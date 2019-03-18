@@ -598,7 +598,7 @@ execute_command_internal (command, asynchronous, pipe_in, pipe_out,
 	  signal_in_progress (DEBUG_TRAP) == 0 && running_trap == 0)
 	{
 	  FREE (the_printed_command_except_trap);
-	  the_printed_command_except_trap = savestring (the_printed_command);
+	  the_printed_command_except_trap = the_printed_command ? savestring (the_printed_command) : (char *)0;
 	}
 
       if (paren_pid == 0)
@@ -2405,7 +2405,7 @@ execute_pipeline (command, asynchronous, pipe_in, pipe_out, fds_to_close)
   if (lastpipe_flag)
     {
 #if defined (JOB_CONTROL)
-      append_process (savestring (the_printed_command), dollar_dollar_pid, exec_result, lastpipe_jid);
+      append_process (the_printed_command ? savestring (the_printed_command) : (char *)0, dollar_dollar_pid, exec_result, lastpipe_jid);
 #endif
       lstdin = wait_for (lastpid);
 #if defined (JOB_CONTROL)
@@ -2644,7 +2644,7 @@ execute_for_command (for_command)
       if (signal_in_progress (DEBUG_TRAP) == 0 && running_trap == 0)
 	{
 	  FREE (the_printed_command_except_trap);
-	  the_printed_command_except_trap = savestring (the_printed_command);
+	  the_printed_command_except_trap = the_printed_command ? savestring (the_printed_command) : (char *)0;
 	}
 
       retval = run_debug_trap ();
@@ -2759,7 +2759,7 @@ eval_arith_for_expr (l, okp)
       if (signal_in_progress (DEBUG_TRAP) == 0)
 	{
 	  FREE (the_printed_command_except_trap);
-	  the_printed_command_except_trap = savestring (the_printed_command);
+	  the_printed_command_except_trap = the_printed_command ? savestring (the_printed_command) : (char *)0;
 	}
 
       r = run_debug_trap ();
@@ -3101,7 +3101,7 @@ execute_select_command (select_command)
 #endif
     {
       FREE (the_printed_command_except_trap);
-      the_printed_command_except_trap = savestring (the_printed_command);
+      the_printed_command_except_trap = the_printed_command ? savestring (the_printed_command) : (char *)0;
     }
 
   retval = run_debug_trap ();
@@ -3237,7 +3237,7 @@ execute_case_command (case_command)
 #endif
     {
       FREE (the_printed_command_except_trap);
-      the_printed_command_except_trap = savestring (the_printed_command);
+      the_printed_command_except_trap = the_printed_command ? savestring (the_printed_command) : (char *)0;
     }
 
   retval = run_debug_trap();
@@ -3456,7 +3456,7 @@ execute_arith_command (arith_command)
   if (signal_in_progress (DEBUG_TRAP) == 0)
     {
       FREE (the_printed_command_except_trap);
-      the_printed_command_except_trap = savestring (the_printed_command);
+      the_printed_command_except_trap = the_printed_command ? savestring (the_printed_command) : (char *)0;
     }
 
   /* Run the debug trap before each arithmetic command, but do it after we
@@ -3653,7 +3653,7 @@ execute_cond_command (cond_command)
   if (signal_in_progress (DEBUG_TRAP) == 0)
     {
       FREE (the_printed_command_except_trap);
-      the_printed_command_except_trap = savestring (the_printed_command);
+      the_printed_command_except_trap = the_printed_command ? savestring (the_printed_command) : (char *)0;
     }
 
   /* Run the debug trap before each conditional command, but do it after we
