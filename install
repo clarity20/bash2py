@@ -1,6 +1,6 @@
 #!/bin/sh
 cd bash-4.3.30
-./configure
+chmod +x configure && ./configure
 make bash2pyengine
 ls -l bash2pyengine
 cd ..
