@@ -2,7 +2,7 @@ import os, sys
 import pdb
 
 def translate(bashFileName, html):
-	os.system('/usr/share/bash2py/bash2py-3.6/bash-4.3.30/bash2pyengine ' + html + bashFileName)
+	os.system('bash-4.3.30/bash2pyengine ' + html + bashFileName)
 
 def helpx():
     print("Usage:\n./bash2py [-h] [-d] <dir_name>\n./bash2py [-h] [-f] <file_name>\n  -h: generate html diff not python code")
