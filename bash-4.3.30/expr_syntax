@@ -1,0 +1,20 @@
+evalexpr  := subexpr
+subexpr   := expcomma
+expcomma  := expassign *, exprassign*
+expassign := expcond [=|+=|-= ... ] expassign
+expcond   := explor [? expcomma : expcond ]
+explor    := expland * || expland  *
+expland   := expbor  * && expbor   *
+expbor    := expbxor * |  expbxor  *
+expbxor   := expband * ^   expband *
+expband   := exp5    * &   exp5    *
+exp5      := exp4 * [==|!=] exp4   *
+exp4      := expshift * [<|<=|>|>=] expshift *
+expshift  := exp3 * [<<|>>] exp3   *
+exp3      := exp2 * [+|-] exp2     *
+exp2      := exppower * [*|/|%] exppower *
+exppower  := exp1 * ** exppower *
+exp1      := [!|~|-|+] exp1 | exp0
+exp0      := [++|--] ARRAY  | ( expcomma ) | NUM | exppost 
+exppost   := ARRAY [ [++|--] ]
+array     := VAR [ [ expcomma ] ]

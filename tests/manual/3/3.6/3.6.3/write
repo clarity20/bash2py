@@ -1,0 +1,3 @@
+date > output
+date >> output
+tr a-z A-Z < output

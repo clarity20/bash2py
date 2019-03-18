@@ -1,0 +1,3 @@
+#!/bin/sh
+echo "Good"
+exit 0

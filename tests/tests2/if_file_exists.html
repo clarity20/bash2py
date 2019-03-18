@@ -1,0 +1,42 @@
+<html>
+<body>
+<table>
+<tr><td></td><td>
+#! /usr/bin/env python
+</td></tr>
+<tr><td></td><td>import sys,os</td></tr>
+<tr><td></td><td>from stat import *</td></tr>
+<tr><td><pre>#!/bin/bash
+</pre></td><td></td></tr>
+<tr><td><pre>FILE=$1
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>FILE=sys.argv[1]</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>if [ -f $FILE ];
+then
+   echo "File $FILE exists."
+else
+   echo "File $FILE does not exist."
+fi
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>if ((os.path.isfile(FILE ) and S_ISREG(os.stat(FILE ).st_mode)) ):
+    print("File " + str(FILE) + " exists.")
+else:
+    print("File " + str(FILE) + " does not exist.")</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>if [ -b $FILE ];
+then
+    echo "File $FILE exists and is a block-special file."
+else
+    echo "Not a block-special file"
+fi
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>if (S_ISBLK(os.stat(FILE ).st_mode) ):
+    print("File " + str(FILE) + " exists and is a block-special file.")
+else:
+    print("Not a block-special file")</pre></td></tr>
+<tr><td><pre>ÿ</pre></td><td></td></tr>
+</body>
+</html>

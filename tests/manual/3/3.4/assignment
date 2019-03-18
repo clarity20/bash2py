@@ -1,0 +1,7 @@
+a=1
+b=2
+x=$(( a + b ))
+x=$a+$b
+x=junk_x
+x="abc"
+x=2

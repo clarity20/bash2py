@@ -1,0 +1,5 @@
+select name in dog cat man
+do
+  echo $name
+done
+echo "Done"

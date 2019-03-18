@@ -1,0 +1,51 @@
+<html>
+<body>
+<table>
+<tr><td></td><td>
+#! /usr/bin/env python
+</td></tr>
+<tr><td></td><td>import os</td></tr>
+<tr><td></td><td>from stat import *</td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>R=$(cat /etc/redhat-release)
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>R=os.popen("cat /etc/redhat-release").read()</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>secretNumber=$(( ((`date +%N` / 1000) % 100) +1 ))
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>secretNumber=$ ((`date +%N` / 1000) % 100) +1" ))öãSÿ</pre></td></tr>
+<tr><td><pre>guess=-1
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>guess=-1</pre></td></tr>
+<tr><td><pre>while [ "$guess" != "$secretNumber" ]; do
+	echo -n "I am thinking of a number between 1 and 100. Enter your guess:"
+	read guess
+	if [ "$guess" = "" ]; then
+		echo "Please enter a number."
+	elif [ "$guess" = "$secretNumber" ]; then
+		echo -e "\aYes! $guess is the correct answer!"
+	elif [ "$secretNumber" -gt "$guess" ]; then
+		echo "The secret number is larger than your guess. Try again."
+	else
+		echo "The secret number is smaller than your guess. Try again."
+	fi
+done
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>while ("guess" != "secretNumber" ):
+    print("I am thinking of a number between 1 and 100. Enter your guess:")
+    guess = raw_input()
+    if ("guess" == ""  ):
+        print("Please enter a number.")
+    elif ("guess" == "secretNumber"  ):
+        print("\aYes! " + str(guess) + " is the correct answer!")
+    elif ("secretNumber" &gt; "guess"  ):
+        print("The secret number is larger than your guess. Try again.")
+    else:
+        print("The secret number is smaller than your guess. Try again.")</pre></td></tr>
+<tr><td><pre>ÿ</pre></td><td></td></tr>
+</body>
+</html>

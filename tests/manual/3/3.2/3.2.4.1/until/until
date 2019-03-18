@@ -1,0 +1,6 @@
+x=1
+until (( x == 4 ))
+do
+    echo $((x++))
+done
+

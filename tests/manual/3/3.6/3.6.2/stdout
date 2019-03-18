@@ -1,0 +1,6 @@
+echo "Stdout?"
+./testoutput > junk 2> /dev/null
+cat junk
+echo "Stderr?"
+./testoutput > /dev/null 2> junk
+cat junk

@@ -1,0 +1,6 @@
+x=1
+while (( x != 4 )); do
+    echo $x
+    x=4
+done
+

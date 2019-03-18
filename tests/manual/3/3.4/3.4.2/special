@@ -1,0 +1,11 @@
+echo '$*=' $*
+echo '$@=' $@
+echo '"$@"=' "$@"
+echo '$#=' $#
+date
+echo '$?=' $?
+echo '$$=' $$
+echo '$0=' $0
+echo '$-=' $-
+echo '$!=' $!
+echo '$_=' $_

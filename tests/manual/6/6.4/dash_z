@@ -1,0 +1,31 @@
+dash_a="missing";
+blank=""
+
+if [ -z dash_a ]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [ -z $dash_a ]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [ -z "" ]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [ -z $blank ]
+then
+echo "true";
+else
+echo "false";
+fi
+

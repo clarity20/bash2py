@@ -1,0 +1,7 @@
+#!/bin/bash
+#Different rules for $* and $@ depending on whether it is quoted
+#"$*" has a different expansion from the rest
+../../../../../bin/args "$*"
+../../../../../bin/args $*
+../../../../../bin/args "$@"
+../../../../../bin/args $@

@@ -1,0 +1,1 @@
+coproc TEST { echo 'A'; echo 'B'; }

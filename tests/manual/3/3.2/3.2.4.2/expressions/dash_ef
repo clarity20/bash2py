@@ -1,0 +1,45 @@
+dash_ef="missing";
+dash_a="missing";
+
+if [[ dash_ef -ef dash_ef ]]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [[ dash_ef -ef $dash_ef ]]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [[ $dash_ef -ef dash_ef ]]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [[ $dash_ef -ef $dash_ef ]]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [[ dash_ef -ef dash_a ]]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [[ dash_a -ef dash_ef ]]
+then
+echo "true";
+else
+echo "false";
+fi
+

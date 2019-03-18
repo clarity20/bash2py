@@ -1,0 +1,38 @@
+dash_a=[sS]"ad";
+dash_e=""
+dash_ot=ot
+
+if [[ string =~ sad ]]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [[ string =~ "sad" ]]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [[ string =~ [sS]"ad" ]]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [[ string =~ $dash_e ]]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [[ $dash_ot =~ S*d ]]
+then
+echo "true";
+else
+echo "false";
+fi

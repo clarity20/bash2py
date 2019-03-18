@@ -1,0 +1,10 @@
+echo "Enter the name of an animal: "
+read ANIMAL
+echo "The $ANIMAL has "
+case $ANIMAL in
+  horse | dog | cat) echo "four";;
+  man | kangaroo ) echo "two";;
+  *) echo "an unknown number of";;
+esac
+echo " legs."
+

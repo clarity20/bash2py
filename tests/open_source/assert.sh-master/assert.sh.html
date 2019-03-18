@@ -1,0 +1,431 @@
+<html>
+<body>
+<table>
+<tr><td></td><td>
+#! /usr/bin/env python
+</td></tr>
+<tr><td></td><td>import sys,os,subprocess,signal</td></tr>
+<tr><td></td><td><pre>class Bash2PyException(Exception):
+  def __init__(self, value=None):
+    self.value = value
+  def __str__(self):
+    return repr(self.value)
+
+</pre></td></tr><tr><td></td><td><pre>class Bash2Py(object):
+  __slots__ = ["val"]
+  def __init__(self, value=''):
+    self.val = value
+  def postinc(self,inc=1):
+    tmp = self.val
+    self.val += inc
+    return tmp
+
+</pre></td></tr><tr><td></td><td><pre>def GetVariable(name, local=locals()):
+  if name in local:
+    return local[name]
+  if name in globals():
+    return globals()[name]
+  return None
+
+def Make(name, local=locals()):
+  ret = GetVariable(name, local)
+  if ret is None:
+    ret = Bash2Py(0)
+    globals()[name] = ret
+  return ret
+
+def GetValue(name, local=locals()):
+  variable = GetVariable(name,local)
+  if variable is None or variable.val is None:
+    return ''
+  return variable.val
+
+</pre></td></tr><tr><td></td><td><pre>class Expand(object):
+  @staticmethod
+  def at():
+    if (len(sys.argv) < 2):
+      return []
+    return  sys.argv[1:]
+  @staticmethod
+  def star(in_quotes):
+    if (in_quotes):
+      if (len(sys.argv) < 2):
+        return ""
+      return " ".join(sys.argv[1:])
+    return Expand.at()
+  @staticmethod
+  def exclamation():
+    raise Bash2PyException("$! unsupported")
+  @staticmethod
+  def underbar():
+    raise Bash2PyException("$_ unsupported")
+  @staticmethod
+  def colonMinus(name, value=''):
+    ret = GetValue(name)
+    if (ret is None or ret == ''):
+		ret = value
+    return ret
+  @staticmethod
+  def colonPlus(name, value=''):
+    ret = GetValue(name)
+    if (ret is None or ret == ''):
+      return ''
+    return value
+
+</pre></td></tr><tr><td><pre>#!/bin/bash
+</pre></td><td></td></tr>
+<tr><td><pre># assert.sh 1.0 - bash unit testing framework
+</pre></td><td></td></tr>
+<tr><td><pre># Copyright (C) 2009, 2010, 2011, 2012 Robert Lehmann
+</pre></td><td></td></tr>
+<tr><td><pre>#
+</pre></td><td></td></tr>
+<tr><td><pre># http://github.com/lehmannro/assert.sh
+</pre></td><td></td></tr>
+<tr><td><pre>#
+</pre></td><td></td></tr>
+<tr><td><pre># This program is free software: you can redistribute it and/or modify
+</pre></td><td></td></tr>
+<tr><td><pre># it under the terms of the GNU Lesser General Public License as published
+</pre></td><td></td></tr>
+<tr><td><pre># by the Free Software Foundation, either version 3 of the License, or
+</pre></td><td></td></tr>
+<tr><td><pre># (at your option) any later version.
+</pre></td><td></td></tr>
+<tr><td><pre>#
+</pre></td><td></td></tr>
+<tr><td><pre># This program is distributed in the hope that it will be useful,
+</pre></td><td></td></tr>
+<tr><td><pre># but WITHOUT ANY WARRANTY; without even the implied warranty of
+</pre></td><td></td></tr>
+<tr><td><pre># MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+</pre></td><td></td></tr>
+<tr><td><pre># GNU Lesser General Public License for more details.
+</pre></td><td></td></tr>
+<tr><td><pre>#
+</pre></td><td></td></tr>
+<tr><td><pre># You should have received a copy of the GNU Lesser General Public License
+</pre></td><td></td></tr>
+<tr><td><pre># along with this program.  If not, see &lt;http://www.gnu.org/licenses/&gt;.
+</pre></td><td></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>export DISCOVERONLY=${DISCOVERONLY:-}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># assert.sh 1.0 - bash unit testing framework</pre></td></tr><tr><td></td><td><pre>
+# Copyright (C) 2009, 2010, 2011, 2012 Robert Lehmann</pre></td></tr><tr><td></td><td><pre>
+#</pre></td></tr><tr><td></td><td><pre>
+# http://github.com/lehmannro/assert.sh</pre></td></tr><tr><td></td><td><pre>
+#</pre></td></tr><tr><td></td><td><pre>
+# This program is free software: you can redistribute it and/or modify</pre></td></tr><tr><td></td><td><pre>
+# it under the terms of the GNU Lesser General Public License as published</pre></td></tr><tr><td></td><td><pre>
+# by the Free Software Foundation, either version 3 of the License, or</pre></td></tr><tr><td></td><td><pre>
+# (at your option) any later version.</pre></td></tr><tr><td></td><td><pre>
+#</pre></td></tr><tr><td></td><td><pre>
+# This program is distributed in the hope that it will be useful,</pre></td></tr><tr><td></td><td><pre>
+# but WITHOUT ANY WARRANTY; without even the implied warranty of</pre></td></tr><tr><td></td><td><pre>
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the</pre></td></tr><tr><td></td><td><pre>
+# GNU Lesser General Public License for more details.</pre></td></tr><tr><td></td><td><pre>
+#</pre></td></tr><tr><td></td><td><pre>
+# You should have received a copy of the GNU Lesser General Public License</pre></td></tr><tr><td></td><td><pre>
+# along with this program.  If not, see &lt;http://www.gnu.org/licenses/&gt;.</pre></td></tr><tr><td></td><td><pre>
+os.environ['DISCOVERONLY'] = Expand.colonMinus("DISCOVERONLY")</pre></td></tr>
+<tr><td><pre>export DEBUG=${DEBUG:-}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>os.environ['DEBUG'] = Expand.colonMinus("DEBUG")</pre></td></tr>
+<tr><td><pre>export STOP=${STOP:-}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>os.environ['STOP'] = Expand.colonMinus("STOP")</pre></td></tr>
+<tr><td><pre>export INVARIANT=${INVARIANT:-}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>os.environ['INVARIANT'] = Expand.colonMinus("INVARIANT")</pre></td></tr>
+<tr><td><pre>export CONTINUE=${CONTINUE:-}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>os.environ['CONTINUE'] = Expand.colonMinus("CONTINUE")</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>args="$(getopt -n "$0" -l \
+    verbose,help,stop,discover,invariant,continue vhxdic $*)" \
+|| exit -1
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>_rc0 = (args=Bash2Py(os.popen("getopt -n \""+__file__+"\" -l     verbose,help,stop,discover,invariant,continue vhxdic "+Expand.star(1)).read().rstrip("\n"))) or (exit(-1))</pre></td></tr>
+<tr><td><pre>for arg in $args; do
+    case "$arg" in
+        -h)
+            echo "$0 [-vxidc]" \
+                "[--verbose] [--stop] [--invariant] [--discover] [--continue]"
+            echo "`sed 's/./ /g' &lt;&lt;&lt; "$0"` [-h] [--help]"
+            exit 0;;
+        --help)
+            cat &lt;&lt;EOF
+Usage: $0 [options]
+Language-agnostic unit tests for subprocesses.
+
+Options:
+  -v, --verbose    generate output for every individual test case
+  -x, --stop       stop running tests after the first failure
+  -i, --invariant  do not measure timings to remain invariant between runs
+  -d, --discover   collect test suites only, do not run any tests
+  -c, --continue   do not modify exit code to test suite status
+  -h               show brief usage information and exit
+  --help           show this help message and exit
+EOF
+            exit 0;;
+        -v|--verbose)
+            DEBUG=1;;
+        -x|--stop)
+            STOP=1;;
+        -i|--invariant)
+            INVARIANT=1;;
+        -d|--discover)
+            DISCOVERONLY=1;;
+        -c|--continue)
+            CONTINUE=1;;
+    esac
+done
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>arg=Bash2Py(0)
+for arg.val in [args.val]:
+    
+    if ( str(arg.val) == '-h'):
+        print(__file__+" [-vxidc]","[--verbose] [--stop] [--invariant] [--discover] [--continue]")
+        print(os.popen("sed 's/./ /g' &lt;&lt;&lt; \""+__file__+"\"").read().rstrip("\n")+" [-h] [--help]")
+        exit(0)
+    elif ( str(arg.val) == '--help'):
+        subprocess.Popen("cat",shell=True,stdin=subprocess.PIPE)
+        _rc0.communicate("Usage: "+__file__+" [options]\nLanguage-agnostic unit tests for subprocesses.\n\nOptions:\n  -v, --verbose    generate output for every individual test case\n  -x, --stop       stop running tests after the first failure\n  -i, --invariant  do not measure timings to remain invariant between runs\n  -d, --discover   collect test suites only, do not run any tests\n  -c, --continue   do not modify exit code to test suite status\n  -h               show brief usage information and exit\n  --help           show this help message and exit\n")
+        _rc0 = _rc0.wait()
+        exit(0)
+    elif ( str(arg.val) == '-v' or str(arg.val) == '--verbose'):
+        DEBUG=Bash2Py(1)
+    elif ( str(arg.val) == '-x' or str(arg.val) == '--stop'):
+        STOP=Bash2Py(1)
+    elif ( str(arg.val) == '-i' or str(arg.val) == '--invariant'):
+        INVARIANT=Bash2Py(1)
+    elif ( str(arg.val) == '-d' or str(arg.val) == '--discover'):
+        DISCOVERONLY=Bash2Py(1)
+    elif ( str(arg.val) == '-c' or str(arg.val) == '--continue'):
+        CONTINUE=Bash2Py(1)</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>printf -v _indent "\n\t" # local format helper
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>_indent = "\n\t"</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>_assert_reset() {
+    tests_ran=0
+    tests_failed=0
+    tests_errors=()
+    tests_starttime="$(date +%s.%N)" # seconds_since_epoch.nanoseconds
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># local format helper</pre></td></tr><tr><td></td><td><pre>
+def _assert_reset () :
+    global tests_ran
+    global tests_failed
+    global tests_errors
+    global tests_starttime
+
+    tests_ran=Bash2Py(0)
+    tests_failed=Bash2Py(0)
+    tests_errors=Bash2Py("()")
+    tests_starttime=Bash2Py(os.popen("date +%s.%N").read().rstrip("\n"))
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>assert_end() {
+    # assert_end [suite ..]
+    tests_endtime="$(date +%s.%N)"
+    tests="$tests_ran ${*:+$* }tests"
+    [[ -n "$DISCOVERONLY" ]] &amp;&amp; echo "collected $tests." &amp;&amp; _assert_reset &amp;&amp; return
+    [[ -n "$DEBUG" ]] &amp;&amp; echo
+    [[ -z "$INVARIANT" ]] &amp;&amp; report_time=" in $(bc \
+        &lt;&lt;&lt; "${tests_endtime%.N} - ${tests_starttime%.N}" \
+        | sed -e 's/\.\([0-9]\{0,3\}\)[0-9]*/.\1/' -e 's/^\./0./')s" \
+        || report_time=
+
+    if [[ "$tests_failed" -eq 0 ]]; then
+        echo "all $tests passed$report_time."
+    else
+        for error in "${tests_errors[@]}"; do echo "$error"; done
+        echo "$tests_failed of $tests failed$report_time."
+    fi
+    tests_failed_previous=$tests_failed
+    [[ $tests_failed -gt 0 ]] &amp;&amp; tests_suite_status=1
+    _assert_reset
+    return $tests_failed_previous
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># seconds_since_epoch.nanoseconds</pre></td></tr><tr><td></td><td><pre>
+def assert_end () :
+    global tests_endtime
+    global tests
+    global tests_ran
+    global DISCOVERONLY
+    global DEBUG
+    global INVARIANT
+    global report_time
+    global tests_starttime
+    global tests_failed
+    global tests_errors
+    global error
+    global tests_failed_previous
+    global tests_suite_status
+
+    # assert_end [suite ..]</pre></td></tr><tr><td></td><td><pre>
+    tests_endtime=Bash2Py(os.popen("date +%s.%N").read().rstrip("\n"))
+    tests=Bash2Py(str(tests_ran.val)+" "+Expand.colonPlus("*",Expand.star(1)+" ")+"tests")
+    _rc0 = (((str(DISCOVERONLY.val) != '') and (print("collected "+str(tests.val)+"."))) and (_assert_reset())) and (return)
+    _rc0 = (str(DEBUG.val) != '') and (print())
+    _rc0 = ((str(INVARIANT.val) == '') and (report_time=Bash2Py(" in "+os.popen("bc         &lt;&lt;&lt; \""+str(tests_endtime.val%.N)+" - "+str(tests_starttime.val%.N)+"\"         | sed -e 's/.([0-9]{0,3})[0-9]*/.1/' -e 's/^./0./'").read().rstrip("\n")+"s"))) or (report_time=Bash2Py())
+    if (int(tests_failed.val) == 0 ):
+        print("all "+str(tests.val)+" passed"+str(report_time.val)+".")
+    else:
+        error=Bash2Py(0)
+        for error.val in [tests_errors.val[@] ]]:
+            print(error.val)
+        print(str(tests_failed.val)+" of "+str(tests.val)+" failed"+str(report_time.val)+".")
+    tests_failed_previous=Bash2Py(tests_failed.val)
+    _rc0 = (int(tests_failed.val) &gt; 0) and (tests_suite_status=Bash2Py(1))
+    _assert_reset()
+    return(int(tests_failed_previous.val))
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>assert() {
+    # assert &lt;command&gt; &lt;expected stdout&gt; [stdin]
+    (( tests_ran++ )) || :
+    [[ -n "$DISCOVERONLY" ]] &amp;&amp; return || true
+    # printf required for formatting
+    printf -v expected "x${2:-}" # x required to overwrite older results
+    result="$(eval 2&gt;/dev/null $1 &lt;&lt;&lt; ${3:-})" || true
+    # Note: $expected is already decorated
+    if [[ "x$result" == "$expected" ]]; then
+        [[ -n "$DEBUG" ]] &amp;&amp; echo -n . || true
+        return
+    fi
+    result="$(sed -e :a -e '$!N;s/\n/\\n/;ta' &lt;&lt;&lt; "$result")"
+    [[ -z "$result" ]] &amp;&amp; result="nothing" || result="\"$result\""
+    [[ -z "$2" ]] &amp;&amp; expected="nothing" || expected="\"$2\""
+    _assert_fail "expected $expected${_indent}got $result" "$1" "$3"
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def assert (_p1,_p2,_p3) :
+    global DISCOVERONLY
+    global result
+    global expected
+    global DEBUG
+
+    # assert &lt;command&gt; &lt;expected stdout&gt; [stdin]</pre></td></tr><tr><td></td><td><pre>
+    (Make("tests_ran").postinc()) or (pass)
+    _rc0 = ((str(DISCOVERONLY.val) != '') and (return)) or (True)
+    # printf required for formatting</pre></td></tr><tr><td></td><td><pre>
+    expected = "x"+Expand.colonMinus("2")
+    # x required to overwrite older results</pre></td></tr><tr><td></td><td><pre>
+    _rc0 = (result=Bash2Py(os.popen("eval 2&gt;/dev/null "+str(_p1)+" &lt;&lt;&lt; "+Expand.colonMinus("3")).read().rstrip("\n"))) or (True)
+    # Note: $expected is already decorated</pre></td></tr><tr><td></td><td><pre>
+    if ("x"+str(result.val) == str(expected.val) ):
+        ((str(DEBUG.val) != '') and (print(".",end=""))) or (True)
+        return
+    result=Bash2Py(os.popen("sed -e :a -e '"+str(Expand.exclamation())+"N;s/n/\\n/;ta' &lt;&lt;&lt; \""+str(result.val)+"\"").read().rstrip("\n"))
+    _rc0 = ((str(result.val) == '') and (result=Bash2Py("nothing"))) or (result=Bash2Py("\""+str(result.val)+"\""))
+    _rc0 = ((str(_p2) == '') and (expected=Bash2Py("nothing"))) or (expected=Bash2Py("\""+str(_p2)+"\""))
+    _rc0 = subprocess.call(["_assert_fail","expected "+str(expected.val)+Expand.underbar()indent+"got "+str(result.val),str(_p1),str(_p3)],shell=True)
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>assert_raises() {
+    # assert_raises &lt;command&gt; &lt;expected code&gt; [stdin]
+    (( tests_ran++ )) || :
+    [[ -n "$DISCOVERONLY" ]] &amp;&amp; return || true
+    status=0
+    (eval $1 &lt;&lt;&lt; ${3:-}) &gt; /dev/null 2&gt;&amp;1 || status=$?
+    expected=${2:-0}
+    if [[ "$status" -eq "$expected" ]]; then
+        [[ -n "$DEBUG" ]] &amp;&amp; echo -n . || true
+        return
+    fi
+    _assert_fail "program terminated with code $status instead of $expected" "$1" "$3"
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def assert_raises (_p1,_p2,_p3) :
+    global DISCOVERONLY
+    global status
+    global expected
+    global DEBUG
+
+    # assert_raises &lt;command&gt; &lt;expected code&gt; [stdin]</pre></td></tr><tr><td></td><td><pre>
+    (Make("tests_ran").postinc()) or (pass)
+    _rc0 = ((str(DISCOVERONLY.val) != '') and (return)) or (True)
+    status=Bash2Py(0)
+    _rc0 = (&gt; /dev/null2&gt;&amp;1(eval(str(_p1))) &gt; /dev/null 2&gt;&amp;1) or (status=Bash2Py(_rc0))
+    expected=Bash2Py(Expand.colonMinus("2","0"))
+    if (int(status.val) == int(expected.val) ):
+        ((str(DEBUG.val) != '') and (print(".",end=""))) or (True)
+        return
+    _rc0 = subprocess.call(["_assert_fail","program terminated with code "+str(status.val)+" instead of "+str(expected.val),str(_p1),str(_p3)],shell=True)
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>_assert_fail() {
+    # _assert_fail &lt;failure&gt; &lt;command&gt; &lt;stdin&gt;
+    [[ -n "$DEBUG" ]] &amp;&amp; echo -n X
+    report="test #$tests_ran \"$2${3:+ &lt;&lt;&lt; $3}\" failed:${_indent}$1"
+    if [[ -n "$STOP" ]]; then
+        [[ -n "$DEBUG" ]] &amp;&amp; echo
+        echo "$report"
+        exit 1
+    fi
+    tests_errors[$tests_failed]="$report"
+    (( tests_failed++ )) || :
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def _assert_fail (_p1,_p2,_p3) :
+    global DEBUG
+    global report
+    global tests_ran
+    global STOP
+    global tests_errors
+    global tests_failed
+
+    # _assert_fail &lt;failure&gt; &lt;command&gt; &lt;stdin&gt;</pre></td></tr><tr><td></td><td><pre>
+    (str(DEBUG.val) != '') and (print("X",end=""))
+    report=Bash2Py("test #"+str(tests_ran.val)+" \""+str(_p2)+Expand.colonPlus("3"," &lt;&lt;&lt; "+str(_p3))+"\" failed:"+Expand.underbar()indent+str(_p1))
+    if (str(STOP.val) != '' ):
+        (str(DEBUG.val) != '') and (print())
+        print(report.val)
+        exit(1)
+    tests_errors[tests_failed]=Bash2Py(report.val)
+    _rc0 = (Make("tests_failed").postinc()) or (pass)
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>_assert_reset
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>_assert_reset()</pre></td></tr>
+<tr><td><pre>: ${tests_suite_status:=0}  # remember if any of the tests failed so far
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>pass</pre></td></tr>
+<tr><td><pre>_assert_cleanup() {
+    local status=$?
+    # modify exit code if it's not already non-zero
+    [[ $status -eq 0 &amp;&amp; -z $CONTINUE ]] &amp;&amp; exit $tests_suite_status
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># remember if any of the tests failed so far</pre></td></tr><tr><td></td><td><pre>
+def _assert_cleanup () :
+    global CONTINUE
+    global tests_suite_status
+
+    status=Bash2Py(_rc0)
+    # modify exit code if it's not already non-zero</pre></td></tr><tr><td></td><td><pre>
+    _rc0 = (int(status.val) == 0 and str(CONTINUE.val) == '') and (exit(int(tests_suite_status.val)))
+</pre></td></tr>
+<tr><td><pre>trap _assert_cleanup EXIT
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>signal.signal(signal.SIGEXIT,_assert_cleanup)
+</pre></td></tr>
+<tr><td><pre>ÿ</pre></td><td></td></tr>
+</body>
+</html>

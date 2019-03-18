@@ -1,0 +1,89 @@
+<html>
+<body>
+<table>
+<tr><td></td><td>
+#! /usr/bin/env python
+</td></tr>
+<tr><td></td><td>import os,subprocess</td></tr>
+<tr><td></td><td>from stat import *</td></tr>
+<tr><td><pre>#! /bin/bash 
+</pre></td><td></td></tr>
+<tr><td><pre>clear 
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>_rc = subprocess.call(["clear"])</pre></td></tr>
+<tr><td><pre>sum=0 
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>sum=0</pre></td></tr>
+<tr><td><pre>i="y" 
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>i="y"</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>echo " Enter one no." 
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>print(" Enter one no.")</pre></td></tr>
+<tr><td><pre>read n1 
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>n1 = raw_input()</pre></td></tr>
+<tr><td><pre>echo "Enter second no." 
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>print("Enter second no.")</pre></td></tr>
+<tr><td><pre>read n2 
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>n2 = raw_input()</pre></td></tr>
+<tr><td><pre>while [ $i = "y" ] 
+do 
+echo "1.Addition" 
+echo "2.Subtraction" 
+echo "3.Multiplication" 
+echo "4.Division" 
+echo "Enter your choice" 
+read ch 
+case $ch in 
+    1)sum=`expr $n1 + $n2` 
+     echo "Sum = $sum";; 
+    2)sum=`expr $n1 - $n2` 
+     echo "Sub = $sum";; 
+    3)sum=`expr $n1 \* $n2` 
+     echo "Mul = $sum";; 
+    4)sum=`expr $n1 / $n2` 
+     echo "Div = $sum";; 
+    *)echo "Invalid choice";; 
+esac 
+echo "Do u want to continue (y/n)) ?" 
+read i 
+if [ $i != "y" ] 
+then 
+    exit 
+fi
+done
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>while (i == ""y"" ):
+    print("1.Addition")
+    print("2.Subtraction")
+    print("3.Multiplication")
+    print("4.Division")
+    print("Enter your choice")
+    ch = raw_input()
+    
+    if ( ch == '1'):
+        sum=os.popen("expr "+str(n1)++str(n2)).read()
+        print("Sum = " + str(sum))
+    elif ( ch == '2'):
+        sum=os.popen("expr "+str(n1)+" - "+str(n2)).read()
+        print("Sub = " + str(sum))
+    elif ( ch == '3'):
+        sum=os.popen("expr "+str(n1)+" * "+str(n2)).read()
+        print("Mul = " + str(sum))
+    elif ( ch == '4'):
+        sum=os.popen("expr "+str(n1)+" / "+str(n2)).read()
+        print("Div = " + str(sum))
+    else:
+        print("Invalid choice")
+    print("Do u want to continue (y/n)) ?")
+    i = raw_input()
+    if (i != ""y""  ):
+        exit()</pre></td></tr>
+<tr><td><pre>ÿ</pre></td><td></td></tr>
+</body>
+</html>

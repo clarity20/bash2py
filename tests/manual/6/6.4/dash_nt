@@ -1,0 +1,46 @@
+dash_a="missing";
+dash_nt=nt
+dash_ef=ef
+
+if [ dash_nt -nt dash_ef ]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [ dash_nt -nt $dash_ef ]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [ $dash_nt -nt dash_ef ]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [ $dash_nt -nt $dash_ef ]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [ dash_nt -nt dash_a ]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [ dash_a -nt dash_nt ]
+then
+echo "true";
+else
+echo "false";
+fi
+

@@ -1,0 +1,4 @@
+echo "Stdout and Stderr?"
+echo "Start" > junk
+./testoutput &>> junk
+cat junk

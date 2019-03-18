@@ -1,0 +1,13 @@
+if [[ x ]]
+then
+  echo "true"
+else
+  echo "false"
+fi
+
+if [[ ]]
+then
+  echo "true"
+else
+  echo "false"
+fi

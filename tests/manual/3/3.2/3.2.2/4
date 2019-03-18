@@ -1,0 +1,2 @@
+testoutput > stdout1 2>&1
+testoutput      > stdout2

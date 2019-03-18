@@ -1,0 +1,3 @@
+#!/bin/bash
+#Different rules for $* and $@ depending on whether it is quoted
+./special_parm1 parm1 parm2 parm3

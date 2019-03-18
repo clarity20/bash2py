@@ -1,0 +1,8 @@
+x=0
+y=1
+if [ $x -a $y ]
+then
+ echo "True"
+else
+ echo "False"
+fi

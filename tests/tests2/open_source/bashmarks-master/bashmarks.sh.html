@@ -1,0 +1,269 @@
+<html>
+<body>
+<table>
+<tr><td></td><td>
+#! /usr/bin/env python
+</td></tr>
+<tr><td></td><td>import sys,os,subprocess</td></tr>
+<tr><td></td><td>from stat import *</td></tr>
+<tr><td><pre># Bashmarks is a simple set of bash functions that allows you to bookmark
+</pre></td><td></td></tr>
+<tr><td><pre># folders in the command-line.
+</pre></td><td></td></tr>
+<tr><td><pre>#
+</pre></td><td></td></tr>
+<tr><td><pre># To install, put bashmarks.sh somewhere such as ~/bin, then source it
+</pre></td><td></td></tr>
+<tr><td><pre># in your .bashrc file (or other bash startup file):
+</pre></td><td></td></tr>
+<tr><td><pre>#   source ~/bin/bashmarks.sh
+</pre></td><td></td></tr>
+<tr><td><pre>#
+</pre></td><td></td></tr>
+<tr><td><pre># To bookmark a folder, simply go to that folder, then bookmark it like so:
+</pre></td><td></td></tr>
+<tr><td><pre>#   bookmark foo
+</pre></td><td></td></tr>
+<tr><td><pre>#
+</pre></td><td></td></tr>
+<tr><td><pre># The bookmark will be named "foo"
+</pre></td><td></td></tr>
+<tr><td><pre>#
+</pre></td><td></td></tr>
+<tr><td><pre># When you want to get back to that folder use:
+</pre></td><td></td></tr>
+<tr><td><pre>#   go foo
+</pre></td><td></td></tr>
+<tr><td><pre>#
+</pre></td><td></td></tr>
+<tr><td><pre># To see a list of bookmarks:
+</pre></td><td></td></tr>
+<tr><td><pre>#   bookmarksshow
+</pre></td><td></td></tr>
+<tr><td><pre>#
+</pre></td><td></td></tr>
+<tr><td><pre># Tab completion works, to go to the shoobie bookmark:
+</pre></td><td></td></tr>
+<tr><td><pre>#   go sho[tab]
+</pre></td><td></td></tr>
+<tr><td><pre>#
+</pre></td><td></td></tr>
+<tr><td><pre># Your bookmarks are stored in the ~/.bookmarks file
+</pre></td><td></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>bookmarks_file=~/.bookmarks
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># Bashmarks is a simple set of bash functions that allows you to bookmark</pre></td></tr><tr><td></td><td><pre>
+# folders in the command-line.</pre></td></tr><tr><td></td><td><pre>
+#</pre></td></tr><tr><td></td><td><pre>
+# To install, put bashmarks.sh somewhere such as ~/bin, then source it</pre></td></tr><tr><td></td><td><pre>
+# in your .bashrc file (or other bash startup file):</pre></td></tr><tr><td></td><td><pre>
+#   source ~/bin/bashmarks.sh</pre></td></tr><tr><td></td><td><pre>
+#</pre></td></tr><tr><td></td><td><pre>
+# To bookmark a folder, simply go to that folder, then bookmark it like so:</pre></td></tr><tr><td></td><td><pre>
+#   bookmark foo</pre></td></tr><tr><td></td><td><pre>
+#</pre></td></tr><tr><td></td><td><pre>
+# The bookmark will be named "foo"</pre></td></tr><tr><td></td><td><pre>
+#</pre></td></tr><tr><td></td><td><pre>
+# When you want to get back to that folder use:</pre></td></tr><tr><td></td><td><pre>
+#   go foo</pre></td></tr><tr><td></td><td><pre>
+#</pre></td></tr><tr><td></td><td><pre>
+# To see a list of bookmarks:</pre></td></tr><tr><td></td><td><pre>
+#   bookmarksshow</pre></td></tr><tr><td></td><td><pre>
+#</pre></td></tr><tr><td></td><td><pre>
+# Tab completion works, to go to the shoobie bookmark:</pre></td></tr><tr><td></td><td><pre>
+#   go sho[tab]</pre></td></tr><tr><td></td><td><pre>
+#</pre></td></tr><tr><td></td><td><pre>
+# Your bookmarks are stored in the ~/.bookmarks file</pre></td></tr><tr><td></td><td><pre>
+bookmarks_file=os.path.expanduser("~/.bookmarks")</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># Create bookmarks_file it if it doesn't exist
+</pre></td><td></td></tr>
+<tr><td><pre>if [[ ! -f $bookmarks_file ]]; then
+  touch $bookmarks_file
+fi
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># Create bookmarks_file it if it doesn't exist</pre></td></tr><tr><td></td><td><pre>
+if (! (os.path.isfile(bookmarks_file) and S_ISREG(os.stat(bookmarks_file).st_mode)) ):
+    _rc = subprocess.call(["touch",bookmarks_file])</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>bookmark (){
+  bookmark_name=$1
+
+  if [[ -z $bookmark_name ]]; then
+    echo 'Invalid name, please provide a name for your bookmark. For example:'
+    echo '  bookmark foo'
+  else
+    bookmark="`pwd`|$bookmark_name" # Store the bookmark as folder|name
+
+    if [[ -z `grep "|$bookmark_name" $bookmarks_file` ]]; then
+      echo $bookmark &gt;&gt; $bookmarks_file
+      echo "Bookmark '$bookmark_name' saved"
+    else
+      echo "Bookmark '$bookmark_name' already exists. Replace it? (y or n)"
+      while read replace
+      do
+        if [[ $replace = "y" ]]; then
+          # Delete existing bookmark
+          sed "/.*|$bookmark_name/d" $bookmarks_file &gt; ~/.tmp &amp;&amp; mv ~/.tmp $bookmarks_file
+          # Save new bookmark
+          echo $bookmark &gt;&gt; $bookmarks_file
+          echo "Bookmark '$bookmark_name' saved"
+          break
+        elif [[ $replace = "n" ]]; then
+          break
+        else
+          echo "Please type 'y' or 'n'"
+        fi
+      done
+    fi
+  fi
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def bookmark () :
+    global bookmark_name
+    global bookmark
+    global bookmarks_file
+    global replace
+
+    bookmark_name=sys.argv[1]
+    if (('bookmark_name' not in globals()) ):
+        print("Invalid name, please provide a name for your bookmark. For example:")
+        print("  bookmark foo")
+    else:
+        bookmark=str(os.popen("pwd").read()) + "|" + str(bookmark_name)
+        # Store the bookmark as folder|name</pre></td></tr><tr><td></td><td><pre>
+        if (('os.popen("grep \"|"+str(bookmark_name)+"\" "+str(bookmarks_file)).read()' not in globals()) ):
+            print(bookmark)
+            print("Bookmark '" + str(bookmark_name) + "' saved")
+        else:
+            print("Bookmark '" + str(bookmark_name) + "' already exists. Replace it? (y or n)")
+            while (replace = raw_input()):
+                if (replace == "y" ):
+                    # Delete existing bookmark</pre></td></tr><tr><td></td><td><pre>
+                    _rc = subprocess.call("sed /.*|" + str(bookmark_name) + "/d " + bookmarks_file,shell=True,stdout=file('~/.tmp','wb'))
+                     and _rc = subprocess.call(["mv",os.path.expanduser("~/.tmp"),bookmarks_file])
+                    # Save new bookmark</pre></td></tr><tr><td></td><td><pre>
+                    print(bookmark)
+                    print("Bookmark '" + str(bookmark_name) + "' saved")
+                    break
+                elif (replace == "n" ):
+                    break
+                else:
+                    print("Please type 'y' or 'n'")
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># Delete the named bookmark from the list
+</pre></td><td></td></tr>
+<tr><td><pre>bookmarkdelete (){
+  bookmark_name=$1
+
+  if [[ -z $bookmark_name ]]; then
+    echo 'Invalid name, please provide the name of the bookmark to delete.'
+  else
+    bookmark=`grep "|$bookmark_name$" "$bookmarks_file"`
+
+    if [[ -z $bookmark ]]; then
+      echo 'Invalid name, please provide a valid bookmark name.'
+    else
+      cat $bookmarks_file | grep -v "|$bookmark_name$" $bookmarks_file &gt; bookmarks_temp &amp;&amp; mv bookmarks_temp $bookmarks_file
+      echo "Bookmark '$bookmark_name' deleted"
+    fi
+  fi
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># Delete the named bookmark from the list</pre></td></tr><tr><td></td><td><pre>
+def bookmarkdelete () :
+    global bookmark_name
+    global bookmark
+    global bookmarks_file
+
+    bookmark_name=sys.argv[1]
+    if (('bookmark_name' not in globals()) ):
+        print("Invalid name, please provide the name of the bookmark to delete.")
+    else:
+        bookmark=os.popen("grep \"|"+str(bookmark_name)++"\" \""+str(bookmarks_file)+"\"").read()
+        if (('bookmark' not in globals()) ):
+            print("Invalid name, please provide a valid bookmark name.")
+        else:
+            _rc = subprocess.call(["cat",bookmarks_file]) | _rc = subprocess.call("grep -v |" + str(bookmark_name) + str() + " " + bookmarks_file,shell=True,stdout=file('bookmarks_temp','wb'))
+             and _rc = subprocess.call(["mv","bookmarks_temp",bookmarks_file])
+            print("Bookmark '" + str(bookmark_name) + "' deleted")
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># Show a list of the bookmarks
+</pre></td><td></td></tr>
+<tr><td><pre>bookmarksshow (){
+  cat $bookmarks_file | awk '{ printf "%-40s%-40s%s\n",$1,$2,$3}' FS=\|
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># Show a list of the bookmarks</pre></td></tr><tr><td></td><td><pre>
+def bookmarksshow () :
+    global bookmarks_file
+    global FS
+
+    _rc = subprocess.call(["cat",bookmarks_file]) | _rc = subprocess.call(["awk","{ printf \"%-40s%-40s%s\\n\",\$1,\$2,\$3}",FS=\|])
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>go(){
+  bookmark_name=$1
+
+  bookmark=`grep "|$bookmark_name$" "$bookmarks_file"`
+
+  if [[ -z $bookmark ]]; then
+    echo 'Invalid name, please provide a valid bookmark name. For example:'
+    echo '  go foo'
+    echo
+    echo 'To bookmark a folder, go to the folder then do this (naming the bookmark 'foo'):'
+    echo '  bookmark foo'
+  else
+    dir=`echo "$bookmark" | cut -d\| -f1`
+    cd "$dir"
+  fi
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def go () :
+    global bookmark_name
+    global bookmark
+    global bookmarks_file
+    global dir
+
+    bookmark_name=sys.argv[1]
+    bookmark=os.popen("grep \"|"+str(bookmark_name)++"\" \""+str(bookmarks_file)+"\"").read()
+    if (('bookmark' not in globals()) ):
+        print("Invalid name, please provide a valid bookmark name. For example:")
+        print("  go foo")
+        print()
+        print("To bookmark a folder, go to the folder then do this (naming the bookmark "foo"):")
+        print("  bookmark foo")
+    else:
+        dir=os.popen("echo \""+str(bookmark)+"\" | cut -d| -f1").read()
+        os.chdir(str(dir))
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>_go_complete(){
+  # Get a list of bookmark names, then grep for what was entered to narrow the list
+  cat $bookmarks_file | cut -d\| -f2 | grep "$2.*"
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def _go_complete () :
+    global bookmarks_file
+
+    # Get a list of bookmark names, then grep for what was entered to narrow the list</pre></td></tr><tr><td></td><td><pre>
+    _rc = subprocess.call(["cat",bookmarks_file]) | _rc = subprocess.call(["cut","-d"\|,"-f2"]) | _rc = subprocess.call(["grep",str(sys.argv[2]) + ".*"])
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>complete -C _go_complete -o default go
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>_rc = subprocess.call(["complete","-C","_go_complete","-o","default","go"])</pre></td></tr>
+<tr><td><pre>ÿ</pre></td><td></td></tr>
+</body>
+</html>

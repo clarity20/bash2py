@@ -1,0 +1,1 @@
+python bash_data_collector.py $1 $2

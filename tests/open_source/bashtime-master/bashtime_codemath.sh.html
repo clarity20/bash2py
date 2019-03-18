@@ -1,0 +1,271 @@
+<html>
+<body>
+<table>
+<tr><td></td><td>
+#! /usr/bin/env python
+</td></tr>
+<tr><td></td><td>import sys,os</td></tr>
+<tr><td></td><td><pre>class Bash2Py(object):
+  __slots__ = ["val"]
+  def __init__(self, value=''):
+    self.val = value
+
+</pre></td></tr><tr><td></td><td><pre>def IsDefined(name, local=locals()):
+  return name in globals() or name in local
+
+def GetVariable(name, local=locals()):
+  if name in local:
+    return local[name]
+  if name in globals():
+    return globals()[name]
+  return None
+
+def GetValue(name, local=locals()):
+  variable = GetVariable(name,local)
+  if variable is None or variable.val is None:
+    return ''
+  return variable.val
+
+</pre></td></tr><tr><td></td><td><pre>class Expand(object):
+  @staticmethod
+  def at():
+    if (len(sys.argv) < 2):
+      return []
+    return  sys.argv[1:]
+  @staticmethod
+  def star(in_quotes):
+    if (in_quotes):
+      if (len(sys.argv) < 2):
+        return ""
+      return " ".join(sys.argv[1:])
+    return Expand.at()
+  @staticmethod
+  def minus(name, value=''):
+    if (IsDefined(name)):
+      return GetValue(name)
+    return value
+
+</pre></td></tr><tr><td><pre>#! /bin/bash
+</pre></td><td></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># This is bashtime.sh
+</pre></td><td></td></tr>
+<tr><td><pre># Copyright (c) 2013 Paul Scott-Murphy (idea, initial code)
+</pre></td><td></td></tr>
+<tr><td><pre># Copyright (c) 2013 Johann Dreo (new code)
+</pre></td><td></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># Permission is hereby granted, free of charge, to any person obtaining a copy of
+</pre></td><td></td></tr>
+<tr><td><pre># this software and associated documentation files (the "Software"), to deal in
+</pre></td><td></td></tr>
+<tr><td><pre># the Software without restriction, including without limitation the rights to
+</pre></td><td></td></tr>
+<tr><td><pre># use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+</pre></td><td></td></tr>
+<tr><td><pre># the Software, and to permit persons to whom the Software is furnished to do so,
+</pre></td><td></td></tr>
+<tr><td><pre># subject to the following conditions:
+</pre></td><td></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># The above copyright notice and this permission notice shall be included in all
+</pre></td><td></td></tr>
+<tr><td><pre># copies or substantial portions of the Software.
+</pre></td><td></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+</pre></td><td></td></tr>
+<tr><td><pre># IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+</pre></td><td></td></tr>
+<tr><td><pre># FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+</pre></td><td></td></tr>
+<tr><td><pre># COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+</pre></td><td></td></tr>
+<tr><td><pre># IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+</pre></td><td></td></tr>
+<tr><td><pre># CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+</pre></td><td></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># if no args
+</pre></td><td></td></tr>
+<tr><td><pre>if [[ -z "$*" ]] ; then
+    # get the date as "hours(12) minutes" in a single call
+    # make a bash array with it
+    d=( $(date "+%I %M") )
+    # separate hours and minutes
+    hour=${d[0]#0} # remove leading 0 or values &lt;10 will be interpreted as octal
+    min=${d[1]#0}
+else
+    # get the arguments passed to the script
+    hour=${1#0}
+    min=${2#0}
+fi
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># This is bashtime.sh</pre></td></tr><tr><td></td><td><pre>
+# Copyright (c) 2013 Paul Scott-Murphy (idea, initial code)</pre></td></tr><tr><td></td><td><pre>
+# Copyright (c) 2013 Johann Dreo (new code)</pre></td></tr><tr><td></td><td><pre>
+# Permission is hereby granted, free of charge, to any person obtaining a copy of</pre></td></tr><tr><td></td><td><pre>
+# this software and associated documentation files (the "Software"), to deal in</pre></td></tr><tr><td></td><td><pre>
+# the Software without restriction, including without limitation the rights to</pre></td></tr><tr><td></td><td><pre>
+# use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of</pre></td></tr><tr><td></td><td><pre>
+# the Software, and to permit persons to whom the Software is furnished to do so,</pre></td></tr><tr><td></td><td><pre>
+# subject to the following conditions:</pre></td></tr><tr><td></td><td><pre>
+# The above copyright notice and this permission notice shall be included in all</pre></td></tr><tr><td></td><td><pre>
+# copies or substantial portions of the Software.</pre></td></tr><tr><td></td><td><pre>
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR</pre></td></tr><tr><td></td><td><pre>
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS</pre></td></tr><tr><td></td><td><pre>
+# FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR</pre></td></tr><tr><td></td><td><pre>
+# COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER</pre></td></tr><tr><td></td><td><pre>
+# IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN</pre></td></tr><tr><td></td><td><pre>
+# CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</pre></td></tr><tr><td></td><td><pre>
+# if no args</pre></td></tr><tr><td></td><td><pre>
+if (Expand.star(1) == '' ):
+    # get the date as "hours(12) minutes" in a single call</pre></td></tr><tr><td></td><td><pre>
+    # make a bash array with it</pre></td></tr><tr><td></td><td><pre>
+    d=Bash2Py("("+os.popen("date \"+%I %M\"").read().rstrip("\n")+")")
+    # separate hours and minutes</pre></td></tr><tr><td></td><td><pre>
+    hour=Bash2Py(d.val[0] ]#0)
+    # remove leading 0 or values &lt;10 will be interpreted as octal</pre></td></tr><tr><td></td><td><pre>
+    min=Bash2Py(d.val[1] ]#0)
+else:
+    # get the arguments passed to the script</pre></td></tr><tr><td></td><td><pre>
+    hour=Bash2Py(sys.argv[1]#0)
+    min=Bash2Py(sys.argv[2]#0)</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># The targeted unicode characters are the "CLOCK FACE" ones
+</pre></td><td></td></tr>
+<tr><td><pre># They are located in the codepages between:
+</pre></td><td></td></tr>
+<tr><td><pre>#     U+1F550 (ONE OCLOCK) and U+1F55B (TWELVE OCLOCK), for the plain hours
+</pre></td><td></td></tr>
+<tr><td><pre>#     U+1F55C (ONE-THIRTY) and U+1F567 (TWELVE-THIRTY), for the thirties
+</pre></td><td></td></tr>
+<tr><td><pre>#
+</pre></td><td></td></tr>
+<tr><td><pre># Those codes may be output with unicode escapes or hexadecimal escapes,
+</pre></td><td></td></tr>
+<tr><td><pre># the later being the more portable.
+</pre></td><td></td></tr>
+<tr><td><pre>#
+</pre></td><td></td></tr>
+<tr><td><pre># But we can iterate only over integers.
+</pre></td><td></td></tr>
+<tr><td><pre>#
+</pre></td><td></td></tr>
+<tr><td><pre># We thus need the following conversion table:
+</pre></td><td></td></tr>
+<tr><td><pre>#       utf   hex   int
+</pre></td><td></td></tr>
+<tr><td><pre># hours 50:5B 90:9b 144:155
+</pre></td><td></td></tr>
+<tr><td><pre># half  5C:67 9c:a7 156:167
+</pre></td><td></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># The characters being grouped bas plain/thirty, we must first now
+</pre></td><td></td></tr>
+<tr><td><pre># if we are close to the 0 or 30 minutes.
+</pre></td><td></td></tr>
+<tr><td><pre># Bash using integer arithmetic by default, we do not need rounding.
+</pre></td><td></td></tr>
+<tr><td><pre># We thus add 0 (plain hour) or 12 (half).
+</pre></td><td></td></tr>
+<tr><td><pre># Then we add 144, which is the first index (as an integer).
+</pre></td><td></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># (0 … 16 … 31 … 46 …) -&gt; (0 1 2 3)
+</pre></td><td></td></tr>
+<tr><td><pre>a=$(echo $(($min/15)))
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># The targeted unicode characters are the "CLOCK FACE" ones</pre></td></tr><tr><td></td><td><pre>
+# They are located in the codepages between:</pre></td></tr><tr><td></td><td><pre>
+#     U+1F550 (ONE OCLOCK) and U+1F55B (TWELVE OCLOCK), for the plain hours</pre></td></tr><tr><td></td><td><pre>
+#     U+1F55C (ONE-THIRTY) and U+1F567 (TWELVE-THIRTY), for the thirties</pre></td></tr><tr><td></td><td><pre>
+#</pre></td></tr><tr><td></td><td><pre>
+# Those codes may be output with unicode escapes or hexadecimal escapes,</pre></td></tr><tr><td></td><td><pre>
+# the later being the more portable.</pre></td></tr><tr><td></td><td><pre>
+#</pre></td></tr><tr><td></td><td><pre>
+# But we can iterate only over integers.</pre></td></tr><tr><td></td><td><pre>
+#</pre></td></tr><tr><td></td><td><pre>
+# We thus need the following conversion table:</pre></td></tr><tr><td></td><td><pre>
+#       utf   hex   int</pre></td></tr><tr><td></td><td><pre>
+# hours 50:5B 90:9b 144:155</pre></td></tr><tr><td></td><td><pre>
+# half  5C:67 9c:a7 156:167</pre></td></tr><tr><td></td><td><pre>
+# The characters being grouped bas plain/thirty, we must first now</pre></td></tr><tr><td></td><td><pre>
+# if we are close to the 0 or 30 minutes.</pre></td></tr><tr><td></td><td><pre>
+# Bash using integer arithmetic by default, we do not need rounding.</pre></td></tr><tr><td></td><td><pre>
+# We thus add 0 (plain hour) or 12 (half).</pre></td></tr><tr><td></td><td><pre>
+# Then we add 144, which is the first index (as an integer).</pre></td></tr><tr><td></td><td><pre>
+# (0 … 16 … 31 … 46 …) -&gt; (0 1 2 3)</pre></td></tr><tr><td></td><td><pre>
+a=Bash2Py(os.popen("echo "+str((min.val // 15))).read().rstrip("\n"))</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># (0 1 2 3) -&gt; (0 1 1 2)
+</pre></td><td></td></tr>
+<tr><td><pre>i=$(echo $a | awk '{ print $1/1.5 }' OFMT="%.0f")
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># (0 1 2 3) -&gt; (0 1 1 2)</pre></td></tr><tr><td></td><td><pre>
+i=Bash2Py(os.popen("echo "+str(a.val)+" | awk \"{ print $1/1.5 }\" OFMT=\"%.0f\"").read().rstrip("\n"))</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># (0 1 1 2) -&gt; (0 12 12 -1)
+</pre></td><td></td></tr>
+<tr><td><pre>j=$(( ( (i*12+1)%25 )-1 ))
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># (0 1 1 2) -&gt; (0 12 12 -1)</pre></td></tr><tr><td></td><td><pre>
+j=Bash2Py(((((i.val * 12) + 1) % 25) - 1))</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># (0 12 12 -1) -&gt; (0 12 12 1)
+</pre></td><td></td></tr>
+<tr><td><pre>k=${j#-}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># (0 12 12 -1) -&gt; (0 12 12 1)</pre></td></tr><tr><td></td><td><pre>
+k=Bash2Py(Expand.minus("j#"))</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># start from the first code
+</pre></td><td></td></tr>
+<tr><td><pre>mi=$((144+$k))
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># start from the first code</pre></td></tr><tr><td></td><td><pre>
+mi=Bash2Py((144 + k.val))</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># Add the computed minutes index (144 or 156) minus 1 (because the first hour starts at 0).
+</pre></td><td></td></tr>
+<tr><td><pre>hi=$(($mi+$hour-1))
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># Add the computed minutes index (144 or 156) minus 1 (because the first hour starts at 0).</pre></td></tr><tr><td></td><td><pre>
+hi=Bash2Py((mi.val + (hour.val - 1)))</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># Get the hexadecimal representation of this integer
+</pre></td><td></td></tr>
+<tr><td><pre>hex=$(printf "%x" $hi)
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># Get the hexadecimal representation of this integer</pre></td></tr><tr><td></td><td><pre>
+hex=Bash2Py(os.popen("printf \"%x\" "+str(hi.val)).read().rstrip("\n"))</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># Print the first three bytes (that are always the same) and the computed last one.
+</pre></td><td></td></tr>
+<tr><td><pre>printf "\xf0\x9f\x95\x$hex"
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># Print the first three bytes (that are always the same) and the computed last one.</pre></td></tr><tr><td></td><td><pre>
+print( "\xf0\x9f\x95\x"+str(hex.val) )
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>�</pre></td><td></td></tr>
+</body>
+</html>

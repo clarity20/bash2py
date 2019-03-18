@@ -1,0 +1,1 @@
+echo "Hello World" | tr a-z A-Z | tr A-Z a-z

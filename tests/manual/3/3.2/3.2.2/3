@@ -1,0 +1,2 @@
+testoutput 2>&1 | tr a-z A-Z
+testoutput      | tr a-z A-Z

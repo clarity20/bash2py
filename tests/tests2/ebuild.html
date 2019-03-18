@@ -1,0 +1,190 @@
+<html>
+<body>
+<table>
+<tr><td></td><td>
+#! /usr/bin/env python
+</td></tr>
+<tr><td></td><td>import sys,os,subprocess</td></tr>
+<tr><td></td><td>from stat import *</td></tr>
+<tr><td><pre>#!/usr/bin/env bash
+</pre></td><td></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>if [ $# -ne 2 ]
+then
+        echo "Please specify ebuild file and unpack, compile or all"
+        exit 1
+fi
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>if (len(sys.argv) != 2  ):
+    print("Please specify ebuild file and unpack, compile or all")
+    exit(1)</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>source /etc/ebuild.conf
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>_rc = subprocess.call(["source","/etc/ebuild.conf"])</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>if [ -z "$DISTDIR" ]
+then
+        # set DISTDIR to /usr/src/distfiles if not already set
+        DISTDIR=/usr/src/distfiles
+fi
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>if (('"$DISTDIR"' not in globals()) ):
+    # set DISTDIR to /usr/src/distfiles if not already set</pre></td></tr><tr><td></td><td><pre>
+    DISTDIR="/usr/src/distfiles"</pre></td></tr>
+<tr><td><pre>export DISTDIR
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>os.environ['DISTDIR'] = DISTDIR</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>ebuild_unpack() {
+        #make sure we're in the right directory 
+        cd ${ORIGDIR}
+        
+        if [ -d ${WORKDIR} ]
+        then    
+                rm -rf ${WORKDIR}
+        fi
+
+        mkdir ${WORKDIR}
+        cd ${WORKDIR}
+        if [ ! -e ${DISTDIR}/${A} ]
+        then
+                echo "${DISTDIR}/${A} does not exist.  Please download first."
+                exit 1
+        fi
+        tar xzf ${DISTDIR}/${A}
+        echo "Unpacked ${DISTDIR}/${A}."
+        #source is now correctly unpacked
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def ebuild_unpack () :
+    global ORIGDIR
+    global WORKDIR
+    global DISTDIR
+    global A
+
+    #make sure we're in the right directory </pre></td></tr><tr><td></td><td><pre>
+    os.chdir(ORIGDIR)
+    if (S_ISDIR(os.stat(WORKDIR ).st_mode) ):
+        _rc = subprocess.call(["rm","-rf",WORKDIR])
+    _rc = subprocess.call(["mkdir",WORKDIR])
+    os.chdir(WORKDIR)
+    if ( not os.path.isfile(str(DISTDIR) + "/" + str(A) ) ):
+        print(str(DISTDIR) + "/" + str(A) + " does not exist.  Please download first.")
+        exit(1)
+    _rc = subprocess.call(["tar","xzf",str(DISTDIR) + "/" + str(A)])
+    print("Unpacked " + str(DISTDIR) + "/" + str(A) + ".")
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>user_compile() {
+        #we're already in ${SRCDIR}
+        if [ -e configure ]
+        then
+                #run configure script if it exists
+                ./configure --prefix=/usr
+        fi
+        #run make
+        make $MAKEOPTS MAKE="make $MAKEOPTS"  
+} 
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>#source is now correctly unpacked</pre></td></tr><tr><td></td><td><pre>
+def user_compile () :
+    global MAKEOPTS
+    global MAKE
+
+    #we're already in ${SRCDIR}</pre></td></tr><tr><td></td><td><pre>
+    if (os.path.isfile("configure" ) ):
+        #run configure script if it exists</pre></td></tr><tr><td></td><td><pre>
+        _rc = subprocess.call(["./configure","--prefix"="/usr"])
+    #run make</pre></td></tr><tr><td></td><td><pre>
+    _rc = subprocess.call(["make",MAKEOPTS,MAKE="make " + str(MAKEOPTS)])
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>ebuild_compile() {
+        if [ ! -d "${SRCDIR}" ]
+        then
+                echo "${SRCDIR} does not exist -- please unpack first."
+                exit 1
+        fi
+        #make sure we're in the right directory  
+        cd ${SRCDIR}
+        user_compile
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def ebuild_compile () :
+    global SRCDIR
+
+    if ( not S_ISDIR(os.stat(str(SRCDIR) ).st_mode) ):
+        print(str(SRCDIR) + " does not exist -- please unpack first.")
+        exit(1)
+    #make sure we're in the right directory  </pre></td></tr><tr><td></td><td><pre>
+    os.chdir(SRCDIR)
+    user_compile()
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>export ORIGDIR=`pwd`
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>os.environ['ORIGDIR'] = os.popen("pwd").read()</pre></td></tr>
+<tr><td><pre>export WORKDIR=${ORIGDIR}/work
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>os.environ['WORKDIR'] = str(ORIGDIR) + "/work"</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>if [ -e "$1" ]
+then
+        source $1
+else
+        echo "Ebuild file $1 not found."
+        exit 1
+fi
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>if (os.path.isfile(str(sys.argv[1]) ) ):
+    _rc = subprocess.call(["source",sys.argv[1]])
+else:
+    print("Ebuild file " + str(sys.argv[1]) + " not found.")
+    exit(1)</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>export SRCDIR=${WORKDIR}/${P}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>os.environ['SRCDIR'] = str(WORKDIR) + "/" + str(P)</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>case "${2}" in
+        unpack)
+                ebuild_unpack
+                ;;
+        compile)
+                ebuild_compile
+                ;;
+        all)
+                ebuild_unpack
+                ebuild_compile
+                ;;
+        *)
+                echo "Please specify unpack, compile or all as the second arg"
+                exit 1
+                ;;
+esac
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>
+if ( str(sys.argv[2]) == 'unpack'):
+    ebuild_unpack()
+elif ( str(sys.argv[2]) == 'compile'):
+    ebuild_compile()
+elif ( str(sys.argv[2]) == 'all'):
+    ebuild_unpack()
+    ebuild_compile()
+else:
+    print("Please specify unpack, compile or all as the second arg")
+    exit(1)</pre></td></tr>
+<tr><td><pre>ÿ</pre></td><td></td></tr>
+</body>
+</html>

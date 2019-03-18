@@ -1,0 +1,5 @@
+function a
+{ echo "Called"; echo "Function"; }
+
+a
+a

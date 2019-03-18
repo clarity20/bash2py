@@ -1,0 +1,51 @@
+<html>
+<body>
+<table>
+<tr><td></td><td>
+#! /usr/bin/env python
+</td></tr>
+<tr><td></td><td>from stat import *</td></tr>
+<tr><td><pre>#!/bin/bash
+</pre></td><td></td></tr>
+<tr><td><pre>#Define bash global variable
+</pre></td><td></td></tr>
+<tr><td><pre>#This variable is global and can be used anywhere in this bash script
+</pre></td><td></td></tr>
+<tr><td><pre>VAR="global variable"
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>#Define bash global variable</pre></td></tr><tr><td></td><td><pre>
+#This variable is global and can be used anywhere in this bash script</pre></td></tr><tr><td></td><td><pre>
+VAR="global variable"</pre></td></tr>
+<tr><td><pre>function bash {
+#Define bash local variable
+#This variable is local to bash function only
+local VAR="local variable"
+echo $VAR
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def bash () :
+
+    #Define bash local variable</pre></td></tr><tr><td></td><td><pre>
+    #This variable is local to bash function only</pre></td></tr><tr><td></td><td><pre>
+    VAR="local variable"
+    
+    print(VAR)
+</pre></td></tr>
+<tr><td><pre>echo $VAR
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>print(VAR)</pre></td></tr>
+<tr><td><pre>bash
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>bash()</pre></td></tr>
+<tr><td><pre># Note the bash global variable did not change
+</pre></td><td></td></tr>
+<tr><td><pre># "local" is bash reserved word
+</pre></td><td></td></tr>
+<tr><td><pre>echo $VAR
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># Note the bash global variable did not change</pre></td></tr><tr><td></td><td><pre>
+# "local" is bash reserved word</pre></td></tr><tr><td></td><td><pre>
+print(VAR)</pre></td></tr>
+<tr><td><pre>ÿ</pre></td><td></td></tr>
+</body>
+</html>

@@ -1,0 +1,3 @@
+echo "Stdout and Stderr?"
+./testoutput > junk 2>&1
+cat junk

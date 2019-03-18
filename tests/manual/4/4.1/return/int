@@ -1,0 +1,8 @@
+function foo {
+	echo $1
+	return 21
+}
+
+foo 1
+
+foo $#

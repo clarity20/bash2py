@@ -1,0 +1,4 @@
+./cat1 << "EOF"
+Once in a while
+A rake will fire $0
+EOF

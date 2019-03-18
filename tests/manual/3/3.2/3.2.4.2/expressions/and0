@@ -1,0 +1,10 @@
+# IJD This is unbelievable: bash treats x as a variable and cond as a string
+x=1
+cond=no
+if [[ x -eq 1 && -a cond ]]
+then
+  echo "true"
+else
+  echo "false"
+fi
+

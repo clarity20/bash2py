@@ -1,0 +1,5 @@
+for i in a{d,c,d}$@e
+do
+echo $i
+done
+

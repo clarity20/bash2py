@@ -1,0 +1,46 @@
+dash_a="missing";
+dash_ot=ot
+dash_ef=ef
+
+if [ dash_ot < dash_ef ]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [ dash_ot < $dash_ef ]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [ $dash_ot < dash_ef ]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [ $dash_ot < $dash_ef ]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [ dash_ot < dash_a ]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [ dash_a < dash_ot ]
+then
+echo "true";
+else
+echo "false";
+fi
+

@@ -1,0 +1,517 @@
+<html>
+<body>
+<table>
+<tr><td></td><td>
+#! /usr/bin/env python
+</td></tr>
+<tr><td></td><td>import sys,os,subprocess,glob,re</td></tr>
+<tr><td></td><td><pre>class Bash2Py(object):
+  __slots__ = ["val"]
+  def __init__(self, value=''):
+    self.val = value
+
+</pre></td></tr><tr><td></td><td><pre>def Str(value):
+  if isinstance(value, list):
+    return " ".join(value)
+  return value
+
+</pre></td></tr><tr><td></td><td><pre>class Expand(object):
+  @staticmethod
+  def at():
+    if (len(sys.argv) < 2):
+      return []
+    return  sys.argv[1:]
+  @staticmethod
+  def star(in_quotes):
+    if (in_quotes):
+      if (len(sys.argv) < 2):
+        return ""
+      return " ".join(sys.argv[1:])
+    return Expand.at()
+
+</pre></td></tr><tr><td><pre>#!/usr/bin/env bash
+</pre></td><td></td></tr>
+<tr><td><pre>#
+</pre></td><td></td></tr>
+<tr><td><pre># A simple, configurable HTTP server written in bash.
+</pre></td><td></td></tr>
+<tr><td><pre>#
+</pre></td><td></td></tr>
+<tr><td><pre># See LICENSE for licensing information.
+</pre></td><td></td></tr>
+<tr><td><pre>#
+</pre></td><td></td></tr>
+<tr><td><pre># Original author: Avleen Vig, 2012
+</pre></td><td></td></tr>
+<tr><td><pre># Reworked by:     Josh Cartwright, 2012
+</pre></td><td></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>warn() { echo "WARNING: $@" &gt;&amp;2; }
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>#</pre></td></tr><tr><td></td><td><pre>
+# A simple, configurable HTTP server written in bash.</pre></td></tr><tr><td></td><td><pre>
+#</pre></td></tr><tr><td></td><td><pre>
+# See LICENSE for licensing information.</pre></td></tr><tr><td></td><td><pre>
+#</pre></td></tr><tr><td></td><td><pre>
+# Original author: Avleen Vig, 2012</pre></td></tr><tr><td></td><td><pre>
+# Reworked by:     Josh Cartwright, 2012</pre></td></tr><tr><td></td><td><pre>
+def warn () :
+    print("WARNING: "+Str(Expand.at()),stderr=subprocess.STDOUT)
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>[ -r bashttpd.conf ] || {
+   cat &gt;bashttpd.conf &lt;&lt;'EOF'
+#
+# bashttpd.conf - configuration for bashttpd
+#
+# The behavior of bashttpd is dictated by the evaluation
+# of rules specified in this configuration file.  Each rule
+# is evaluated until one is matched.  If no rule is matched,
+# bashttpd will serve a 500 Internal Server Error.
+#
+# The format of the rules are:
+#    on_uri_match REGEX command [args]
+#    unconditionally command [args]
+#
+# on_uri_match:
+#   On an incoming request, the URI is checked against the specified
+#   (bash-supported extended) regular expression, and if encounters a match the
+#   specified command is executed with the specified arguments.
+#
+#   For additional flexibility, on_uri_match will also pass the results of the
+#   regular expression match, ${BASH_REMATCH[@]} as additional arguments to the
+#   command.
+#
+# unconditionally:
+#   Always serve via the specified command.  Useful for catchall rules.
+#
+# The following commands are available for use:
+#
+#   serve_file FILE
+#     Statically serves a single file.
+#
+#   serve_dir_with_tree DIRECTORY
+#     Statically serves the specified directory using 'tree'.  It must be
+#     installed and in the PATH.
+#
+#   serve_dir_with_ls DIRECTORY
+#     Statically serves the specified directory using 'ls -al'.
+#
+#   serve_dir  DIRECTORY
+#     Statically serves a single directory listing.  Will use 'tree' if it is
+#     installed and in the PATH, otherwise, 'ls -al'
+#
+#   serve_dir_or_file_from DIRECTORY
+#     Serves either a directory listing (using serve_dir) or a file (using
+#     serve_file).  Constructs local path by appending the specified root
+#     directory, and the URI portion of the client request.
+#
+#   serve_static_string STRING
+#     Serves the specified static string with Content-Type text/plain.
+#
+# Examples of rules:
+#
+# on_uri_match '^/issue$' serve_file "/etc/issue"
+#
+#   When a client's requested URI matches the string '/issue', serve them the
+#   contents of /etc/issue
+#
+# on_uri_match 'root' serve_dir /
+#
+#   When a client's requested URI has the word 'root' in it, serve up
+#   a directory listing of /
+#
+# DOCROOT=/var/www/html
+# on_uri_match '/(.*)' serve_dir_or_file_from "$DOCROOT"
+#   When any URI request is made, attempt to serve a directory listing
+#   or file content based on the request URI, by mapping URI's to local
+#   paths relative to the specified "$DOCROOT"
+#
+
+unconditionally serve_static_string 'Hello, world!  You can configure bashttpd by modifying bashttpd.conf.'
+
+# More about commands:
+#
+# It is possible to somewhat easily write your own commands.  An example
+# may help.  The following example will serve "Hello, $x!" whenever
+# a client sends a request with the URI /say_hello_to/$x:
+#
+# serve_hello() {
+#    add_response_header "Content-Type" "text/plain"
+#    send_response_ok_exit &lt;&lt;&lt; "Hello, $2!"
+# }
+# on_uri_match '^/say_hello_to/(.*)$' serve_hello
+#
+# Like mentioned before, the contents of ${BASH_REMATCH[@]} are passed
+# to your command, so its possible to use regular expression groups
+# to pull out info.
+#
+# With this example, when the requested URI is /say_hello_to/Josh, serve_hello
+# is invoked with the arguments '/say_hello_to/Josh' 'Josh',
+# (${BASH_REMATCH[0]} is always the full match)
+EOF
+   warn "Created bashttpd.conf using defaults.  Please review it/configure before running bashttpd again."
+   exit 1
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>_rc0 = (os.access("bashttpd.conf",R_OK)) or (subprocess.Popen("cat",shell=True,stdout=file('bashttpd.conf','wb'),stdin=subprocess.PIPE)
+_rc0.communicate("#\n# bashttpd.conf - configuration for bashttpd\n#\n# The behavior of bashttpd is dictated by the evaluation\n# of rules specified in this configuration file.  Each rule\n# is evaluated until one is matched.  If no rule is matched,\n# bashttpd will serve a 500 Internal Server Error.\n#\n# The format of the rules are:\n#    on_uri_match REGEX command [args]\n#    unconditionally command [args]\n#\n# on_uri_match:\n#   On an incoming request, the URI is checked against the specified\n#   (bash-supported extended) regular expression, and if encounters a match the\n#   specified command is executed with the specified arguments.\n#\n#   For additional flexibility, on_uri_match will also pass the results of the\n#   regular expression match, ${BASH_REMATCH[@]} as additional arguments to the\n#   command.\n#\n# unconditionally:\n#   Always serve via the specified command.  Useful for catchall rules.\n#\n# The following commands are available for use:\n#\n#   serve_file FILE\n#     Statically serves a single file.\n#\n#   serve_dir_with_tree DIRECTORY\n#     Statically serves the specified directory using 'tree'.  It must be\n#     installed and in the PATH.\n#\n#   serve_dir_with_ls DIRECTORY\n#     Statically serves the specified directory using 'ls -al'.\n#\n#   serve_dir  DIRECTORY\n#     Statically serves a single directory listing.  Will use 'tree' if it is\n#     installed and in the PATH, otherwise, 'ls -al'\n#\n#   serve_dir_or_file_from DIRECTORY\n#     Serves either a directory listing (using serve_dir) or a file (using\n#     serve_file).  Constructs local path by appending the specified root\n#     directory, and the URI portion of the client request.\n#\n#   serve_static_string STRING\n#     Serves the specified static string with Content-Type text/plain.\n#\n# Examples of rules:\n#\n# on_uri_match '^/issue$' serve_file \"/etc/issue\"\n#\n#   When a client's requested URI matches the string '/issue', serve them the\n#   contents of /etc/issue\n#\n# on_uri_match 'root' serve_dir /\n#\n#   When a client's requested URI has the word 'root' in it, serve up\n#   a directory listing of /\n#\n# DOCROOT=/var/www/html\n# on_uri_match '/(.*)' serve_dir_or_file_from \"$DOCROOT\"\n#   When any URI request is made, attempt to serve a directory listing\n#   or file content based on the request URI, by mapping URI's to local\n#   paths relative to the specified \"$DOCROOT\"\n#\n\nunconditionally serve_static_string 'Hello, world!  You can configure bashttpd by modifying bashttpd.conf.'\n\n# More about commands:\n#\n# It is possible to somewhat easily write your own commands.  An example\n# may help.  The following example will serve \"Hello, $x!\" whenever\n# a client sends a request with the URI /say_hello_to/$x:\n#\n# serve_hello() {\n#    add_response_header \"Content-Type\" \"text/plain\"\n#    send_response_ok_exit &lt;&lt;&lt; \"Hello, $2!\"\n# }\n# on_uri_match '^/say_hello_to/(.*)$' serve_hello\n#\n# Like mentioned before, the contents of ${BASH_REMATCH[@]} are passed\n# to your command, so its possible to use regular expression groups\n# to pull out info.\n#\n# With this example, when the requested URI is /say_hello_to/Josh, serve_hello\n# is invoked with the arguments '/say_hello_to/Josh' 'Josh',\n# (${BASH_REMATCH[0]} is always the full match)\n")
+_rc0 = _rc0.wait()
+warn("Created bashttpd.conf using defaults.  Please review it/configure before running bashttpd again.")
+exit(1) )</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>recv() { echo "&lt; $@" &gt;&amp;2; }
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def recv () :
+    print("&lt; "+Str(Expand.at()),stderr=subprocess.STDOUT)
+</pre></td></tr>
+<tr><td><pre>send() { echo "&gt; $@" &gt;&amp;2;
+         printf '%s\r\n' "$*"; }
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def send () :
+    print("&gt; "+Str(Expand.at()),stderr=subprocess.STDOUT)
+    print( "%s\\r\\n" % (Expand.star(1)) )
+    
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>[[ $UID = 0 ]] &amp;&amp; warn "It is not recommended to run bashttpd as root."
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>_rc0 = (str(UID.val) == "0") and (warn("It is not recommended to run bashttpd as root."))</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>DATE=$(date +"%a, %d %b %Y %H:%M:%S %Z")
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>DATE=Bash2Py(os.popen("date +\"%a, %d %b %Y %H:%M:%S %Z\"").read().rstrip("\n"))</pre></td></tr>
+<tr><td><pre>declare -a RESPONSE_HEADERS=(
+      "Date: $DATE"
+   "Expires: $DATE"
+    "Server: Slash Bin Slash Bash"
+)
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>"RESPONSE_HEADERS=(Date: "+str(DATE.val)+" Expires: "+str(DATE.val)+" Server: Slash Bin Slash Bash)"
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>add_response_header() {
+   RESPONSE_HEADERS+=("$1: $2")
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def add_response_header (_p1,_p2) :
+    global RESPONSE_HEADERS
+
+    RESPONSE_HEADERS+=Bash2Py("("+str(_p1)+": "+str(_p2)+")")
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>declare -a HTTP_RESPONSE=(
+   [200]="OK"
+   [400]="Bad Request"
+   [403]="Forbidden"
+   [404]="Not Found"
+   [405]="Method Not Allowed"
+   [500]="Internal Server Error"
+)
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>Str(glob.glob("HTTP_RESPONSE=([200]=OK [400]=Bad Request [403]=Forbidden [404]=Not Found [405]=Method Not Allowed [500]=Internal Server Error)"))
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>send_response() {
+   local code=$1
+   send "HTTP/1.0 $1 ${HTTP_RESPONSE[$1]}"
+   for i in "${RESPONSE_HEADERS[@]}"; do
+      send "$i"
+   done
+   send
+   while read -r line; do
+      send "$line"
+   done
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def send_response (_p1) :
+    global HTTP_RESPONSE
+    global RESPONSE_HEADERS
+    global i
+    global line
+
+    code=Bash2Py(_p1)
+    send("HTTP/1.0 "+str(_p1)+" "+str(HTTP_RESPONSE.val[_p1] ]))
+    i=Bash2Py(0)
+    for i.val in [RESPONSE_HEADERS.val[@] ]]:
+        send(i.val)
+    send()
+    while (line = Bash2Py(raw_input())):
+        send(line.val)
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>send_response_ok_exit() { send_response 200; exit 0; }
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def send_response_ok_exit () :
+    send_response(200)
+    exit(0)
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>fail_with() {
+   send_response "$1" &lt;&lt;&lt; "$1 ${HTTP_RESPONSE[$1]}"
+   exit 1
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def fail_with (_p1) :
+    send_response(_p1)
+    exit(1)
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>serve_file() {
+   local file=$1
+
+   read -r CONTENT_TYPE   &lt; &lt;(file -b --mime-type "$file") &amp;&amp; \
+      add_response_header "Content-Type"   "$CONTENT_TYPE"
+   read -r CONTENT_LENGTH &lt; &lt;(stat -c'%s' "$file")         &amp;&amp; \
+      add_response_header "Content-Length" "$CONTENT_LENGTH"
+
+   send_response_ok_exit &lt; "$file"
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def serve_file (_p1) :
+    global CONTENT_TYPE
+    global CONTENT_LENGTH
+
+    file=Bash2Py(_p1)
+    _rc0 = (CONTENT_TYPE = Bash2Py(raw_input())) and (add_response_header("Content-Type", CONTENT_TYPE.val))
+    _rc0 = (CONTENT_LENGTH = Bash2Py(raw_input())) and (add_response_header("Content-Length", CONTENT_LENGTH.val))
+    send_response_ok_exit()
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>serve_dir_with_tree()
+{
+   local dir="$1" tree_vers tree_opts basehref x
+
+   add_response_header "Content-Type" "text/html"
+
+   # The --du option was added in 1.6.0.
+   read x tree_vers x &lt; &lt;(tree --version)
+   [[ $tree_vers == v1.6* ]] &amp;&amp; tree_opts="--du"
+
+   send_response_ok_exit &lt; \
+      &lt;(tree -H "$2" -L 1 "$tree_opts" -D "$dir")
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def serve_dir_with_tree (_p1) :
+    global tree_vers
+    global tree_opts
+
+    dir=Bash2Py(_p1)
+    "tree_vers"
+    "tree_opts"
+    "basehref"
+    "x"
+    add_response_header("Content-Type", "text/html")
+    # The --du option was added in 1.6.0.</pre></td></tr><tr><td></td><td><pre>
+    x = Bash2Py(raw_input())
+    _rc0 = (str(tree_vers.val) == Str(glob.glob("v1.6*"))) and (tree_opts=Bash2Py("--du"))
+    send_response_ok_exit()
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>serve_dir_with_ls()
+{
+   local dir=$1
+
+   add_response_header "Content-Type" "text/plain"
+
+   send_response_ok_exit &lt; \
+      &lt;(ls -la "$dir")
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def serve_dir_with_ls (_p1) :
+
+    dir=Bash2Py(_p1)
+    add_response_header("Content-Type", "text/plain")
+    send_response_ok_exit()
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>serve_dir() {
+   local dir=$1
+
+   # If `tree` is installed, use that for pretty output.
+   which tree &amp;&gt;/dev/null &amp;&amp; \
+      serve_dir_with_tree "$@"
+
+   serve_dir_with_ls "$@"
+
+   fail_with 500
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def serve_dir (_p1) :
+
+    dir=Bash2Py(_p1)
+    # If `tree` is installed, use that for pretty output.</pre></td></tr><tr><td></td><td><pre>
+    _rc0 = (subprocess.call("which" + " " + "tree",shell=True,stderr=subprocess.STDOUT,stdout=file('/dev/null','wb'))
+    ) and (serve_dir_with_tree(Expand.at()))
+    serve_dir_with_ls(Expand.at())
+    fail_with(500)
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>serve_dir_or_file_from() {
+   local URL_PATH=$1/$3
+   shift
+
+   # sanitize URL_PATH
+   URL_PATH=${URL_PATH//[^a-zA-Z0-9_~\-\.\/]/}
+   [[ $URL_PATH == *..* ]] &amp;&amp; fail_with 400
+
+   # Serve index file if exists in requested directory
+   [[ -d $URL_PATH &amp;&amp; -f $URL_PATH/index.html &amp;&amp; -r $URL_PATH/index.html ]] &amp;&amp; \
+      URL_PATH="$URL_PATH/index.html"
+
+   if [[ -f $URL_PATH ]]; then
+      [[ -r $URL_PATH ]] &amp;&amp; \
+         serve_file "$URL_PATH" "$@" || fail_with 403
+   elif [[ -d $URL_PATH ]]; then
+      [[ -x $URL_PATH ]] &amp;&amp; \
+         serve_dir  "$URL_PATH" "$@" || fail_with 403
+   fi
+
+   fail_with 404
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def serve_dir_or_file_from (_p1,_p2,_p3) :
+
+    URL_PATH=Bash2Py(str(_p1)+"/"+str(_p3))
+    _rc0 = subprocess.call(["shift"],shell=True)
+    # sanitize URL_PATH</pre></td></tr><tr><td></td><td><pre>
+    URL_PATH=Bash2Py(URL_PATH.val//[^a-zA-Z0-9_os.path.expanduser("~)\-\.\/]/)
+    _rc0 = (str(URL_PATH.val) == Str(glob.glob("*..*"))) and (fail_with(400))
+    # Serve index file if exists in requested directory</pre></td></tr><tr><td></td><td><pre>
+    _rc0 = (os.path.isdir(str(URL_PATH.val)) and os.path.isfile(str(URL_PATH.val)+"/index.html") and os.access(str(URL_PATH.val)+"/index.html",R_OK)) and (URL_PATH=Bash2Py(str(URL_PATH.val)+"/index.html"))
+    if (os.path.isfile(str(URL_PATH.val)) ):
+        ((os.access(str(URL_PATH.val),R_OK)) and (serve_file(URL_PATH.val, Expand.at()))) or (fail_with(403))
+    elif (os.path.isdir(str(URL_PATH.val)) ):
+        ((os.access(str(URL_PATH.val),X_OK)) and (serve_dir(URL_PATH.val, Expand.at()))) or (fail_with(403))
+    fail_with(404)
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>serve_static_string() {
+   add_response_header "Content-Type" "text/plain"
+   send_response_ok_exit &lt;&lt;&lt; "$1"
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def serve_static_string () :
+    add_response_header("Content-Type", "text/plain")
+    send_response_ok_exit()
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>on_uri_match() {
+   local regex=$1
+   shift
+
+   [[ $REQUEST_URI =~ $regex ]] &amp;&amp; \
+      "$@" "${BASH_REMATCH[@]}"
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def on_uri_match (_p1) :
+    global REQUEST_URI
+    global BASH_REMATCH
+
+    regex=Bash2Py(_p1)
+    _rc0 = subprocess.call(["shift"],shell=True)
+    _rc0 = (re.search(str(regex.val),str(REQUEST_URI.val))) and (subprocess.call([Str(Expand.at()),str(BASH_REMATCH.val[@] ])],shell=True))
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>unconditionally() {
+   "$@" "$REQUEST_URI"
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def unconditionally () :
+    global REQUEST_URI
+
+    subprocess.call([Str(Expand.at()),str(REQUEST_URI.val)],shell=True)
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># Request-Line HTTP RFC 2616 $5.1
+</pre></td><td></td></tr>
+<tr><td><pre>read -r line || fail_with 400
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># Request-Line HTTP RFC 2616 $5.1</pre></td></tr><tr><td></td><td><pre>
+_rc0 = (line = Bash2Py(raw_input())) or (fail_with(400))</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># strip trailing CR if it exists
+</pre></td><td></td></tr>
+<tr><td><pre>line=${line%%$'\r'}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># strip trailing CR if it exists</pre></td></tr><tr><td></td><td><pre>
+line=Bash2Py(line.val%%"\r")</pre></td></tr>
+<tr><td><pre>recv "$line"
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>recv(line.val)</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>read -r REQUEST_METHOD REQUEST_URI REQUEST_HTTP_VERSION &lt;&lt;&lt;"$line"
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>REQUEST_METHOD = Bash2Py(raw_input())</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>[ -n "$REQUEST_METHOD" ] &amp;&amp; \
+[ -n "$REQUEST_URI" ] &amp;&amp; \
+[ -n "$REQUEST_HTTP_VERSION" ] \
+   || fail_with 400
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>_rc0 = (((str(REQUEST_METHOD.val) != '') and (str(REQUEST_URI.val) != '')) and (str(REQUEST_HTTP_VERSION.val) != '')) or (fail_with(400))</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># Only GET is supported at this time
+</pre></td><td></td></tr>
+<tr><td><pre>[ "$REQUEST_METHOD" = "GET" ] || fail_with 405
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># Only GET is supported at this time</pre></td></tr><tr><td></td><td><pre>
+_rc0 = (REQUEST_METHOD.val  "=""GET" != '') or (fail_with(405))</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>declare -a REQUEST_HEADERS
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>REQUEST_HEADERS=""
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>while read -r line; do
+   line=${line%%$'\r'}
+   recv "$line"
+
+   # If we've reached the end of the headers, break.
+   [ -z "$line" ] &amp;&amp; break
+
+   REQUEST_HEADERS+=("$line")
+done
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>while (line = Bash2Py(raw_input())):
+    line=Bash2Py(line.val%%"\r")
+    recv(line.val)
+    # If we've reached the end of the headers, break.</pre></td></tr><tr><td></td><td><pre>
+    (str(line.val) == '') and (break)
+    REQUEST_HEADERS+=Bash2Py("("+str(line.val)+")")</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>source bashttpd.conf
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>_rc0 = subprocess.call(["source","bashttpd.conf"],shell=True)</pre></td></tr>
+<tr><td><pre>fail_with 500
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>fail_with(500)</pre></td></tr>
+<tr><td><pre>ÿ</pre></td><td></td></tr>
+</body>
+</html>

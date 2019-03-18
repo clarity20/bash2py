@@ -1,0 +1,6 @@
+#need to pass in some parameters
+for i in $* "$*"
+do
+echo $i
+done
+

@@ -1,0 +1,20 @@
+<html>
+<body>
+<table>
+<tr><td></td><td>
+#! /usr/bin/env python
+</td></tr>
+<tr><td></td><td>import os,subprocess</td></tr>
+<tr><td></td><td>from stat import *</td></tr>
+<tr><td><pre>SUBDIR=ijdavis
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>SUBDIR="ijdavis"</pre></td></tr>
+<tr><td><pre>export SUBDIR
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>os.environ['SUBDIR'] = SUBDIR</pre></td></tr>
+<tr><td><pre>~/bin/args abc | grep abc
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>_rc = subprocess.call([os.path.expanduser("~/bin/args"),"abc"]) | _rc = subprocess.call(["grep","abc"])</pre></td></tr>
+<tr><td><pre>ÿ</pre></td><td></td></tr>
+</body>
+</html>

@@ -1,0 +1,63 @@
+28 Feb 2014
+
+This is a guide to the understanding the source code for bash2py. Bash2py is
+based off of the original Bash source code. It reuses most of the code of Bash,
+so that the control-flow graph of a bash script can be made with ease. All
+code compiled when BASH2PY is defined (and/or omitted) represents changes
+applied to the basic Bash source-code distribution.  When this preprocess
+define is absent from the config.h file (providing a clean build is performed)
+the standard bash-4.3.30 shell program should be generated.
+
+The main driver for Bash2py is the executable script "bash2py", located in the
+root directory of the project. This file calls "bash2py.py" with the arguments
+to the script, where the first argument is either -d or -f (depending on
+whether a file or a directory wants to be translated), and the second argument
+is the directory or file name.
+
+"bash2py.py" then calls the program "bash-4.3.30/bash2pyengine" on the file
+that you want to translate (if the -f option is used), or it will call it on
+every file not ending with "*.py" (recursively) in the directory specified (if
+the -d option is used). The program "bash-4.3.30/bash2pyengine" translates
+named bash files to python files with the same name but with the extension
+".py".
+
+Now, let's explain how the source code works:
+
+As mentioned above, "bash2pyengine" is the "meat and potatoes" of bash2py.
+This is the driving engine that performs the actual translation. The argument
+to bash2pyengine is the fully qualified name of the bash file that you want to
+translate. The most important C file of bash2pyengine is the file
+"translate.c", which is the file that performs the actual translation. Note
+to reader: any function names we say hereforth are functions which exist in
+"translate.c". When bash2pyengine first starts running, it first calls the
+function initialize_translator(), which creates the output file "<name>.py",
+which will contain the outputed Python code. Later on, just before the
+translator terminates, it calls close_translator().
+
+Now, let's specify how translation happens. When bash2pyengine first starts,
+it first parses the bash file, and creates a control-flow-graph. All of this
+happens in C files that were authored originally by the authors of Bash, and
+we did not have to alter their files. Now, bash2pyengine is going to walk
+through each node of the CFG (control flow graph), where each node is a
+COMMAND object. At every node, the function print_translation() is going to
+be called with the node as an argument. print_translation() is the function
+that actually translates each command. It will call the function
+print_command(), which does the translation. This function will call the
+function make_command_string(), which does the translation. That function will
+write the translation directly to the file "<name>.py". Forgive this
+complicated mechanism, as it is essentially an artifact from Bash.
+
+Make_command_string() will call emit_command(). This function
+will figure out what type of command we are dealing with (e.g. if, for, while,
+etc.). Depending on what type of command it is, the relevant function will be
+called. That function will perform some contextual translation involving the
+whole command, but eventually, it will try to translate each "word" of the
+command, where the words are essentially tokens separated by spaces
+(or escaped quoted sequences). For instance, in the conditional "[ -eq $x 2 ]",
+the words will be [, -eq, $x, 2, and ]. Each word is passed to the function
+translate_word(), which is going to translate that word from Bash syntax to
+Python. This function will call the function fix_string(), to convert such
+words to their python equivalent words.
+
+End users are invited to further improve this translation logic to better
+meet their own requirements of it.

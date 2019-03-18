@@ -1,0 +1,4 @@
+for i in a b * *.[ch] d *.o $@
+do
+echo $i
+done

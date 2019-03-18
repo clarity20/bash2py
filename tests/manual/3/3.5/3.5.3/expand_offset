@@ -1,0 +1,3 @@
+x="abcdefghijklmno"
+echo ${x:10}
+echo ${x:10:4}

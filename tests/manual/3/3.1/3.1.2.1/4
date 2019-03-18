@@ -1,0 +1,7 @@
+# 3.1.2.1 Escape Character
+# A backslash preserves the literal value of the next character, with the
+# exception of newline, in which case it is treated as line continuation.
+
+echo Before\
+After
+

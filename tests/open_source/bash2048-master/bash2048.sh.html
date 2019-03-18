@@ -1,0 +1,818 @@
+<html>
+<body>
+<table>
+<tr><td></td><td>
+#! /usr/bin/env python
+</td></tr>
+<tr><td></td><td>import sys,os,subprocess,signal</td></tr>
+<tr><td></td><td><pre>class Bash2Py(object):
+  __slots__ = ["val"]
+  def __init__(self, value=''):
+    self.val = value
+  def setValue(self, value=None):
+    self.val = value
+    return value
+  def postinc(self,inc=1):
+    tmp = self.val
+    self.val += inc
+    return tmp
+  def plus(value):
+    self.val += value
+    return self.val
+  def minus(value):
+    self.val -= value
+    return self.val
+
+</pre></td></tr><tr><td></td><td><pre>def GetVariable(name, local=locals()):
+  if name in local:
+    return local[name]
+  if name in globals():
+    return globals()[name]
+  return None
+
+def Make(name, local=locals()):
+  ret = GetVariable(name, local)
+  if ret is None:
+    ret = Bash2Py(0)
+    globals()[name] = ret
+  return ret
+
+</pre></td></tr><tr><td></td><td><pre>class Expand(object):
+  @staticmethod
+  def hash():
+    return  len(sys.argv)-1
+
+</pre></td></tr><tr><td><pre>#!/usr/bin/env bash
+</pre></td><td></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>#important variables
+</pre></td><td></td></tr>
+<tr><td><pre>declare -ia board    # array that keeps track of game status
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>#important variables</pre></td></tr><tr><td></td><td><pre>
+board=""
+</pre></td></tr>
+<tr><td><pre>declare -i pieces    # number of pieces present on board
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># array that keeps track of game status</pre></td></tr><tr><td></td><td><pre>
+pieces=0
+</pre></td></tr>
+<tr><td><pre>declare -i score=0   # score variable
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># number of pieces present on board</pre></td></tr><tr><td></td><td><pre>
+"score=0"
+</pre></td></tr>
+<tr><td><pre>declare -i flag_skip # flag that prevents doing more than one operation on
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># score variable</pre></td></tr><tr><td></td><td><pre>
+flag_skip=0
+</pre></td></tr>
+<tr><td><pre>                     # single field in one step
+</pre></td><td></td></tr>
+<tr><td><pre>declare -i moves     # stores number of possible moves to determine if player lost 
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># flag that prevents doing more than one operation on</pre></td></tr><tr><td></td><td><pre>
+# single field in one step</pre></td></tr><tr><td></td><td><pre>
+moves=0
+</pre></td></tr>
+<tr><td><pre>                     # the game
+</pre></td><td></td></tr>
+<tr><td><pre>declare ESC=$'\e'    # escape byte
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># stores number of possible moves to determine if player lost </pre></td></tr><tr><td></td><td><pre>
+# the game</pre></td></tr><tr><td></td><td><pre>
+"ESC=\x1b"
+</pre></td></tr>
+<tr><td><pre>declare header="Bash 2048 v1.1 (https://github.com/mydzor/bash2048)"
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># escape byte</pre></td></tr><tr><td></td><td><pre>
+"header=Bash 2048 v1.1 (https://github.com/mydzor/bash2048)"
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>#default config
+</pre></td><td></td></tr>
+<tr><td><pre>declare -i board_size=4
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>#default config</pre></td></tr><tr><td></td><td><pre>
+"board_size=4"
+</pre></td></tr>
+<tr><td><pre>declare -i target=2048
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>"target=2048"
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>#for colorizing numbers
+</pre></td><td></td></tr>
+<tr><td><pre>declare -a colors
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>#for colorizing numbers</pre></td></tr><tr><td></td><td><pre>
+colors=""
+</pre></td></tr>
+<tr><td><pre>colors[2]=33         # yellow text
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>colors[2]=Bash2Py(33)</pre></td></tr>
+<tr><td><pre>colors[4]=32         # green text
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># yellow text</pre></td></tr><tr><td></td><td><pre>
+colors[4]=Bash2Py(32)</pre></td></tr>
+<tr><td><pre>colors[8]=34         # blue text
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># green text</pre></td></tr><tr><td></td><td><pre>
+colors[8]=Bash2Py(34)</pre></td></tr>
+<tr><td><pre>colors[16]=36        # cyan text
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># blue text</pre></td></tr><tr><td></td><td><pre>
+colors[16]=Bash2Py(36)</pre></td></tr>
+<tr><td><pre>colors[32]=35        # purple text
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># cyan text</pre></td></tr><tr><td></td><td><pre>
+colors[32]=Bash2Py(35)</pre></td></tr>
+<tr><td><pre>colors[64]="33m\033[7"        # yellow background
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># purple text</pre></td></tr><tr><td></td><td><pre>
+colors[64]=Bash2Py("33m\033[7")</pre></td></tr>
+<tr><td><pre>colors[128]="32m\033[7"       # green background
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># yellow background</pre></td></tr><tr><td></td><td><pre>
+colors[128]=Bash2Py("32m\033[7")</pre></td></tr>
+<tr><td><pre>colors[256]="34m\033[7"       # blue background
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># green background</pre></td></tr><tr><td></td><td><pre>
+colors[256]=Bash2Py("34m\033[7")</pre></td></tr>
+<tr><td><pre>colors[512]="36m\033[7"       # cyan background
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># blue background</pre></td></tr><tr><td></td><td><pre>
+colors[512]=Bash2Py("36m\033[7")</pre></td></tr>
+<tr><td><pre>colors[1024]="35m\033[7"      # purple background
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># cyan background</pre></td></tr><tr><td></td><td><pre>
+colors[1024]=Bash2Py("35m\033[7")</pre></td></tr>
+<tr><td><pre>colors[2048]="31m\033[7"      # red background (won with default target)
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># purple background</pre></td></tr><tr><td></td><td><pre>
+colors[2048]=Bash2Py("31m\033[7")</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>exec 3&gt;/dev/null     # no logging by default
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># red background (won with default target)</pre></td></tr><tr><td></td><td><pre>
+_rc0 = subprocess.call("exec",shell=True,std3=file('/dev/null','wb'))
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>trap "end_game 0" INT #handle INT signal
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># no logging by default</pre></td></tr><tr><td></td><td><pre>
+signal.signal(signal.SIGINT,"end_game 0")
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>#simplified replacement of seq command
+</pre></td><td></td></tr>
+<tr><td><pre>function _seq {
+  local cur=1
+  local max
+  local inc=1
+  case $# in
+    1) let max=$1;;
+    2) let cur=$1
+       let max=$2;;
+    3) let cur=$1
+       let inc=$2
+       let max=$3;;
+  esac
+  while test $max -ge $cur; do
+    printf "$cur "
+    let cur+=inc
+  done
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>#handle INT signal</pre></td></tr><tr><td></td><td><pre>
+#simplified replacement of seq command</pre></td></tr><tr><td></td><td><pre>
+def _seq (_p1,_p2,_p3) :
+    global max
+
+    cur=Bash2Py(1)
+    "max"
+    inc=Bash2Py(1)
+    
+    if ( str(Expand.hash()) == '1'):
+        Make("max").setValue(_p1.val)
+    elif ( str(Expand.hash()) == '2'):
+        Make("cur").setValue(_p1.val)
+        Make("max").setValue(_p2.val)
+    elif ( str(Expand.hash()) == '3'):
+        Make("cur").setValue(_p1.val)
+        Make("inc").setValue(_p2.val)
+        Make("max").setValue(_p3.val)
+    while (int(max.val) &gt;= int(cur.val)):
+        print( str(cur.val)+" " )
+        
+        Make("cur").plus(inc.val)
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># print currect status of the game, last added pieces are marked red
+</pre></td><td></td></tr>
+<tr><td><pre>function print_board {
+  clear
+  printf "$header pieces=$pieces target=$target score=$score\n"
+  printf "Board status:\n" &gt;&amp;3
+  printf "\n"
+  printf '/------'
+  for l in $(_seq 1 $index_max); do
+    printf '|------'
+  done
+  printf '\\\n'
+  for l in $(_seq 0 $index_max); do
+    printf '|'
+    for m in $(_seq 0 $index_max); do
+      if let ${board[l*$board_size+m]}; then
+        if let '(last_added==(l*board_size+m))|(first_round==(l*board_size+m))'; then
+          printf '\033[1m\033[31m %4d \033[0m|' ${board[l*$board_size+m]}
+        else
+          printf "\033[1m\033[${colors[${board[l*$board_size+m]}]}m %4d\033[0m |" ${board[l*$board_size+m]}
+        fi
+        printf " %4d |" ${board[l*$board_size+m]} &gt;&amp;3
+      else
+        printf '      |'
+        printf '      |' &gt;&amp;3
+      fi
+    done
+    let l==$index_max || {
+      printf '\n|------'
+      for l in $(_seq 1 $index_max); do
+        printf '|------'
+      done
+      printf '|\n'
+      printf '\n' &gt;&amp;3
+    }
+  done
+  printf '\n\\------'
+  for l in $(_seq 1 $index_max); do
+    printf '|------'
+  done
+  printf '/\n'
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># print currect status of the game, last added pieces are marked red</pre></td></tr><tr><td></td><td><pre>
+def print_board () :
+    global header
+    global pieces
+    global target
+    global score
+    global index_max
+    global board
+    global board_size
+    global colors
+
+    subprocess.call(["clear"],shell=True)
+    print( str(header.val)+" pieces="+str(pieces.val)+" target="+str(target.val)+" score="+str(score.val)+"\n" )
+    
+    print( "Board status:\n" )
+    
+    print( "\n" )
+    
+    print( "/------" )
+    
+    l=Bash2Py(0)
+    for l.val in [os.popen("_seq 1 "+str(index_max.val)).read().rstrip("\n")]:
+        print( "|------" )
+    
+    print( "\\\\\\n" )
+    
+    l=Bash2Py(0)
+    for l.val in [os.popen("_seq 0 "+str(index_max.val)).read().rstrip("\n")]:
+        print( "|" )
+        
+        m=Bash2Py(0)
+        for m.val in [os.popen("_seq 0 "+str(index_max.val)).read().rstrip("\n")]:
+            if (board[l*board_size+m] ] ):
+                if (((last_added.val == ((l.val * board_size.val) + m.val)) | (first_round.val == ((l.val * board_size.val) + m.val))) ):
+                    print( "\\033[1m\\033[31m %4d \\033[0m|" % (str(board.val[l*str(board_size.val)+m] ])) )
+                
+                else:
+                    print( "\033[1m\033["+str(colors.val[str(board.val[l*str(board_size.val)+m] ])] ])+"m %4d\033[0m |" % (str(board.val[l*str(board_size.val)+m] ])) )
+                
+                print( " %4d |" % (str(board.val[l*str(board_size.val)+m] ])) )
+            
+            else:
+                print( "      |" )
+                
+                print( "      |" )
+        
+        ((l.val == index_max.val)) or (
+            print( "\\n|------" )
+            
+            l=Bash2Py(0)
+            for l.val in [os.popen("_seq 1 "+str(index_max.val)).read().rstrip("\n")]:
+                print( "|------" )
+            
+            print( "|\\n" )
+            
+            print( "\\n" )
+            
+        )
+    print( "\\n\\\\------" )
+    
+    l=Bash2Py(0)
+    for l.val in [os.popen("_seq 1 "+str(index_max.val)).read().rstrip("\n")]:
+        print( "|------" )
+    
+    print( "/\\n" )
+    
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># Generate new piece on the board
+</pre></td><td></td></tr>
+<tr><td><pre># inputs:
+</pre></td><td></td></tr>
+<tr><td><pre>#         $board  - original state of the game board
+</pre></td><td></td></tr>
+<tr><td><pre>#         $pieces - original number of pieces
+</pre></td><td></td></tr>
+<tr><td><pre># outputs:
+</pre></td><td></td></tr>
+<tr><td><pre>#         $board  - new state of the game board
+</pre></td><td></td></tr>
+<tr><td><pre>#         $pieces - new number of pieces
+</pre></td><td></td></tr>
+<tr><td><pre>function generate_piece {
+  while true; do
+    let pos=RANDOM%fields_total
+    let board[$pos] || {
+      let value=RANDOM%10?2:4
+      board[$pos]=$value
+      last_added=$pos
+      printf "Generated new piece with value $value at position [$pos]\n" &gt;&amp;3
+      break;
+    }
+  done
+  let pieces++
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># Generate new piece on the board</pre></td></tr><tr><td></td><td><pre>
+# inputs:</pre></td></tr><tr><td></td><td><pre>
+#         $board  - original state of the game board</pre></td></tr><tr><td></td><td><pre>
+#         $pieces - original number of pieces</pre></td></tr><tr><td></td><td><pre>
+# outputs:</pre></td></tr><tr><td></td><td><pre>
+#         $board  - new state of the game board</pre></td></tr><tr><td></td><td><pre>
+#         $pieces - new number of pieces</pre></td></tr><tr><td></td><td><pre>
+def generate_piece () :
+    global pos
+    global board
+    global value
+    global last_added
+
+    while (True):
+        Make("pos").setValue((RANDOM.val % fields_total.val))
+        (board) or (
+            Make("value").setValue((2 if (RANDOM.val % 10) else 4))
+            board[pos]=Bash2Py(value.val)
+            last_added=Bash2Py(pos.val)
+            print( "Generated new piece with value "+str(value.val)+" at position ["+str(pos.val)+"]\n" )
+            
+            break
+        )
+    _rc0= not Make("pieces").postinc()
+    _rc0 = Bash2Py(_rc0)
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># perform push operation between two pieces
+</pre></td><td></td></tr>
+<tr><td><pre># inputs:
+</pre></td><td></td></tr>
+<tr><td><pre>#         $1 - push position, for horizontal push this is row, for vertical column
+</pre></td><td></td></tr>
+<tr><td><pre>#         $2 - recipient piece, this will hold result if moving or joining
+</pre></td><td></td></tr>
+<tr><td><pre>#         $3 - originator piece, after moving or joining this will be left empty
+</pre></td><td></td></tr>
+<tr><td><pre>#         $4 - direction of push, can be either "up", "down", "left" or "right"
+</pre></td><td></td></tr>
+<tr><td><pre>#         $5 - if anything is passed, do not perform the push, only update number 
+</pre></td><td></td></tr>
+<tr><td><pre>#              of valid moves
+</pre></td><td></td></tr>
+<tr><td><pre>#         $board - original state of the game board
+</pre></td><td></td></tr>
+<tr><td><pre># outputs:
+</pre></td><td></td></tr>
+<tr><td><pre>#         $change    - indicates if the board was changed this round
+</pre></td><td></td></tr>
+<tr><td><pre>#         $flag_skip - indicates that recipient piece cannot be modified further
+</pre></td><td></td></tr>
+<tr><td><pre>#         $board     - new state of the game board
+</pre></td><td></td></tr>
+<tr><td><pre>function push_pieces {
+  case $4 in
+    "up")
+      let "first=$2*$board_size+$1"
+      let "second=($2+$3)*$board_size+$1"
+      ;;
+    "down")
+      let "first=(index_max-$2)*$board_size+$1"
+      let "second=(index_max-$2-$3)*$board_size+$1"
+      ;;
+    "left")
+      let "first=$1*$board_size+$2"
+      let "second=$1*$board_size+($2+$3)"
+      ;;
+    "right")
+      let "first=$1*$board_size+(index_max-$2)"
+      let "second=$1*$board_size+(index_max-$2-$3)"
+      ;;
+  esac
+  let ${board[$first]} || { 
+    let ${board[$second]} &amp;&amp; {
+      if test -z $5; then
+        board[$first]=${board[$second]}
+        let board[$second]=0
+        let change=1
+        printf "move piece with value ${board[$first]} from [$second] to [$first]\n" &gt;&amp;3
+      else
+        let moves++
+      fi
+      return
+    }
+    return
+  }
+  let ${board[$second]} &amp;&amp; let flag_skip=1
+  let "${board[$first]}==${board[second]}" &amp;&amp; { 
+    if test -z $5; then
+      let board[$first]*=2
+      let "board[$first]==$target" &amp;&amp; end_game 1
+      let board[$second]=0
+      let pieces-=1
+      let change=1
+      let score+=${board[$first]}
+      printf "joined piece from [$second] with [$first], new value=${board[$first]}\n" &gt;&amp;3
+    else
+      let moves++
+    fi
+  }
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># perform push operation between two pieces</pre></td></tr><tr><td></td><td><pre>
+# inputs:</pre></td></tr><tr><td></td><td><pre>
+#         $1 - push position, for horizontal push this is row, for vertical column</pre></td></tr><tr><td></td><td><pre>
+#         $2 - recipient piece, this will hold result if moving or joining</pre></td></tr><tr><td></td><td><pre>
+#         $3 - originator piece, after moving or joining this will be left empty</pre></td></tr><tr><td></td><td><pre>
+#         $4 - direction of push, can be either "up", "down", "left" or "right"</pre></td></tr><tr><td></td><td><pre>
+#         $5 - if anything is passed, do not perform the push, only update number </pre></td></tr><tr><td></td><td><pre>
+#              of valid moves</pre></td></tr><tr><td></td><td><pre>
+#         $board - original state of the game board</pre></td></tr><tr><td></td><td><pre>
+# outputs:</pre></td></tr><tr><td></td><td><pre>
+#         $change    - indicates if the board was changed this round</pre></td></tr><tr><td></td><td><pre>
+#         $flag_skip - indicates that recipient piece cannot be modified further</pre></td></tr><tr><td></td><td><pre>
+#         $board     - new state of the game board</pre></td></tr><tr><td></td><td><pre>
+def push_pieces (_p1,_p2,_p3,_p4,_p5) :
+    global board_size
+    global board
+    global first
+    global second
+    global target
+
+    
+    if ( str(_p4) == 'up'):
+        Make("first").setValue(((_p2.val * board_size.val) + _p1.val))
+        Make("second").setValue((((_p2.val + _p3.val) * board_size.val) + _p1.val))
+    elif ( str(_p4) == 'down'):
+        Make("first").setValue((((index_max.val - _p2.val) * board_size.val) + _p1.val))
+        Make("second").setValue((((index_max.val - (_p2.val - _p3.val)) * board_size.val) + _p1.val))
+    elif ( str(_p4) == 'left'):
+        Make("first").setValue(((_p1.val * board_size.val) + _p2.val))
+        Make("second").setValue(((_p1.val * board_size.val) + (_p2.val + _p3.val)))
+    elif ( str(_p4) == 'right'):
+        Make("first").setValue(((_p1.val * board_size.val) + (index_max.val - _p2.val)))
+        Make("second").setValue(((_p1.val * board_size.val) + (index_max.val - (_p2.val - _p3.val))))
+    _rc0 = (board[first] ]) or (
+        (board[second] ]) and (
+            if (str(_p5) == '' ):
+                board[first]=Bash2Py(board.val[second.val] ])
+                board
+                Make("change").setValue(1)
+                print( "move piece with value "+str(board.val[str(first.val)] ])+" from ["+str(second.val)+"] to ["+str(first.val)+"]\n" )
+            
+            else:
+                Make("moves").postinc()
+            return
+        )
+        return
+    )
+    _rc0 = (board[second] ]) and (Make("flag_skip").setValue(1))
+    _rc0 = ((board[first] ].val == board[second] ].val)) and (
+        if (str(_p5) == '' ):
+            board
+            (board) and (subprocess.call(["end_game","1"],shell=True))
+            board
+            Make("pieces").minus(1)
+            Make("change").setValue(1)
+            Make("score").plus(board[first] ].val)
+            print( "joined piece from ["+str(second.val)+"] with ["+str(first.val)+"], new value="+str(board.val[str(first.val)] ])+"\n" )
+        
+        else:
+            Make("moves").postinc()
+    )
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>function apply_push {
+  printf "\n\ninput: $1 key\n" &gt;&amp;3
+  for i in $(_seq 0 $index_max); do
+    for j in $(_seq 0 $index_max); do
+      flag_skip=0
+      let increment_max=index_max-j
+      for k in $(_seq 1 $increment_max); do
+        let flag_skip &amp;&amp; break
+        push_pieces $i $j $k $1 $2
+      done 
+    done
+  done
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def apply_push (_p1,_p2) :
+    global index_max
+    global flag_skip
+    global increment_max
+    global i
+    global j
+    global k
+
+    print( "\n\ninput: "+str(_p1)+" key\n" )
+    
+    i=Bash2Py(0)
+    for i.val in [os.popen("_seq 0 "+str(index_max.val)).read().rstrip("\n")]:
+        j=Bash2Py(0)
+        for j.val in [os.popen("_seq 0 "+str(index_max.val)).read().rstrip("\n")]:
+            flag_skip=Bash2Py(0)
+            Make("increment_max").setValue((index_max.val - j.val))
+            k=Bash2Py(0)
+            for k.val in [os.popen("_seq 1 "+str(increment_max.val)).read().rstrip("\n")]:
+                (flag_skip) and (break)
+                push_pieces(i.val, j.val, k.val, _p1, _p2)
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>function check_moves {
+  let moves=0
+  apply_push up fake
+  apply_push down fake
+  apply_push left fake
+  apply_push right fake
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def check_moves () :
+    Make("moves").setValue(0)
+    apply_push("up", "fake")
+    apply_push("down", "fake")
+    apply_push("left", "fake")
+    apply_push("right", "fake")
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>function key_react {
+  let change=0
+  read -d '' -sn 1
+  test "$REPLY" = "$ESC" &amp;&amp; {
+    read -d '' -sn 1 -t1
+    test "$REPLY" = "[" &amp;&amp; {
+      read -d '' -sn 1 -t1
+      case $REPLY in
+        A) apply_push up;;
+        B) apply_push down;;
+        C) apply_push right;;
+        D) apply_push left;;
+      esac
+    }
+  } || {
+    case $REPLY in
+      k) apply_push up;;
+      j) apply_push down;;
+      l) apply_push right;;
+      h) apply_push left;;
+    esac
+  }
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def key_react () :
+    global REPLY
+    global ESC
+
+    Make("change").setValue(0)
+    raw_input()
+    _rc0 = ((REPLY.val  "="str(ESC.val) != '') and (
+        raw_input()
+        (REPLY.val  "=""[" != '') and (
+            raw_input()
+            
+            if ( str(REPLY.val) == 'A'):
+                apply_push("up")
+            elif ( str(REPLY.val) == 'B'):
+                apply_push("down")
+            elif ( str(REPLY.val) == 'C'):
+                apply_push("right")
+            elif ( str(REPLY.val) == 'D'):
+                apply_push("left")
+        )
+    )) or (
+        
+        if ( str(REPLY.val) == 'k'):
+            apply_push("up")
+        elif ( str(REPLY.val) == 'j'):
+            apply_push("down")
+        elif ( str(REPLY.val) == 'l'):
+            apply_push("right")
+        elif ( str(REPLY.val) == 'h'):
+            apply_push("left")
+    )
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>function end_game {
+  print_board
+  printf "GAME OVER\n"
+  printf "Your score: $score\n"
+  stty echo
+  let $1 &amp;&amp; {
+    printf "Congratulations you have achieved $target\n"
+    exit 0
+  }
+  printf "You have lost, better luck next time.\033[0m\n"
+  exit 0
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def end_game (_p1) :
+    global score
+    global target
+
+    print_board()
+    print( "GAME OVER\n" )
+    
+    print( "Your score: "+str(score.val)+"\n" )
+    
+    _rc0 = subprocess.call(["stty","echo"],shell=True)
+    _rc0 = (_p1) and (
+        print( "Congratulations you have achieved "+str(target.val)+"\n" )
+        
+        exit(0)
+    )
+    print( "You have lost, better luck next time.\033[0m\n" )
+    
+    exit(0)
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>function help {
+  cat &lt;&lt;END_HELP
+Usage: $1 [-b INTEGER] [-t INTEGER] [-l FILE] [-h]
+
+  -b			specify game board size (sizes 3-9 allowed)
+  -t			specify target score to win (needs to be power of 2)
+  -l			log debug info into specified file
+  -h			this help
+
+END_HELP
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def help (_p1) :
+    subprocess.Popen("cat",shell=True,stdin=subprocess.PIPE)
+    _rc0.communicate("Usage: "+str(_p1)+" [-b INTEGER] [-t INTEGER] [-l FILE] [-h]\n\n  -b			specify game board size (sizes 3-9 allowed)\n  -t			specify target score to win (needs to be power of 2)\n  -l			log debug info into specified file\n  -h			this help\n\n")
+    _rc0 = _rc0.wait()
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>#parse commandline options
+</pre></td><td></td></tr>
+<tr><td><pre>while getopts "b:t:l:h" opt; do
+  case $opt in
+    b ) board_size="$OPTARG"
+      let '(board_size&gt;=3)&amp;(board_size&lt;=9)' || {
+        printf "Invalid board size, please choose size between 3 and 9\n"
+        exit -1 
+      };;
+    t ) target="$OPTARG"
+      printf "obase=2;$target\n" | bc | grep -e '^1[^1]*$'
+      let $? &amp;&amp; {
+        printf "Invalid target, has to be power of two\n"
+        exit -1 
+      };;
+    h ) help $0
+        exit 0;;
+    l ) exec 3&gt;$OPTARG;;
+    \?) printf "Invalid option: -"$opt", try $0 -h\n" &gt;&amp;2
+            exit 1;;
+    : ) printf "Option -"$opt" requires an argument, try $0 -h\n" &gt;&amp;2
+            exit 1;;
+  esac
+done
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>#parse commandline options</pre></td></tr><tr><td></td><td><pre>
+while (subprocess.call(["getopts","b:t:l:h","opt"],shell=True)):
+    
+    if ( str(opt.val) == 'b'):
+        board_size=Bash2Py(OPTARG.val)
+        (((board_size.val &gt;= 3) &amp; (board_size.val &lt;= 9))) or (print( "Invalid board size, please choose size between 3 and 9\n" )
+        
+        exit(-1) )
+    elif ( str(opt.val) == 't'):
+        target=Bash2Py(OPTARG.val)
+        _rcr3, _rcw3 = os.pipe()
+        if os.fork():
+            os.close(_rcw3)
+            os.dup2(_rcr3, 0)
+            _rcr4, _rcw4 = os.pipe()
+            if os.fork():
+                os.close(_rcw4)
+                os.dup2(_rcr4, 0)
+                subprocess.call(["grep","-e","^1[^1]*$"],shell=True)
+            else:
+                os.close(_rcr4)
+                os.dup2(_rcw4, 1)
+                subprocess.call(["bc"],shell=True)
+                sys.exit(0)
+            
+        else:
+            os.close(_rcr3)
+            os.dup2(_rcw3, 1)
+            print( "obase=2;"+str(target.val)+"\n" )
+            
+            sys.exit(0)
+        
+        (_rc0) and (print( "Invalid target, has to be power of two\n" )
+        
+        exit(-1) )
+    elif ( str(opt.val) == 'h'):
+        help(__file__)
+        exit(0)
+    elif ( str(opt.val) == 'l'):
+        subprocess.call("exec",shell=True,std3=file('$OPTARG','wb'))
+    
+    elif ( str(opt.val) == '\?'):
+        print( "Invalid option: -"+str(opt.val)+", try "+__file__+" -h\n" )
+        
+        exit(1)
+    elif ( str(opt.val) == ':'):
+        print( "Option -"+str(opt.val)+" requires an argument, try "+__file__+" -h\n" )
+        
+        exit(1)</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>#init board
+</pre></td><td></td></tr>
+<tr><td><pre>let fields_total=board_size*board_size
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>#init board</pre></td></tr><tr><td></td><td><pre>
+_rc0= not Make("fields_total").setValue((board_size.val * board_size.val))
+_rc0 = Bash2Py(_rc0)</pre></td></tr>
+<tr><td><pre>let index_max=board_size-1
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>_rc0= not Make("index_max").setValue((board_size.val - 1))
+_rc0 = Bash2Py(_rc0)</pre></td></tr>
+<tr><td><pre>for i in $(_seq 0 $fields_total); do board[$i]="0"; done
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>i=Bash2Py(0)
+for i.val in [os.popen("_seq 0 "+str(fields_total.val)).read().rstrip("\n")]:
+    board[i]=Bash2Py(0)</pre></td></tr>
+<tr><td><pre>let pieces=0
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>_rc0= not Make("pieces").setValue(0)
+_rc0 = Bash2Py(_rc0)</pre></td></tr>
+<tr><td><pre>generate_piece
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>generate_piece()</pre></td></tr>
+<tr><td><pre>first_round=$last_added
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>first_round=Bash2Py(last_added.val)</pre></td></tr>
+<tr><td><pre>generate_piece
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>generate_piece()</pre></td></tr>
+<tr><td><pre>while true; do
+  print_board
+  key_react
+  let change &amp;&amp; generate_piece
+  first_round=-1
+  let pieces==fields_total &amp;&amp; {
+   check_moves
+   let moves==0 &amp;&amp; end_game 0 #lose the game
+  }
+done
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>while (True):
+    print_board()
+    key_react()
+    (change) and (generate_piece())
+    first_round=Bash2Py(-1)
+    ((pieces.val == fields_total.val)) and (check_moves()
+    ((moves.val == 0)) and (end_game(0)) )</pre></td></tr>
+<tr><td><pre>ÿ</pre></td><td></td></tr>
+#lose the game</pre></td></tr><tr><td></td><td><pre>
+</body>
+</html>

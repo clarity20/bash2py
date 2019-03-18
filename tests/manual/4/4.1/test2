@@ -1,0 +1,7 @@
+if test 1 -eq 1 && ( test 2 -eq 2 || test 3 -eq 3 )
+then
+  echo "true"
+else
+  echo "false"
+fi
+

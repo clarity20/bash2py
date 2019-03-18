@@ -1,0 +1,12 @@
+none=
+null=""
+present="yes"
+echo '${missing:=Missing}=' ${missing:=Missing}
+echo '${none:=None}=' ${none:=None}
+echo '${null:=Null}=' ${null:=Null} 
+echo '${present:=Yes}='   ${present:=Yes}
+echo "missing=" ${missing-Undefined}
+echo "none=" $none
+echo "null=" $null
+echo "present=" $present
+

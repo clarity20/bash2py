@@ -1,0 +1,45 @@
+dash_ef="missing";
+dash_ot=xyz
+
+if [ dash_ot -eq dash_ef ]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [ dash_ot -eq $dash_ef ]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [ $dash_ot -eq dash_ef ]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [ $dash_ot -eq $dash_ef ]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [ dash_ot -eq dash_a ]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [ dash_a -eq dash_ot ]
+then
+echo "true";
+else
+echo "false";
+fi
+

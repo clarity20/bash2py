@@ -1,0 +1,68 @@
+x=1
+
+# Test if the string "" is not the null string
+if [[ "" ]]
+then
+  echo "[[ \"\" ]] true"
+else
+  echo "[[ \"\" ]] false"
+fi
+
+# Test if the string "x" is not the null string
+if [[ x ]]
+then
+  echo "[[ x ]] true"
+else
+  echo "[[ x ]] false"
+fi
+
+# Test if the value of x is not the null string
+if [[ $x ]]
+then
+  echo "[[ \$x ]] true"
+else
+  echo "[[ \$x ]] false"
+fi
+
+if [[ y ]]
+then
+  echo "[[ y ]] true"
+else
+  echo "[[ y ]] false"
+fi
+
+if [[ $y ]]
+then
+  echo "[[ \$y ]] true"
+else
+  echo "[[ \$y ]] false"
+fi
+
+if [[ true ]]
+then
+  echo "[[ true ]] true"
+else
+  echo "[[ true ]] false"
+fi
+
+if [[ ! true ]]
+then
+  echo "[[ ! true ]] true"
+else
+  echo "[[ ! true ]]false"
+fi
+
+if [[ false ]]
+then
+  echo "[[ false ]] true"
+else
+  echo "[[ false ]] false"
+fi
+
+if [[ ! false ]]
+then
+  echo "[[ ! false ]] true"
+else
+  echo "[[ ! false ]] false"
+fi
+

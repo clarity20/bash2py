@@ -1,0 +1,16 @@
+dir="missing";
+
+if [ -d ~ ]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [ -d $dir ]
+then
+echo "true";
+else
+echo "false";
+fi
+

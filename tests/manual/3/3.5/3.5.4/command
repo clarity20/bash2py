@@ -1,0 +1,2 @@
+echo $(date)
+echo `date`

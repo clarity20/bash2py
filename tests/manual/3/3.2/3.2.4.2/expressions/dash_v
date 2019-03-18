@@ -1,0 +1,15 @@
+dash_a="missing";
+
+if [[ -v dash_a ]]
+then
+echo "true";
+else
+echo "false";
+fi
+
+if [[ -v $dash_a ]]
+then
+echo "true";
+else
+echo "false";
+fi
