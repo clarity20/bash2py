@@ -1,6 +1,6 @@
 # bash2py
 Bash-to-python transpiler    https://www.swag.uwaterloo.ca/bash2py/index.html<br>
-Current version: 3.0
+Current version: 3.6
 
 Bash2py is a tool designed to automate the translation from Bash to Python.
 
