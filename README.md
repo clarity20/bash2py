@@ -6,7 +6,7 @@ Bash2py is a tool designed to automate the translation from Bash to Python.
 
 Coding has attempted to ensure that the source code for Bash 4.3.30 remains<br>
 entact within this distribution. All changes to this source code (by intent)<br>
-are to be compiled if and only if the BASH2PY macro is defined.  This<br>
+are to be compiled if and only if the BASH2PY macro is defined. This<br>
 allows ready discovery of how the original source code has been changed.<br>
 
 The three main files changed are:
