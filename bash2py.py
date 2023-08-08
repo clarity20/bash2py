@@ -5,7 +5,7 @@ def translate(bashFileName, html):
 	os.system('bash-4.3.30/bash2pyengine ' + html + bashFileName)
 
 def helpx():
-    print("Usage:\n./bash2py [-h] [-d] <dir_name>\n./bash2py [-h] [-f] <file_name>\n  -h: generate html diff not python code")
+	print("Usage:\n./bash2py [-h] [-d] <dir_name>\n./bash2py [-h] [-f] <file_name>\n  -h: generate html diff not python code")
 
 def main():
 
@@ -14,7 +14,7 @@ def main():
 
 	lth = len(sys.argv);
 
-        if (lth == 1):
+	if (lth == 1):
 		helpx()
 		exit(0)
 
