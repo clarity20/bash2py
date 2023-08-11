@@ -11,10 +11,11 @@
 
 translateT	g_translate = {0};
 
-static burpT g_buffer      = {0, 0, 0};
-static burpT g_new         = {0, 0, 0};
-static burpT g_braced      = {0, 0, 0};
+static burpT g_buffer = {0,0,0,0,0,0};
+static burpT g_new = {0,0,0,0,0,0};
+static burpT g_braced = {0,0,0,0,0,0};
 
+int g_regmatch_special_case = FALSE;
 int	g_inside_function = 0;
 int g_function_parms  = 0;
 
@@ -27,6 +28,8 @@ extern int  		g_translate_html;
 #ifndef TEST
 extern	void seen_global(const char *nameP, int local);
 #endif
+
+char g_regmatch_var_name[] = "BASH_REMATCH";
 
 static void
 exchange(burpT *oldP, burpT *newP)
@@ -528,9 +531,10 @@ static char *emitSpecial1(char *startP, int in_quotes, fix_typeE want, fix_typeE
 
 static char *
 emitSimpleVariable(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
+
 {
 	char		*P, *endP;
-	int			c;
+	int			c, len;
 	fix_typeE	got;
 
 	got = FIX_NONE;
@@ -613,13 +617,21 @@ emitSimpleVariable(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 		if (c != '_' && !isalpha(c)) {
 			return 0;
 		}
-		burpc(&g_new, c);
-		for (; (c = *P) && (c == '_' || isalnum(c)); ++P) {
+		len = strlen(g_regmatch_var_name);
+		if (0 == strncmp(startP, g_regmatch_var_name, len)) {
+		    g_regmatch_special_case = TRUE;
+		    burps(&g_new, "match_object.group");
+			P += len-1;
+        }
+        else {
 			burpc(&g_new, c);
-		}
-		if (!g_underDollarExpression) {
-			burps(&g_new, ".val");
-		}
+			for (; (c = *P) && (c == '_' || isalnum(c)); ++P) {
+				burpc(&g_new, c);
+			}
+			if (!g_underDollarExpression) {
+				burps(&g_new, ".val");
+			}
+        }
 		got = FIX_VAR;
 #ifndef TEST
 		*P = 0;
@@ -843,9 +855,13 @@ done:
     if (braced) {
 		int offset;
 
-		array = (*endP == '[');
+		array = (*endP == '['):
 		if (array) {
 			*gotP = FIX_VAR;
+			if (g_regmatch_special_case) {
+				// Python gets the regmatch member by a function call () not a direct lookup []
+				*endP = '(';
+			}
 		}
 		for (; ; ++endP) {
 			c = *endP;
@@ -866,8 +882,10 @@ done:
 			case ']':
 				if (array) {
 					// We don't know what an array is of..
-					burps(&g_new, "] ");
+					burps(&g_new, g_regmatch_special_case ? ")" : "]");
 					array = 0;
+					g_regmatch_special_case = FALSE;
+					continue;
 				}
 			}
 			burpc(&g_new, c);

@@ -1175,7 +1175,7 @@ is_var:
 		return;
 	case 14: // [[ x =~ y ]]
 		g_translate.m_uses.m_re = 1;
-		burp(&g_output, "re.search(%s,%s)", rightP, leftP);
+		burp(&g_output, "re.search(r%s,%s)", rightP, leftP);
 		break;
 	default:
 		burp(&g_output, "%s %s %s", leftP, operatorP, rightP);
@@ -1186,7 +1186,7 @@ is_var:
 
 static void emit_command (COMMAND *command);
 
-static void
+static int
 emit_embedded_command(COMMAND *commandP)
 {
 	int	lth;
@@ -1195,6 +1195,8 @@ emit_embedded_command(COMMAND *commandP)
 	for (lth = g_output.m_lth; lth && g_output.m_P[lth-1] == '\n'; --lth);
 	g_output.m_lth    = lth;
 	g_output.m_P[lth] = 0;
+
+	return TRUE;
 }
 
 void
@@ -2383,14 +2385,43 @@ WHILE_COM *while_command;
 	OUTDENT(g_output);
 }
 
+static int is_test_condition_regmatch(IF_COM *if_command)
+{
+	COMMAND *test = if_command->test;
+
+	return (test->type == cm_cond && 0 == strcmp(test->value.Cond->op->word, "=~"));
+}
+
 static void
 print_if_command (if_command)
 IF_COM *if_command;
 {
+	/* Normally we begin by burping "if (" straightaway. But if the command
+	 is built around a regmatch, it needs to be rearranged to implement the
+	 side effects of the shell variable BASH_REMATCH. This requires
+	 some alternative processing. */
+
+	int regmatch_in_progress = FALSE;
+    int extra_indents = 0;
+
+	if (is_test_condition_regmatch(if_command)) {
+		burps(&g_output, "match_object = ");
+		regmatch_in_progress = emit_embedded_command(if_command->test);
+		newline("");
+	}
+
 	burps(&g_output, "if (");
+
 restart:
-	emit_embedded_command (if_command->test);
-	burps(&g_output, " ):\n");
+	if (regmatch_in_progress) {
+		burps(&g_output, "match_object):\n");
+		regmatch_in_progress = FALSE;
+	}
+	else {
+		emit_embedded_command (if_command->test);
+		burps(&g_output, " ):\n");
+	}
+	/* regmatch_in_progress should be FALSE now. */
 	INDENT(g_output);
 	emit_command (if_command->true_case);
 	PRINT_DEFERRED_HEREDOCS ("");
@@ -2399,8 +2430,18 @@ restart:
 	if (if_command->false_case)
 	{
 		if (if_command->false_case->flags & CMD_ELIF) {
-			newline("elif (");
 			if_command = if_command->false_case->value.If;
+			if (is_test_condition_regmatch(if_command)) {
+				newline("else:\n");
+				INDENT(g_output);   extra_indents++;
+				burps(&g_output, "match_object = ");
+				regmatch_in_progress = emit_embedded_command(if_command->test);
+				newline("");
+				burps(&g_output, "if (");
+			}
+			else {
+				newline("elif (");
+			}
 			goto restart;
 		}
 		newline ("else:\n");
@@ -2410,6 +2451,8 @@ restart:
 		PRINT_DEFERRED_HEREDOCS ("");
 		OUTDENT(g_output);
 	}
+	while (extra_indents-- > 0)
+		OUTDENT(g_output);
 }
 
 #ifdef COND_COMMAND

@@ -1,3 +1,8 @@
+#ifndef TRUE
+#  define TRUE 1
+#  define FALSE 0
+#endif
+
 /* We handle 5 types of data:
 	NONE, INT, STRING, VAR, ARRAY
  */
