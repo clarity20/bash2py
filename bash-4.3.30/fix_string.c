@@ -622,6 +622,7 @@ emitSimpleVariable(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 		    g_regmatch_special_case = TRUE;
 		    burps(&g_new, "match_object.group");
 			P += len-1;
+			c = *P;
         }
         else {
 			burpc(&g_new, c);
@@ -855,7 +856,7 @@ done:
     if (braced) {
 		int offset;
 
-		array = (*endP == '['):
+		array = (*endP == '[' || g_regmatch_special_case);
 		if (array) {
 			*gotP = FIX_VAR;
 			if (g_regmatch_special_case) {

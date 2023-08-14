@@ -2958,7 +2958,11 @@ emit_command (COMMAND *command)
 		case cm_cond:
 			g_embedded = old_embedded;
 			if (!old_started) {
-				burp(&g_output, "_rc%d = ", g_rc_identifier);
+				if (0 == strcmp(command->value.Cond->op->word, "=~")) {
+					burp(&g_output, "match_object = ");
+				} else {
+					burp(&g_output, "_rc%d = ", g_rc_identifier);
+				}
 			}
 			print_cond_command (command->value.Cond);
 			break;
