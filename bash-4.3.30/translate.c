@@ -51,6 +51,8 @@
 #include "builtins/common.h"
 #include "fix_string.h"
 
+#include "bash2py_alloc.h"
+
 #if !HAVE_DECL_PRINTF
 extern int printf __P((const char *, ...));	/* Yuck.  Double yuck. */
 #endif

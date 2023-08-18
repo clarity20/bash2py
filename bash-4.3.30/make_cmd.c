@@ -52,6 +52,10 @@
 #include "jobs.h"
 #endif
 
+#ifdef BASH2PY
+#include "bash2py_alloc.h"
+#endif
+
 #include "shmbutil.h"
 
 extern int line_number, current_command_line_count, parser_state;

@@ -9,6 +9,8 @@
 #include "burp.h"
 #include "fix_string.h"
 
+#include "bash2py_alloc.h"
+
 /*
 	evalexpr  := subexpr
 	subexpr   := expcomma

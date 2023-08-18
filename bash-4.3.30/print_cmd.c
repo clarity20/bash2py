@@ -46,6 +46,10 @@
 
 #include "builtins/common.h"
 
+#ifdef BASH2PY
+#include "bash2py_alloc.h"
+#endif
+
 #if !HAVE_DECL_PRINTF
 extern int printf __P((const char *, ...));	/* Yuck.  Double yuck. */
 #endif

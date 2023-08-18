@@ -30,6 +30,10 @@
 
 #include <stdio.h>
 
+#ifdef BASH2PY
+#  include "bash2py_alloc.h"
+#endif
+
 #include "shell.h"
 
 static PATTERN_LIST *copy_case_clause __P((PATTERN_LIST *));

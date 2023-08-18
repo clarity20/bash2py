@@ -18,6 +18,8 @@
 #  include <varargs.h>
 #endif
 
+#include "bash2py_alloc.h"
+
 #include "bashansi.h"
 
 #include "burp.h"

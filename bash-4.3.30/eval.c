@@ -46,6 +46,7 @@
 #endif
 
 #ifdef BASH2PY
+#include "bash2py_alloc.h"
 #include "translate.h"
 #include "burp.h"
 #endif
