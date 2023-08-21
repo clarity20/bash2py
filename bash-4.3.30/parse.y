@@ -357,7 +357,7 @@ static REDIRECTEE redir;
 POSITION position = {0,0,0};
 
 /* To properly initialize data structures */
-WORD_DESC dummy_word_desc = { "dummy", 0, {0, 0, 0} };
+WORD_DESC dummy_word_desc = { NULL, 0, {0, 0, 0} };
 
 /* The globally known line number */
 int      line_number = 0;

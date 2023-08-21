@@ -93,15 +93,15 @@ static char indirection_string[100];
 extern int   g_translate_html;
 static FILE* outputF = 0;
 
-static burpT case_var = {0,0,0};
-static burpT temp_burp = {0, 0, 0};
+static burpT case_var = {0,0,0,0,0,0};
+static burpT temp_burp = {0, 0, 0, 0, 0, 0};
 static int first_if = 1;
 //MIW var declarations end
 
-burpT	g_output  = {0, 0, 0};
+burpT	g_output  = {0, 0, 0, 0, 0, 0};
 
-static burpT	g_comment = {0, 0, 0};
-static burpT	g_temp    = {0, 0, 0};
+static burpT	g_comment = {0, 0, 0, 0, 0, 0};
+static burpT	g_temp    = {0, 0, 0, 0, 0, 0};
 
 typedef struct function_nameS {
 	struct function_nameS *m_nextP;
@@ -2762,7 +2762,7 @@ static void
 print_function_def (func)
 FUNCTION_DEF *func;
 {
-	static burpT	save = {0,0,0};
+	static burpT	save = {0,0,0,0,0,0};
 	
 	burpT	temp;
 	COMMAND *cmdcopy;
