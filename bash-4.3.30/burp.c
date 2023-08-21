@@ -40,7 +40,7 @@ increase_burp(burpT *burpP)
 	if (!burpP->m_P) {
 		burpP->m_lth = 0;
 		burpP->m_max = 0;
-		max          = 4196;
+		max          = 1024;
 		burpP->m_P   = (char *) xmalloc(max);
 		if (!burpP->m_P) {
 			fprintf(stderr, "Burp can't xmalloc(%d)\n", max);

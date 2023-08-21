@@ -356,6 +356,9 @@ static REDIRECTEE redir;
 /* The globally known current input position. */
 POSITION position = {0,0,0};
 
+/* To properly initialize data structures */
+WORD_DESC dummy_word_desc = { NULL, 0, {0, 0, 0} };
+
 /* The globally known line number */
 int      line_number = 0;
 #endif
@@ -642,36 +645,54 @@ redirection:	'>' WORD
 			{
 			  source.dest = 0;
 			  redir.dest = VALUE($2);
+#ifdef BASH2PY
+			  redir.filename = &dummy_word_desc;
+#endif
 			  $$ = make_redirection (source, r_duplicating_input, redir, 0);
 			}
 	|	NUMBER LESS_AND NUMBER
 			{
 			  source.dest = VALUE($1);
 			  redir.dest = VALUE($3);
+#ifdef BASH2PY
+			  redir.filename = &dummy_word_desc;
+#endif
 			  $$ = make_redirection (source, r_duplicating_input, redir, 0);
 			}
 	|	REDIR_WORD LESS_AND NUMBER
 			{
 			  source.filename = $1;
 			  redir.dest = VALUE($3);
+#ifdef BASH2PY
+			  redir.filename = &dummy_word_desc;
+#endif
 			  $$ = make_redirection (source, r_duplicating_input, redir, REDIR_VARASSIGN);
 			}
 	|	GREATER_AND NUMBER
 			{
 			  source.dest = 1;
 			  redir.dest = VALUE($2);
+#ifdef BASH2PY
+			  redir.filename = &dummy_word_desc;
+#endif
 			  $$ = make_redirection (source, r_duplicating_output, redir, 0);
 			}
 	|	NUMBER GREATER_AND NUMBER
 			{
 			  source.dest = VALUE($1);
 			  redir.dest =  VALUE($3);
+#ifdef BASH2PY
+			  redir.filename = &dummy_word_desc;
+#endif
 			  $$ = make_redirection (source, r_duplicating_output, redir, 0);
 			}
 	|	REDIR_WORD GREATER_AND NUMBER
 			{
 			  source.filename = $1;
 			  redir.dest = VALUE($3);
+#ifdef BASH2PY
+			  redir.filename = &dummy_word_desc;
+#endif
 			  $$ = make_redirection (source, r_duplicating_output, redir, REDIR_VARASSIGN);
 			}
 	|	LESS_AND WORD
@@ -714,36 +735,54 @@ redirection:	'>' WORD
 			{
 			  source.dest = 1;
 			  redir.dest = 0;
+#ifdef BASH2PY
+			  redir.filename = &dummy_word_desc;
+#endif
 			  $$ = make_redirection (source, r_close_this, redir, 0);
 			}
 	|	NUMBER GREATER_AND '-'
 			{
 			  source.dest = VALUE($1);
 			  redir.dest = 0;
+#ifdef BASH2PY
+			  redir.filename = &dummy_word_desc;
+#endif
 			  $$ = make_redirection (source, r_close_this, redir, 0);
 			}
 	|	REDIR_WORD GREATER_AND '-'
 			{
 			  source.filename = $1;
 			  redir.dest = 0;
+#ifdef BASH2PY
+			  redir.filename = &dummy_word_desc;
+#endif
 			  $$ = make_redirection (source, r_close_this, redir, REDIR_VARASSIGN);
 			}
 	|	LESS_AND '-'
 			{
 			  source.dest = 0;
 			  redir.dest = 0;
+#ifdef BASH2PY
+			  redir.filename = &dummy_word_desc;
+#endif
 			  $$ = make_redirection (source, r_close_this, redir, 0);
 			}
 	|	NUMBER LESS_AND '-'
 			{
 			  source.dest = VALUE($1);
 			  redir.dest = 0;
+#ifdef BASH2PY
+			  redir.filename = &dummy_word_desc;
+#endif
 			  $$ = make_redirection (source, r_close_this, redir, 0);
 			}
 	|	REDIR_WORD LESS_AND '-'
 			{
 			  source.filename = $1;
 			  redir.dest = 0;
+#ifdef BASH2PY
+			  redir.filename = &dummy_word_desc;
+#endif
 			  $$ = make_redirection (source, r_close_this, redir, REDIR_VARASSIGN);
 			}
 	|	AND_GREATER WORD
