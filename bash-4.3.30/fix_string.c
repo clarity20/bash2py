@@ -9,7 +9,10 @@
 #include "burp.h"
 #include "fix_string.h"
 
-translateT	g_translate = {0};
+translateT	g_translate = {0,{0,0,0,0,0,0,0,0,0},
+                            {0,0,0,0,0,0,0,0},
+                            {0,0,0,0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0},
+                            {0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0}};
 
 static burpT g_buffer = {0,0,0,0,0,0};
 static burpT g_new = {0,0,0,0,0,0};

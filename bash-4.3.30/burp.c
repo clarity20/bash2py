@@ -149,7 +149,7 @@ burp_ungetc(burpT *burpP)
 void 
 burp(burpT *burpP, const char *fmtP, ...)	/* proc */
 {
-	static burpT	burp_temp = {0,0,0};
+	static burpT	burp_temp = {0,0,0,0,0,0};
 
 	va_list	    arg;
 	size_t		size, left;
