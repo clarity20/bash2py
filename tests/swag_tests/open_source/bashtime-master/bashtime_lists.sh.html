@@ -1,0 +1,75 @@
+<html>
+<body>
+<table>
+<tr><td></td><td>
+#! /usr/bin/env python
+</td></tr>
+<tr><td></td><td>import sys,os</td></tr>
+<tr><td></td><td>from stat import *</td></tr>
+<tr><td><pre>#!/bin/bash
+</pre></td><td></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># if no args
+</pre></td><td></td></tr>
+<tr><td><pre>if [[ -z "$*" ]] ; then
+    # get the date as "hours(12) minutes" in a single call
+    # make a bash array with it
+    d=( $(date "+%I %M") )
+    # separate hours and minutes
+    hour=${d[0]#0} # remove leading 0 or values &lt;10 will be interpreted as octal
+    min=${d[1]#0}
+else
+    # get the arguments passed to the script
+    hour=${1#0}
+    min=${2#0}
+fi
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># if no args</pre></td></tr><tr><td></td><td><pre>
+if (('str(" ".join(sys.argv[1:]))' not in globals()) ):
+    # get the date as "hours(12) minutes" in a single call</pre></td></tr><tr><td></td><td><pre>
+    # make a bash array with it</pre></td></tr><tr><td></td><td><pre>
+    d=(os.popen("date \"+%I %M\"").read())
+    # separate hours and minutes</pre></td></tr><tr><td></td><td><pre>
+    hour=d[0]#0
+    # remove leading 0 or values &lt;10 will be interpreted as octal</pre></td></tr><tr><td></td><td><pre>
+    min=d[1]#0
+else:
+    # get the arguments passed to the script</pre></td></tr><tr><td></td><td><pre>
+    hour=sys.argv[1]
+    min=sys.argv[2]</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>plain=(🕐 🕑 🕒 🕓 🕔 🕕 🕖 🕗 🕘 🕙 🕚 🕛 )
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>plain=(🕐 🕑 🕒 🕓 🕔 🕕 🕖 🕗 🕘 🕙 🕚 🕛)</pre></td></tr>
+<tr><td><pre>half=(🕜 🕝 🕞 🕟 🕠 🕡 🕢 🕣 🕤 🕥 🕦 🕧 )
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>half=(🕜 🕝 🕞 🕟 🕠 🕡 🕢 🕣 🕤 🕥 🕦 🕧)</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># array index starts at 0
+</pre></td><td></td></tr>
+<tr><td><pre>hi=$((hour-1))
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># array index starts at 0</pre></td></tr><tr><td></td><td><pre>
+hi=(\"hour-1\")</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>if [[ $min -lt 15 ]] ; then
+    echo -n ${plain[$hi]}
+elif [[ $min -lt 45 ]] ; then
+    echo -n ${half[$hi]}
+else
+    echo -n ${plain[$((hi+1))]}
+fi
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>if (min &lt; 15 ):
+    print(plain[hi])
+elif (min &lt; 45 ):
+    print(half[hi])
+else:
+    print(plain[(hi+1)])</pre></td></tr>
+<tr><td><pre>�</pre></td><td></td></tr>
+</body>
+</html>

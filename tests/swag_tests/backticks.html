@@ -1,0 +1,74 @@
+<html>
+<body>
+<table>
+<tr><td></td><td>
+#! /usr/bin/env python
+</td></tr>
+<tr><td></td><td>import os</td></tr>
+<tr><td></td><td>from stat import *</td></tr>
+<tr><td><pre># Calculate the average of a series of numbers.
+</pre></td><td></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>SCORE="0"
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># Calculate the average of a series of numbers.</pre></td></tr><tr><td></td><td><pre>
+SCORE="0"</pre></td></tr>
+<tr><td><pre>AVERAGE="0"
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>AVERAGE="0"</pre></td></tr>
+<tr><td><pre>SUM="0"
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>SUM="0"</pre></td></tr>
+<tr><td><pre>NUM="0"
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>NUM="0"</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>foo="`date` `pwd`"
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>foo=str(os.popen("date").read()) + " " + str(os.popen("pwd").read())</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>echo $foo
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>print(foo)</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>while true; do
+
+  echo -n "Enter your score [0-100%] ('q' for quit): "; read SCORE;
+
+  if (("$SCORE" &lt; "0"))  || (("$SCORE" &gt; "100")); then
+    echo "Be serious.  Common, try again: "
+  elif [ "$SCORE" == "q" ]; then
+    echo "Average rating: $AVERAGE%."
+    break
+  else
+    SUM=$[$SUM + $SCORE]
+    NUM=$[$NUM + 1]
+    AVERAGE=$[$SUM / $NUM]
+  fi
+
+done
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>while (True):
+    print("Enter your score [0-100%] ('q' for quit): ")
+    SCORE = raw_input()
+    if ("$SCORE" &lt; "0" or "$SCORE" &gt; "100" ):
+        print("Be serious.  Common, try again: ")
+    elif ("SCORE" == ""q""  ):
+        print("Average rating: " + str(AVERAGE) + "%.")
+        break
+    else:
+        SUM=[SUM +" SCORE]
+        NUM=[NUM +" 1]
+        AVERAGE=[SUM /" NUM]</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>echo "Exiting."
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>print("Exiting.")</pre></td></tr>
+<tr><td><pre>ÿ</pre></td><td></td></tr>
+</body>
+</html>

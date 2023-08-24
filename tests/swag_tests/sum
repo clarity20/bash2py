@@ -1,0 +1,4 @@
+SUM=3
+SUM1=1
+SUM2=$[$SUM+$SUM1]
+echo $SUM2

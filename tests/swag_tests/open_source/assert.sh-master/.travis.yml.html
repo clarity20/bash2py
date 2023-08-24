@@ -1,0 +1,23 @@
+<html>
+<body>
+<table>
+<tr><td></td><td>
+#! /usr/bin/env python
+</td></tr>
+<tr><td></td><td>import subprocess</td></tr>
+<tr><td></td><td>from stat import *</td></tr>
+<tr><td><pre>language: bash
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>_rc = subprocess.call(["language":,"bash"])</pre></td></tr>
+<tr><td><pre>script: bash tests.sh
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>_rc = subprocess.call(["script":,"bash","tests.sh"])</pre></td></tr>
+<tr><td><pre>before_install:
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>_rc = subprocess.call(["before_install":])</pre></td></tr>
+<tr><td><pre>    - sudo apt-get install bc
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>_rc = subprocess.call([-,"sudo","apt-get","install","bc"])</pre></td></tr>
+<tr><td><pre>ÿ</pre></td><td></td></tr>
+</body>
+</html>

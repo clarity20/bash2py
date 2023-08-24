@@ -1,0 +1,37 @@
+<html>
+<body>
+<table>
+<tr><td></td><td>
+#! /usr/bin/env python
+</td></tr>
+<tr><td></td><td>import subprocess</td></tr>
+<tr><td></td><td>from stat import *</td></tr>
+<tr><td><pre>count=1
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>count=1</pre></td></tr>
+<tr><td><pre>done=0
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>done=0</pre></td></tr>
+<tr><td><pre>while [ $count -le 9 ]
+do
+    sleep 1
+    (( count++ ))
+    if [ $count == 5 ]
+    then 
+        continue
+    fi
+    echo "$count"
+done
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>while (count &lt;= 9 ):
+    _rc = subprocess.call(["sleep",1])
+    count++ 
+    if (count == 5  ):
+        continue
+    print(str(count))</pre></td></tr>
+<tr><td><pre>echo Finished
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>print("Finished")</pre></td></tr>
+<tr><td><pre>ÿ</pre></td><td></td></tr>
+</body>
+</html>

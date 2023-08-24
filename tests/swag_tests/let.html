@@ -1,0 +1,211 @@
+<html>
+<body>
+<table>
+<tr><td></td><td>
+#! /usr/bin/env python
+</td></tr>
+<tr><td></td><td>from stat import *</td></tr>
+<tr><td><pre>#!/bin/bash
+</pre></td><td></td></tr>
+<tr><td><pre># int-or-string.sh
+</pre></td><td></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>a=2334                   # Integer.
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># int-or-string.sh</pre></td></tr><tr><td></td><td><pre>
+a=2334</pre></td></tr>
+<tr><td><pre>let "a += 1"
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># Integer.</pre></td></tr><tr><td></td><td><pre>
+"a +"= 1</pre></td></tr>
+<tr><td><pre>echo "a = $a "           # a = 2335
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>print("a = " + str(a) + " ")</pre></td></tr>
+<tr><td><pre>echo                     # Integer, still.
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># a = 2335</pre></td></tr><tr><td></td><td><pre>
+print()</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>b=${a/23/BB}             # Substitute "BB" for "23".
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># Integer, still.</pre></td></tr><tr><td></td><td><pre>
+b=a/23/BB</pre></td></tr>
+<tr><td><pre>                         # This transforms $b into a string.
+</pre></td><td></td></tr>
+<tr><td><pre>echo "b = $b"            # b = BB35
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># Substitute "BB" for "23".</pre></td></tr><tr><td></td><td><pre>
+# This transforms $b into a string.</pre></td></tr><tr><td></td><td><pre>
+print("b = " + str(b))</pre></td></tr>
+<tr><td><pre>declare -i b             # Declaring it an integer doesn't help.
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># b = BB35</pre></td></tr><tr><td></td><td><pre>
+b=""
+</pre></td></tr>
+<tr><td><pre>echo "b = $b"            # b = BB35
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># Declaring it an integer doesn't help.</pre></td></tr><tr><td></td><td><pre>
+print("b = " + str(b))</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>let "b += 1"             # BB35 + 1
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># b = BB35</pre></td></tr><tr><td></td><td><pre>
+"b +"= 1</pre></td></tr>
+<tr><td><pre>echo "b = $b"            # b = 1
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># BB35 + 1</pre></td></tr><tr><td></td><td><pre>
+print("b = " + str(b))</pre></td></tr>
+<tr><td><pre>echo                     # Bash sets the "integer value" of a string to 0.
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># b = 1</pre></td></tr><tr><td></td><td><pre>
+print()</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>c=BB34
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># Bash sets the "integer value" of a string to 0.</pre></td></tr><tr><td></td><td><pre>
+c="BB34"</pre></td></tr>
+<tr><td><pre>echo "c = $c"            # c = BB34
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>print("c = " + str(c))</pre></td></tr>
+<tr><td><pre>d=${c/BB/23}             # Substitute "23" for "BB".
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># c = BB34</pre></td></tr><tr><td></td><td><pre>
+d=c/BB/23</pre></td></tr>
+<tr><td><pre>                         # This makes $d an integer.
+</pre></td><td></td></tr>
+<tr><td><pre>echo "d = $d"            # d = 2334
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># Substitute "23" for "BB".</pre></td></tr><tr><td></td><td><pre>
+# This makes $d an integer.</pre></td></tr><tr><td></td><td><pre>
+print("d = " + str(d))</pre></td></tr>
+<tr><td><pre>let "d += 1"             # 2334 + 1
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># d = 2334</pre></td></tr><tr><td></td><td><pre>
+"d +"= 1</pre></td></tr>
+<tr><td><pre>echo "d = $d"            # d = 2335
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># 2334 + 1</pre></td></tr><tr><td></td><td><pre>
+print("d = " + str(d))</pre></td></tr>
+<tr><td><pre>echo
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># d = 2335</pre></td></tr><tr><td></td><td><pre>
+print()</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># What about null variables?
+</pre></td><td></td></tr>
+<tr><td><pre>e=''                     # ... Or e="" ... Or e=
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># What about null variables?</pre></td></tr><tr><td></td><td><pre>
+e=""</pre></td></tr>
+<tr><td><pre>echo "e = $e"            # e =
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># ... Or e="" ... Or e=</pre></td></tr><tr><td></td><td><pre>
+print("e = " + str(e))</pre></td></tr>
+<tr><td><pre>let "e += 1"             # Arithmetic operations allowed on a null variable?
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># e =</pre></td></tr><tr><td></td><td><pre>
+"e +"= 1</pre></td></tr>
+<tr><td><pre>echo "e = $e"            # e = 1
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># Arithmetic operations allowed on a null variable?</pre></td></tr><tr><td></td><td><pre>
+print("e = " + str(e))</pre></td></tr>
+<tr><td><pre>echo                     # Null variable transformed into an integer.
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># e = 1</pre></td></tr><tr><td></td><td><pre>
+print()</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># What about undeclared variables?
+</pre></td><td></td></tr>
+<tr><td><pre>echo "f = $f"            # f =
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># Null variable transformed into an integer.</pre></td></tr><tr><td></td><td><pre>
+# What about undeclared variables?</pre></td></tr><tr><td></td><td><pre>
+print("f = " + str(f))</pre></td></tr>
+<tr><td><pre>let "f += 1"             # Arithmetic operations allowed?
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># f =</pre></td></tr><tr><td></td><td><pre>
+"f +"= 1</pre></td></tr>
+<tr><td><pre>echo "f = $f"            # f = 1
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># Arithmetic operations allowed?</pre></td></tr><tr><td></td><td><pre>
+print("f = " + str(f))</pre></td></tr>
+<tr><td><pre>echo                     # Undeclared variable transformed into an integer.
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># f = 1</pre></td></tr><tr><td></td><td><pre>
+print()</pre></td></tr>
+<tr><td><pre>#
+</pre></td><td></td></tr>
+<tr><td><pre># However ...
+</pre></td><td></td></tr>
+<tr><td><pre>let "f /= $undecl_var"   # Divide by zero?
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># Undeclared variable transformed into an integer.</pre></td></tr><tr><td></td><td><pre>
+#</pre></td></tr><tr><td></td><td><pre>
+# However ...</pre></td></tr><tr><td></td><td><pre>
+"f /"= undecl_var</pre></td></tr>
+<tr><td><pre>#   let: f /= : syntax error: operand expected (error token is " ")
+</pre></td><td></td></tr>
+<tr><td><pre># Syntax error! Variable $undecl_var is not set to zero here!
+</pre></td><td></td></tr>
+<tr><td><pre>#
+</pre></td><td></td></tr>
+<tr><td><pre># But still ...
+</pre></td><td></td></tr>
+<tr><td><pre>let "f /= 0"
+</pre></td><td></td></tr>
+<tr><td></td><td><pre># Divide by zero?</pre></td></tr><tr><td></td><td><pre>
+#   let: f /= : syntax error: operand expected (error token is " ")</pre></td></tr><tr><td></td><td><pre>
+# Syntax error! Variable $undecl_var is not set to zero here!</pre></td></tr><tr><td></td><td><pre>
+#</pre></td></tr><tr><td></td><td><pre>
+# But still ...</pre></td></tr><tr><td></td><td><pre>
+"f /"= 0</pre></td></tr>
+<tr><td><pre>#   let: f /= 0: division by 0 (error token is "0")
+</pre></td><td></td></tr>
+<tr><td><pre># Expected behavior.
+</pre></td><td></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>#  Bash (usually) sets the "integer value" of null to zero
+</pre></td><td></td></tr>
+<tr><td><pre>#+ when performing an arithmetic operation.
+</pre></td><td></td></tr>
+<tr><td><pre>#  But, don't try this at home, folks!
+</pre></td><td></td></tr>
+<tr><td><pre>#  It's undocumented and probably non-portable behavior.
+</pre></td><td></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre># Conclusion: Variables in Bash are untyped,
+</pre></td><td></td></tr>
+<tr><td><pre>#+ with all attendant consequences.
+</pre></td><td></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>exit $?
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>#   let: f /= 0: division by 0 (error token is "0")</pre></td></tr><tr><td></td><td><pre>
+# Expected behavior.</pre></td></tr><tr><td></td><td><pre>
+#  Bash (usually) sets the "integer value" of null to zero</pre></td></tr><tr><td></td><td><pre>
+#+ when performing an arithmetic operation.</pre></td></tr><tr><td></td><td><pre>
+#  But, don't try this at home, folks!</pre></td></tr><tr><td></td><td><pre>
+#  It's undocumented and probably non-portable behavior.</pre></td></tr><tr><td></td><td><pre>
+# Conclusion: Variables in Bash are untyped,</pre></td></tr><tr><td></td><td><pre>
+#+ with all attendant consequences.</pre></td></tr><tr><td></td><td><pre>
+exit(_rc)</pre></td></tr>
+<tr><td><pre>ÿ</pre></td><td></td></tr>
+</body>
+</html>

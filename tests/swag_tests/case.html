@@ -1,0 +1,43 @@
+<html>
+<body>
+<table>
+<tr><td></td><td>
+#! /usr/bin/env python
+</td></tr>
+<tr><td></td><td>from stat import *</td></tr>
+<tr><td><pre>echo 'Which fruit do you like most?'
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>print("Which fruit do you like most?")</pre></td></tr>
+<tr><td><pre>read fruit
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>fruit = raw_input()</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>case $fruit in
+    apple)
+        echo 'Mmmmh... I like those!'
+        ;;
+    banana)
+        echo 'Hm, a bit awry, no?'
+        ;;
+    orange|tangerine)
+        echo $'Eeeks! I dont like those! Go away!'
+        exit 1
+        ;;
+    *)
+        echo "Unknown fruit - sure it isn't toxic?"
+esac
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>
+if ( fruit == 'apple'):
+    print("Mmmmh... I like those!")
+elif ( fruit == 'banana'):
+    print("Hm, a bit awry, no?")
+elif ( fruit == 'orange' or fruit == 'tangerine'):
+    print("Eeeks! I dont like those! Go away!")
+    exit(1)
+else:
+    print("Unknown fruit - sure it isn't toxic?")</pre></td></tr>
+<tr><td><pre>ÿ</pre></td><td></td></tr>
+</body>
+</html>

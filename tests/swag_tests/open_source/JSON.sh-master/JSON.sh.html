@@ -1,0 +1,426 @@
+<html>
+<body>
+<table>
+<tr><td></td><td>
+#! /usr/bin/env python
+</td></tr>
+<tr><td></td><td>import sys,os,subprocess</td></tr>
+<tr><td></td><td>from stat import *</td></tr>
+<tr><td><pre>#!/usr/bin/env bash
+</pre></td><td></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>throw () {
+  echo "$*" &gt;&amp;2
+  exit 1
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def throw () :
+    print(str(" ".join(sys.argv[1:])))
+    exit(1)
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>BRIEF=0
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>BRIEF=0</pre></td></tr>
+<tr><td><pre>LEAFONLY=0
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>LEAFONLY=0</pre></td></tr>
+<tr><td><pre>PRUNE=0
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>PRUNE=0</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>usage() {
+  echo
+  echo "Usage: JSON.sh [-b] [-l] [-p] [-h]"
+  echo
+  echo "-p - Prune empty. Exclude fields with empty values."
+  echo "-l - Leaf only. Only show leaf nodes, which stops data duplication."
+  echo "-b - Brief. Combines 'Leaf only' and 'Prune empty' options."
+  echo "-h - This help text."
+  echo
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def usage () :
+    print()
+    print("Usage: JSON.sh [-b] [-l] [-p] [-h]")
+    print()
+    print("-p - Prune empty. Exclude fields with empty values.")
+    print("-l - Leaf only. Only show leaf nodes, which stops data duplication.")
+    print("-b - Brief. Combines 'Leaf only' and 'Prune empty' options.")
+    print("-h - This help text.")
+    print()
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>parse_options() {
+  set -- "$@"
+  local ARGN=$#
+  while [ $ARGN -ne 0 ]
+  do
+    case $1 in
+      -h) usage
+          exit 0
+      ;;
+      -b) BRIEF=1
+          LEAFONLY=1
+          PRUNE=1
+      ;;
+      -l) LEAFONLY=1
+      ;;
+      -p) PRUNE=1
+      ;;
+      ?*) echo "ERROR: Unknown option."
+          usage
+          exit 0
+      ;;
+    esac
+    shift 1
+    ARGN=$((ARGN-1))
+  done
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def parse_options () :
+    global BRIEF
+    global LEAFONLY
+    global PRUNE
+
+    _rc = subprocess.call(["set","--",str('"'+"\" \"".join(sys.argv[1:])+'"')])
+    ARGN=len(sys.argv)
+    
+    while (ARGN != 0 ):
+        
+        if ( sys.argv[1] == '-h'):
+            usage()
+            exit(0)
+        elif ( sys.argv[1] == '-b'):
+            BRIEF=1
+            LEAFONLY=1
+            PRUNE=1
+        elif ( sys.argv[1] == '-l'):
+            LEAFONLY=1
+        elif ( sys.argv[1] == '-p'):
+            PRUNE=1
+        elif ( sys.argv[1] == '?*'):
+            print("ERROR: Unknown option.")
+            usage()
+            exit(0)
+        _rc = subprocess.call(["shift",1])
+        ARGN=(\"ARGN-1\")
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>awk_egrep () {
+  local pattern_string=$1
+
+  gawk '{
+    while ($0) {
+      start=match($0, pattern);
+      token=substr($0, start, RLENGTH);
+      print token;
+      $0=substr($0, start+RLENGTH);
+    }
+  }' pattern=$pattern_string
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def awk_egrep () :
+    global pattern
+
+    pattern_string=sys.argv[1]
+    
+    _rc = subprocess.call(["gawk","{\n    while (\$0) {\n      start=match(\$0, pattern);\n      token=substr(\$0, start, RLENGTH);\n      print token;\n      \$0=substr(\$0, start+RLENGTH);\n    }\n  }",pattern=pattern_string])
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>tokenize () {
+  local GREP
+  local ESCAPE
+  local CHAR
+
+  if echo "test string" | egrep -ao --color=never "test" &amp;&gt;/dev/null
+  then
+    GREP='egrep -ao --color=never'
+  else
+    GREP='egrep -ao'
+  fi
+
+  if echo "test string" | egrep -o "test" &amp;&gt;/dev/null
+  then
+    ESCAPE='(\\[^u[:cntrl:]]|\\u[0-9a-fA-F]{4})'
+    CHAR='[^[:cntrl:]"\\]'
+  else
+    GREP=awk_egrep
+    ESCAPE='(\\\\[^u[:cntrl:]]|\\u[0-9a-fA-F]{4})'
+    CHAR='[^[:cntrl:]"\\\\]'
+  fi
+
+  local STRING="\"$CHAR*($ESCAPE$CHAR*)*\""
+  local NUMBER='-?(0|[1-9][0-9]*)([.][0-9]*)?([eE][+-]?[0-9]*)?'
+  local KEYWORD='null|false|true'
+  local SPACE='[[:space:]]+'
+
+  $GREP "$STRING|$NUMBER|$KEYWORD|$SPACE|." | egrep -v "^$SPACE$"
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def tokenize () :
+
+    
+    
+    
+    if (print("test string") | _rc = subprocess.call("egrep -ao --color"="never test",shell=True,stderr=file('/dev/null','wb'),stdout=file('/dev/null','wb'))
+     ):
+        GREP="egrep -ao --color=never"
+    else:
+        GREP="egrep -ao"
+    if (print("test string") | _rc = subprocess.call("egrep -o test",shell=True,stderr=file('/dev/null','wb'),stdout=file('/dev/null','wb'))
+     ):
+        ESCAPE="(\\\\[^u[:cntrl:]]|\\\\u[0-9a-fA-F]{4})"
+        CHAR="[^[:cntrl:]\"\\\\]"
+    else:
+        GREP="awk_egrep"
+        ESCAPE="(\\\\\\\\[^u[:cntrl:]]|\\\\u[0-9a-fA-F]{4})"
+        CHAR="[^[:cntrl:]\"\\\\\\\\]"
+    STRING="\"" + str(CHAR) + "*(" + str(ESCAPE) + str(CHAR) + "*)*\""
+    
+    NUMBER="-?(0|[1-9][0-9]*)([.][0-9]*)?([eE][+-]?[0-9]*)?"
+    
+    KEYWORD="null|false|true"
+    
+    SPACE="[[:space:]]+"
+    
+    _rc = subprocess.call([GREP,str(STRING) + "|" + str(NUMBER) + "|" + str(KEYWORD) + "|" + str(SPACE) + "|."]) | _rc = subprocess.call(["egrep","-v","^" + str(SPACE) + str()])
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>parse_array () {
+  local index=0
+  local ary=''
+  read -r token
+  case "$token" in
+    ']') ;;
+    *)
+      while :
+      do
+        parse_value "$1" "$index"
+        index=$((index+1))
+        ary="$ary""$value" 
+        read -r token
+        case "$token" in
+          ']') break ;;
+          ',') ary="$ary," ;;
+          *) throw "EXPECTED , or ] GOT ${token:-EOF}" ;;
+        esac
+        read -r token
+      done
+      ;;
+  esac
+  [ "$BRIEF" -eq 0 ] &amp;&amp; value=`printf '[%s]' "$ary"` || value=
+  :
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def parse_array () :
+    global token
+    global value
+    global BRIEF
+
+    index=0
+    
+    ary=""
+    
+    token = raw_input()
+    
+    if ( str(token) == ']'):
+    
+    else:
+        while ():
+            _rc = subprocess.call(["parse_value",str(sys.argv[1]),str(index)])
+            index=(\"index+1\")
+            ary=arystr(value)
+            token = raw_input()
+            
+            elif ( str(token) == ']'):
+                break
+            elif ( str(token) == ','):
+                ary=str(ary) + ","
+            else:
+                throw()
+            token = raw_input()
+    "BRIEF" == 0  and value=os.popen("printf \"[%s]\" \""+str(ary)+"\"").read() or value=
+    
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>parse_object () {
+  local key
+  local obj=''
+  read -r token
+  case "$token" in
+    '}') ;;
+    *)
+      while :
+      do
+        case "$token" in
+          '"'*'"') key=$token ;;
+          *) throw "EXPECTED string GOT ${token:-EOF}" ;;
+        esac
+        read -r token
+        case "$token" in
+          ':') ;;
+          *) throw "EXPECTED : GOT ${token:-EOF}" ;;
+        esac
+        read -r token
+        parse_value "$1" "$key"
+        obj="$obj$key:$value"        
+        read -r token
+        case "$token" in
+          '}') break ;;
+          ',') obj="$obj," ;;
+          *) throw "EXPECTED , or } GOT ${token:-EOF}" ;;
+        esac
+        read -r token
+      done
+    ;;
+  esac
+  [ "$BRIEF" -eq 0 ] &amp;&amp; value=`printf '{%s}' "$obj"` || value=
+  :
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def parse_object () :
+    global token
+    global value
+    global BRIEF
+
+    
+    obj=""
+    
+    token = raw_input()
+    
+    if ( str(token) == '}'):
+    
+    else:
+        while ():
+            
+            elif ( str(token) == ''"'*'"''):
+                key=token
+            else:
+                throw()
+            token = raw_input()
+            
+            if ( str(token) == ':'):
+            
+            else:
+                throw()
+            token = raw_input()
+            _rc = subprocess.call(["parse_value",str(sys.argv[1]),str(key)])
+            obj=str(obj) + str(key) + ":" + str(value)
+            token = raw_input()
+            
+            if ( str(token) == '}'):
+                break
+            elif ( str(token) == ','):
+                obj=str(obj) + ","
+            else:
+                throw()
+            token = raw_input()
+    "BRIEF" == 0  and value=os.popen("printf \"{%s}\" \""+str(obj)+"\"").read() or value=
+    
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>parse_value () {
+  local jpath="${1:+$1,}$2" isleaf=0 isempty=0 print=0
+  case "$token" in
+    '{') parse_object "$jpath" ;;
+    '[') parse_array  "$jpath" ;;
+    # At this point, the only valid single-character tokens are digits.
+    ''|[!0-9]) throw "EXPECTED value GOT ${token:-EOF}" ;;
+    *) value=$token
+       isleaf=1
+       [ "$value" = '""' ] &amp;&amp; isempty=1
+       ;;
+  esac
+  [ "$value" = '' ] &amp;&amp; return
+  [ "$LEAFONLY" -eq 0 ] &amp;&amp; [ "$PRUNE" -eq 0 ] &amp;&amp; print=1
+  [ "$LEAFONLY" -eq 1 ] &amp;&amp; [ "$isleaf" -eq 1 ] &amp;&amp; [ $PRUNE -eq 0 ] &amp;&amp; print=1
+  [ "$LEAFONLY" -eq 0 ] &amp;&amp; [ "$PRUNE" -eq 1 ] &amp;&amp; [ "$isempty" -eq 0 ] &amp;&amp; print=1
+  [ "$LEAFONLY" -eq 1 ] &amp;&amp; [ "$isleaf" -eq 1 ] &amp;&amp; \
+    [ $PRUNE -eq 1 ] &amp;&amp; [ $isempty -eq 0 ] &amp;&amp; print=1
+  [ "$print" -eq 1 ] &amp;&amp; printf "[%s]\t%s\n" "$jpath" "$value"
+  :
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def parse_value () :
+    global token
+    global value
+    global LEAFONLY
+    global PRUNE
+
+    jpath=str('' if dir().count('1') == 0 or 1 == '' else sys.argv[1],) + str(sys.argv[2])
+    isleaf=0
+    isempty=0
+    print=0
+    
+    
+    if ( str(token) == '{'):
+        parse_object()
+    elif ( str(token) == '['):
+        parse_array()
+    elif ( str(token) == '' or str(token) == '[!0-9]'):
+        # At this point, the only valid single-character tokens are digits.</pre></td></tr><tr><td></td><td><pre>
+        throw()
+    else:
+        value=token
+        isleaf=1
+        "value" == "\"\""  and isempty=1
+    "value" == ""  and return
+    "LEAFONLY" == 0  and "PRUNE" == 0  and print=1
+    "LEAFONLY" == 1  and "isleaf" == 1  and PRUNE == 0  and print=1
+    "LEAFONLY" == 0  and "PRUNE" == 1  and "isempty" == 0  and print=1
+    "LEAFONLY" == 1  and "isleaf" == 1  and PRUNE == 1  and isempty == 0  and print=1
+    "print" == 1  and print( "[%s]\t%s\n" % (str(jpath), str(value)) )
+    
+    
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>parse () {
+  read -r token
+  parse_value
+  read -r token
+  case "$token" in
+    '') ;;
+    *) throw "EXPECTED EOF GOT $token" ;;
+  esac
+}
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>def parse () :
+    global token
+
+    token = raw_input()
+    parse_value()
+    token = raw_input()
+    
+    if ( str(token) == ''):
+    
+    else:
+        throw()
+</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>parse_options "$@"
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>parse_options()</pre></td></tr>
+<tr><td><pre>
+</pre></td><td></td></tr>
+<tr><td><pre>if ([ "$0" = "$BASH_SOURCE" ] || ! [ -n "$BASH_SOURCE" ]);
+then
+  tokenize | parse
+fi
+</pre></td><td></td></tr>
+<tr><td></td><td><pre>if (( "__file__" == "BASH_SOURCE"  or ! (str(BASH_SOURCE)  != '') ) ):
+    tokenize() | parse()</pre></td></tr>
+<tr><td><pre>ÿ</pre></td><td></td></tr>
+</body>
+</html>
