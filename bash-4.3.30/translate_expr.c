@@ -111,7 +111,7 @@ typedef struct nodeS {
   
 static char		*g_stringP;
 static char		*g_atP;
-static burpT	g_expression  = {0,0,0};
+static burpT	g_expression  = {0,0,0,0,0,0};
 static int		g_allow_array = 0;
 static nodeT	*g_headP      = 0;
 static jmp_buf  longbuf;
