@@ -595,6 +595,7 @@ buildversion.o: version.h conftypes.h patchlevel.h $(srcdir)/version.c
 
 bash2pyengine: .made
 	mv bash bash2pyengine
+	mkdir -p ~/bin
 	cp bash2pyengine ~/bin/bash2pyengine
 
 fix_string: burp.o translate_expr.o fix_string.c
