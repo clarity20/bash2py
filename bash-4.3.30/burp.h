@@ -8,7 +8,7 @@ typedef struct {
 	int		m_ungetc;
 } burpT;
 
-void burp_init(burpT *burpP);
+void burp_reset(burpT *burpP);
 char *burp_extend(burpT *burpP, int offset, int need);
 void burp(burpT *burpP, const char *fmtP, ...);
 void burpc(burpT *burpP, const char c);

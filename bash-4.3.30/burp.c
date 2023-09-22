@@ -27,9 +27,14 @@
 int g_translate_html = 0;
 
 void
-burp_init(burpT *burpP)
+burp_reset(burpT *burpP)
 {
-	memset(burpP, 0, sizeof(burpT));
+	memset(burpP->m_P, 0, burpP->m_max);
+
+	burpP->m_lth = 0;
+	burpP->m_indent = 0;
+	burpP->m_disable_indent = 0;
+	burpP->m_ungetc = 0;
 }
 
 static void

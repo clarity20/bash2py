@@ -1532,7 +1532,11 @@ print_echo_command(WORD_LIST *word_listP, REDIRECT *redirects)
 	char		*wordP, *P, *P1;
 	int			n_flag, e_flag;
 	fix_typeE	got;
-	
+
+	int wordLen;
+	int quoted_word_count = 0;
+	burpT quoted_word_buffer = {0,0,0,0,0,0};
+
 	n_flag = 0;
 	e_flag = 0;
 	for (; word_listP = word_listP->next; ) {
@@ -1558,10 +1562,41 @@ print_echo_command(WORD_LIST *word_listP, REDIRECT *redirects)
 				++P1;
 		}	}
 		wordP = fix_string(wordP, FIX_VAR, &got);
-		burps(&g_output, wordP);
-		if (word_listP->next) {
-			burpc(&g_output, ',');
-	}	}
+		wordLen = strlen(wordP);
+
+		// Combine quoted words into quoted sequences
+		if (wordP[0]=='\"' && wordP[wordLen-1] == '\"') {
+			quoted_word_count++;
+			if (quoted_word_count > 1)
+				burpc(&quoted_word_buffer, ' ');
+			wordP[wordLen-1]='\0';  // remove close quote
+			burps(&quoted_word_buffer, wordP+1);
+		}
+		else {
+			if (quoted_word_count > 0) {
+				// Quoted word sequence has ended. Dump it and reset.
+				burpc(&g_output, '\"');
+				burps(&g_output, quoted_word_buffer.m_P);
+				burpc(&g_output, '\"');
+				quoted_word_count = 0;
+				burp_reset(&quoted_word_buffer);
+				burpc(&g_output, ',');
+			}
+			// If the current word is not quoted just dump it
+			burps(&g_output, wordP);
+			if (word_listP->next) {
+				burpc(&g_output, ',');
+			}
+		}
+	}
+	if (quoted_word_count > 0) {
+		burpc(&g_output, '\"');
+		burps(&g_output, quoted_word_buffer.m_P);
+		burpc(&g_output, '\"');
+		quoted_word_count = 0;
+		burp_reset(&quoted_word_buffer);
+	}
+
 	if (n_flag) {
 		/* Only works with python 3 */
 		burps(&g_output, ",end=\"\"");
