@@ -14,7 +14,7 @@ elif [[ "$1" =~ w ]]; then
     echo "$1" contains w.
 fi
 
-echo The matching letter is ${BASH_REMATCH[0]}
+echo To reiterate '(x>w>r.)', "$1" contains ${BASH_REMATCH[0]}.
 
 [[ "$1" =~ r(.) ]]
 echo Successor of \'r\' in "$1" is ${BASH_REMATCH[1]}.
