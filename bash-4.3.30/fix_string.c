@@ -19,7 +19,7 @@ static burpT g_new = {0,0,0,0,0,0};
 static burpT g_braced = {0,0,0,0,0,0};
 
 int g_regmatch_special_case = FALSE;
-int	g_inside_function = 0;
+int	g_function_nesting_level = 0;
 int g_function_parms  = 0;
 
 int g_rc_identifier   = 0;
@@ -596,7 +596,7 @@ emitSimpleVariable(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 	case '7':
 	case '8':
 	case '9':
-		if (g_inside_function) {
+		if (g_function_nesting_level > 0) {
 			int 	parameter;
 
 			parameter = c - '0';

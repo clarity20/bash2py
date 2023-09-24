@@ -58,7 +58,7 @@ extern int printf __P((const char *, ...));	/* Yuck.  Double yuck. */
 #endif
 
 extern int g_rc_identifier;
-extern int g_inside_function;
+extern int g_function_nesting_level;
 extern int g_function_parms;
 
 extern translateT	g_translate;
@@ -102,6 +102,12 @@ burpT	g_output  = {0, 0, 0, 0, 0, 0};
 
 static burpT	g_comment = {0, 0, 0, 0, 0, 0};
 static burpT	g_temp    = {0, 0, 0, 0, 0, 0};
+
+typedef enum scopeTypeE {
+	sc_local,
+	sc_explicitGlobal,   // created inside a nonlocal scope, requiring keyword global
+	sc_implicitGlobal
+} scopeTypeE;
 
 typedef struct function_nameS {
 	struct function_nameS *m_nextP;
@@ -2735,7 +2741,7 @@ print_connection_command(CONNECTION *connection)
 				was_heredoc = 0;
 			}
 		} else {
-			print_deferred_heredocs (g_inside_function ? "" : ";");
+			print_deferred_heredocs (g_function_nesting_level>0 ? "" : ";");
 		}
 		if (!g_embedded) {
 			g_started = 0;
@@ -2786,7 +2792,7 @@ print_connection_command(CONNECTION *connection)
 static void
 reset_locals ()
 {
-	g_inside_function   = 0;
+	g_function_nesting_level   = 0;
 	g_output.m_indent   = 0;
 	printing_connection = 0;
     stdout_connection   = 0;
@@ -2830,7 +2836,7 @@ FUNCTION_DEF *func;
 	capture_globals = 1;
 	add_unwind_protect (reset_locals, 0);
 
-	g_inside_function++;
+	g_function_nesting_level++;
 
 	cmdcopy = copy_command (func->command);
 	if (cmdcopy->type == cm_group)
@@ -2876,7 +2882,7 @@ FUNCTION_DEF *func;
 	g_output = temp;
 
 	capture_globals = 0;
-	g_inside_function--;
+	g_function_nesting_level--;
 
 	if (func_redirects)
 	{ /* { */
@@ -2891,7 +2897,7 @@ static void
 print_group_command (group_command)
 GROUP_COM *group_command;
 {
-	if (g_inside_function != 0) {
+	if (g_function_nesting_level > 0) {
 		/* This is a group command { ... } inside of a function
 	 definition, and should be printed as a multiline group
 	 command, using the current indentation. */
@@ -2901,7 +2907,7 @@ GROUP_COM *group_command;
 
 	emit_command (group_command->command);
 
-	if (g_inside_function) {
+	if (g_function_nesting_level > 0) {
 		burpc(&g_output, '\n');
 		OUTDENT(g_output);
 	} else {
