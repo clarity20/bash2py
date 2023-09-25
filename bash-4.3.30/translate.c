@@ -1488,21 +1488,26 @@ print_declare_command(WORD_LIST	*word_listP)
 	char		*wordP, *P;
 	int 		separator, is_int;
 	fix_typeE	got;
+	int			is_local;
 	
 	separator = -1;
-	is_int    = 0;
+	is_int    = FALSE;
+	is_local = (g_function_nesting_level > 0);
+
 	for (;word_listP = word_listP->next;) {
 		wordP = word_listP->word->word;
 		if (wordP[0] == '-') {
 			if (!strcmp(wordP, "-p")) {
 				if (separator == -1) {
 					separator = 0;
-					g_translate.m_uses.m_print = 1;
+					g_translate.m_uses.m_print = TRUE;
 					burps(&g_output, "print(");
 				}
 			} else if (!strcmp(wordP, "-i")) {
-				is_int = 1;
-			}
+				is_int = TRUE;
+			} else if ((!strcmp(wordP, "-g")) && g_function_nesting_level > 0) {
+				is_local = FALSE;
+            }
 			continue;
 		}
 		if (separator != -1) {
@@ -1524,7 +1529,7 @@ print_declare_command(WORD_LIST	*word_listP)
 			} else {
 				burps(&g_output, "=\"\"");
 			}
-		} else if (!isAssignment(wordP, 0)) {
+		} else if (!isAssignment(wordP, is_local)) {
 			// Strange
 			wordP = fix_string(wordP, FIX_STRING, &got);
 			burps(&g_output, wordP);
