@@ -95,7 +95,6 @@ static FILE* outputF = 0;
 
 static burpT case_var = {0,0,0,0,0,0};
 static burpT temp_burp = {0, 0, 0, 0, 0, 0};
-static int first_if = 1;
 //MIW var declarations end
 
 burpT	g_output  = {0, 0, 0, 0, 0, 0};
@@ -112,7 +111,7 @@ typedef enum scopeTypeE {
 typedef struct function_nameS {
 	struct function_nameS *m_nextP;
 	char	*m_nameP;
-	int		m_local;
+	int		m_isLocal;
 } function_nameT;
 
 function_nameT *g_function_namesP = 0;
@@ -143,19 +142,25 @@ seen_global(const char *nameP, int local)
 		if (!*nameP) {
 			return;
 		}
+
+		// Capture just the variable's name by stopping at [ or = sign
 		for (P1 = (char *) nameP; (c = *P1) && c != '[' && c != '='; ++P1);
 		*P1 = 0;
+
+		// If the name is already in the registry, return without doing anything
 		for (tailPP = &g_globalsP; globalP = *tailPP; tailPP = &(globalP->m_nextP)) {
 			if (!strcmp(globalP->m_nameP, nameP)) {
 				*((char *) P1) = c;
 				return;
 		}	}
+
+		// If the name is new, add it to the registry
 		globalP = (function_nameT *) xmalloc(sizeof(function_nameT) + strlen(nameP) + 1);
 		P = (char *) (globalP+1);
 		strcpy(P, nameP);
 		globalP->m_nameP = P;
 		globalP->m_nextP = 0;
-		globalP->m_local = local;
+		globalP->m_isLocal = local;
 		*tailPP          = globalP;
 		*P1 = c;
 	}
@@ -1445,9 +1450,11 @@ static int
 isAssignment(char *startP, int local)
 {
 	char	*P, *end_nameP, *end_arrayP;
-	int		c, in_array;
+	int		c;
 
 	P = startP;
+
+	// Left side must be an identifier
 	if ((c = *P) != '_' && !isalpha(c)) {
 		return 0;
 	}
@@ -1461,8 +1468,9 @@ isAssignment(char *startP, int local)
 			c = *++P;
 	}	}
 
+	// Assignment operator can be  +=,  -=,  or  =
 	switch (c) {
-    case '+':
+	case '+':
 	case '-':
 		++P;
 	}
@@ -2346,6 +2354,7 @@ print_case_clauses (clauses)
 PATTERN_LIST *clauses;
 {
 	char *P;
+	static int firstIfClause = TRUE;
 
 	while (clauses)
 	{
@@ -2353,11 +2362,11 @@ PATTERN_LIST *clauses;
 		if (!strcmp(clauses->patterns->word->word, "*")){
 			burps(&g_output, "else:");
 		} else {
-			if (first_if) {
+			if (firstIfClause) {
 				burps(&g_output, "if ( ");
 				burps(&g_output, case_var.m_P);
 				burps(&g_output, " == ");
-				first_if  = 0;
+				firstIfClause  = 0;
 			} else{
 				burps(&g_output, "elif ( ");
 				burps(&g_output, case_var.m_P);
@@ -2390,7 +2399,6 @@ CASE_COM *case_command;
 	print_case_command_head (case_command);
 	if (case_command->clauses)
 		print_case_clauses (case_command->clauses);
-	first_if = 1;
 }
 
 static void
@@ -2862,7 +2870,7 @@ FUNCTION_DEF *func;
 	burps(&save, ") :\n");
 	if (g_globalsP) {
 		for (globalP = g_globalsP; globalP; globalP = nextP) {
-			if (!globalP->m_local) {
+			if (!globalP->m_isLocal) {
 				burps(&save, "    global ");
 				burps(&save, globalP->m_nameP);
 				burpc(&save, '\n');
