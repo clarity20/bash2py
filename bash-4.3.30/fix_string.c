@@ -507,7 +507,8 @@ emitQuotedString(char *startP)
 {
 	char *P;
 	int	 c;
-	
+
+	log_enter("emitQuotedString (startP=%s)", startP);
 	burpc(&g_new, '"');
 	for (P = startP; ; ++P) {
 		c = *P;
@@ -528,7 +529,9 @@ emitQuotedString(char *startP)
 			burpc(&g_new, '\\');
 		}
 		burpc(&g_new, c);
-}	}
+	}
+	log_return();
+}
 
 static char *emitSpecial1(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP);
 
@@ -654,6 +657,8 @@ emitString(char *startP, const char *terminatorsP, int under_quotes)
 	int			c, offset, in_quotes;
 	fix_typeE	got;
 
+    log_enter("emitString (startP=%s, terminatorsP=%s, under_quotes=%d)",
+            startP, terminatorsP, under_quotes);
 	in_quotes = 0;
 	for (P = startP; ; ++P) {
 		c = *P;
@@ -702,6 +707,7 @@ done:
 	if (in_quotes) {
 		burpc(&g_new, '"');
 	}
+	log_return();
 	return P;
 }
 
@@ -710,6 +716,9 @@ emitFunction(char *nameP, char *parm1P, char *parm2P, int indirect, int under_qu
 {
 	char 		*endP;
 	int	 		offset;
+
+	log_enter("emitFunction (nameP=%s, parm1P=%s, parm2P=%s, indirect=%d, under_quotes=%d)",
+			nameP, parm1P, parm2P, indirect, under_quotes);
 
 	burps(&g_new, nameP);
 	burpc(&g_new, '(');
@@ -730,6 +739,8 @@ emitFunction(char *nameP, char *parm1P, char *parm2P, int indirect, int under_qu
 			g_new.m_lth = offset;
 	}	}
 	burpc(&g_new, ')');
+
+	log_return();
 	return endP;
 }
 
@@ -740,6 +751,8 @@ emitVariable(char *startP, int braced, int in_quotes, fix_typeE want, fix_typeE 
 	int			c, array, indirect;
 	fix_typeE	got;
 
+	log_enter("emitVariable (startP=%s, braced=%d, in_quotes=%d, want=%d)",
+			startP, braced, in_quotes, want);
 	start2P     = 0;
 	functionP   = 0;
 
@@ -756,6 +769,7 @@ emitVariable(char *startP, int braced, int in_quotes, fix_typeE want, fix_typeE 
 			end_start1P = start2P;
 			switch(c = *start2P) {
 			case 0:
+				log_return_msg("Early return, null character");
 				return 0;
 			case '*':
 				if (indirect == 1 && start2P[1] == '}') { 	// ${!prefix*}
@@ -848,6 +862,7 @@ emitVariable(char *startP, int braced, int in_quotes, fix_typeE want, fix_typeE 
 				endP = emitFunction(functionP, startP, start2P, indirect, in_quotes);
 				*end_start1P = c;
 				if (!endP) {
+					log_return_msg("Early return, null character");
 					return 0;
 				}
 				goto done;
@@ -879,6 +894,7 @@ done:
 			g_new.m_lth = offset;
 			switch (c) {
 			case 0:
+				log_return_msg("Early return, null character");
 				return 0;
 			case '}':
 				++endP;
@@ -895,6 +911,7 @@ done:
 			burpc(&g_new, c);
 	}	}
 finish:
+	log_return();
 	return endP;
 }
 
@@ -906,6 +923,8 @@ emitDollarExpression(char *startP, int in_quotes, fix_typeE want, fix_typeE *got
 	char 		*P, *P1, *endP;
 	int  		start, offset, blank, c, brackets;
 	fix_typeE	got;
+
+	log_enter("emitDollarExpression (startP=%s, in_quotes=%d, want=%d)", startP, in_quotes, want);
 
 	++g_underDollarExpression;
 	*gotP    = FIX_INT;
@@ -972,6 +991,7 @@ done:
 		if (g_underDollarExpression == 1) {
 			// Do allow array
 			if (!translate_expression(g_new.m_P + start, &P1, 1)) {
+				log_return_msg("Early exit after translation");
 				return 0;
 			}
 			g_new.m_lth = start;
@@ -980,6 +1000,7 @@ done:
 #endif
 	}
 	--g_underDollarExpression;
+	log_return();
 	return P;
 } 
 
@@ -1070,6 +1091,8 @@ emitSpecial1(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 	char *endP, *P;
 	int	 c, c1, start;
 	
+	log_enter("emitSpecial1 (startP=%s, in_quotes=%d, want=%d)", startP, in_quotes, want);
+
 	endP   = 0;
 	start  = g_new.m_lth;
 
@@ -1121,6 +1144,7 @@ emitSpecial1(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 			case FIX_INT:
 			case FIX_VAR:
 			case FIX_ARRAY:
+				log_info("Casting %s to string", start);
 				P = burp_extend(&g_new, start, 4);
 				memcpy(P, "str(", 4);
 				if (got == FIX_ARRAY) {
@@ -1134,6 +1158,7 @@ emitSpecial1(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 			break;
 		case FIX_ARRAY:
 			if (got != FIX_ARRAY) {
+				log_info("Casting %s to array", start);
 				P = burp_extend(&g_new, start, 6);	
 				g_translate.m_function.m_array = 1;
 				memcpy(P, "Array(", 6);
@@ -1144,6 +1169,8 @@ emitSpecial1(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 		}
 		*gotP = got;
 	}
+
+	log_return();
 	return endP;
 }
 
@@ -1166,6 +1193,9 @@ static fix_typeE
 combine_types(int offset, fix_typeE want_type, fix_typeE was_type, fix_typeE new_type)
 {
 	char	*P;
+
+	log_enter("combine_types (offset=%d, want=%d, was=%d, new=%d)",
+				offset, want_type, was_type, new_type);
 
 	switch (want_type) {
 	case FIX_ARRAY:
@@ -1213,6 +1243,7 @@ combine_types(int offset, fix_typeE want_type, fix_typeE was_type, fix_typeE new
 
 	if (was_type == FIX_NONE) {
 		// Do nothing more
+		log_return_msg("Simple cast");
 		return new_type;
 	}
 	if (was_type == new_type) {
@@ -1222,6 +1253,7 @@ combine_types(int offset, fix_typeE want_type, fix_typeE was_type, fix_typeE new
 			// Join two things together
 			P = burp_extend(&g_new, offset, 1);
 			*P ='+';
+			log_return_msg("Concatenated");
 			return new_type;
 	}	}
 
@@ -1248,6 +1280,7 @@ combine_types(int offset, fix_typeE want_type, fix_typeE was_type, fix_typeE new
 			*P = 'S';
 			g_translate.m_function.m_str = 1;
 	}	}
+	log_return_msg("Cast to strings and concatenated");
 	return FIX_STRING;
 }
 
@@ -1270,6 +1303,7 @@ substitute(fix_typeE want)
 	char		**arrayPP, *P, *P1, *P2;
 	int			fileExpansion;
 
+    log_enter("substitute (want=%d)", want);
 	/* Return an array of strings; the brace expansion of TEXT.
 	 * Documentation says this is done before anything else
 	 */
@@ -1408,7 +1442,8 @@ done:
 		}
 		break;
 	}
-		
+
+	log_return();
 	return got;
 }
 
@@ -1665,6 +1700,8 @@ fix_string1(fix_typeE want, fix_typeE *gotP)
 	fix_typeE	got;
 	int			is_expression;
 
+	log_enter("fix_string1 (want=%d)", want);
+
 	got = FIX_NONE;
     if (!g_buffer.m_lth) {
 		goto done;
@@ -1711,6 +1748,8 @@ done:
 	if (gotP) {
 		*gotP = got;
 	}
+
+	log_return();
 	return g_buffer.m_P;
 }
 
@@ -1730,7 +1769,9 @@ fixBracedString(const char *startP, fix_typeE want, fix_typeE *gotP)
 	char	**arrayPP;
 	int		c, in_quotes, state;
 	char	*resultP;
-	
+
+	log_enter("fixBracedString (startP=%s, want=%d)", startP, want);
+
 	if (want == FIX_EXPRESSION) {
 		goto dont_fire;
 	}
@@ -1823,6 +1864,7 @@ fire:
 		}
 		xfree(arrayPP);
 		if (resultP) {
+		    log_return_msg("\'fire\' section");
 			return resultP;
 	}	}
 dont_fire:
@@ -1830,6 +1872,8 @@ dont_fire:
 
 	string_to_buffer(startP);
 	resultP = fix_string1(want, gotP);
+
+	log_return_msg("\'dont fire\' section");
 	return resultP;
 }
 
