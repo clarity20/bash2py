@@ -138,8 +138,11 @@ seen_global(const char *nameP, int local)
 	char *P,*P1;
 	int	 c;
 
+    log_enter("seen_global (nameP=%s, local=%d)", nameP, local);
+
 	if (capture_globals) {
 		if (!*nameP) {
+		    log_return_msg("Return without processing");
 			return;
 		}
 
@@ -151,6 +154,7 @@ seen_global(const char *nameP, int local)
 		for (tailPP = &g_globalsP; globalP = *tailPP; tailPP = &(globalP->m_nextP)) {
 			if (!strcmp(globalP->m_nameP, nameP)) {
 				*((char *) P1) = c;
+				log_return_msg("Variable already seen, return without processing");
 				return;
 		}	}
 
@@ -163,7 +167,9 @@ seen_global(const char *nameP, int local)
 		globalP->m_isLocal = local;
 		*tailPP          = globalP;
 		*P1 = c;
+        log_return_msg("Variable added to registry");
 	}
+	log_return_msg("Default: no action");
 }
 
 //#define UNCHANGED burps(&g_output, "^^")
@@ -1221,6 +1227,8 @@ char *separator;
 	char	  	*wordP = w->word->word;
 	fix_typeE	got;
 
+	log_enter("print_printf_cmd (list->word=%s, separator=%s)", wordP, separator);
+
 	if (!strcmp(wordP, "-v")) {
 		w = w->next;
 		if (w) {
@@ -1233,6 +1241,7 @@ char *separator;
 			wordP = w->word->word;
 			burps(&g_output, fix_string(wordP, FIX_STRING, &got));
 		}
+		log_return_msg("-v option: write to variable");
 		return;
 	}
 
@@ -1255,6 +1264,7 @@ char *separator;
 		burpc(&g_output, ')');
 	}
 	burps(&g_output, " )\n");
+	log_return_msg("default behavior: print to screen");
 }
 
 /* export [-fn] [-p] var[=value] */
@@ -1398,6 +1408,9 @@ print_assignment_command(char *nameP, char *end_variableP, char *end_arrayP, cha
 	int 		c;
 	fix_typeE	got;
 
+	log_enter("print_assignment_command (nameP=%s, end_var=%s, end_array=%s, end_assign=%s, local=%d)",
+	        nameP, end_variableP, end_arrayP, end_assignmentP, local);
+
 	c              = *end_variableP;
 	*end_variableP = 0;
 	seen_global(nameP, local);
@@ -1443,6 +1456,8 @@ print_assignment_command(char *nameP, char *end_variableP, char *end_arrayP, cha
 	}
 #endif
 	burpc(&g_output, ')');
+
+	log_return();
 	return;
 }
 
@@ -1452,10 +1467,13 @@ isAssignment(char *startP, int local)
 	char	*P, *end_nameP, *end_arrayP;
 	int		c;
 
+	log_enter("isAssignment (startP=%s, local=%d)", startP, local);
+
 	P = startP;
 
 	// Left side must be an identifier
 	if ((c = *P) != '_' && !isalpha(c)) {
+		log_return();
 		return 0;
 	}
 	for (++P; (c = *P) == '_' || isalnum(c); ++P);
@@ -1476,8 +1494,10 @@ isAssignment(char *startP, int local)
 	}
 	if (*P == '=') {
 		print_assignment_command(startP, end_nameP, end_arrayP, P, local);
+		log_return();
 		return 1;
 	}
+	log_return();
 	return(0);
 }
 
@@ -1888,6 +1908,8 @@ print_expression(WORD_LIST *word_listP)
 	char 		*wordP;
 	fix_typeE	got;
 
+	log_enter("print_expression (word_list)");
+
 	start_offset = g_output.m_lth;
 	for (atP = word_listP; atP; atP = nextP) {
 		wordP = word_listP->word->word;
@@ -1903,6 +1925,8 @@ print_expression(WORD_LIST *word_listP)
 	burps(&g_output, wordP);
 	burp_rtrim(&g_output);
 	unbrace();
+
+	log_return();
 }
 
 void
@@ -1912,6 +1936,7 @@ print_simple_command (SIMPLE_COM *simple_command)
 	char		*wordP;
 	int			c, negated;
 	fix_typeE	got;
+    int is_done = FALSE;
 
 	word_listP = simple_command->words;
 	if (!word_listP) {
@@ -1922,7 +1947,10 @@ print_simple_command (SIMPLE_COM *simple_command)
 		return;
 	}
 
+	log_enter("print_simple_command (simple_command->word=%s)", wordP);
+
 	if (isAssignment(wordP, 0)) {
+	    log_return_msg("Command is an assignment");
 		return;
 	}
 
@@ -1932,28 +1960,27 @@ print_simple_command (SIMPLE_COM *simple_command)
 	case ':':
 		if (!strcmp(wordP,":")) {
 			burps(&g_output, "pass");
-			return;
+			is_done = TRUE;
 		}
 		break;
 	case '[':
 		if (!strcmp(wordP, "[")) {
 			print_test_command(word_listP->next, negated);
-			return;
+			is_done = TRUE;
 		}
 		break;
 	case 'b':
 		if (!strcmp(wordP, "break")){
 			burps(&g_output, "break");
-			return;
+			is_done = TRUE;
 		}
 		break;
 	case 'c':
 		if (!strcmp(wordP, "continue")){
 			burps(&g_output, "continue");
-			return;
+			is_done = TRUE;
 		}
-	
-		if (!strcmp(wordP, "cd")){
+		else if (!strcmp(wordP, "cd")){
 			g_translate.m_uses.m_os = 1;
 			if (word_listP->next) {
 				burps(&g_output, "os.chdir(");
@@ -1965,25 +1992,25 @@ print_simple_command (SIMPLE_COM *simple_command)
 						burpc(&g_output,',');
 				}	}
 				burpc(&g_output, ')');
+				log_return();
 				return;
 			}
 			burps(&g_output, "os.chdir(os.path.expanduser('~'))");			
-			return;
+			is_done = TRUE;
 		}
 		break;
 	case 'd':
 		if (!strcmp(wordP, "declare")) {
 			print_declare_command(word_listP);
-			return;
+			is_done = TRUE;
 		}
 		break;
 	case 'e':
 		if (!strcmp(wordP, "echo")){
 			print_echo_command(word_listP, simple_command->redirects);
-			return;
+			is_done = TRUE;
 		}
-	
-		if (!strcmp(wordP, "eval")){
+		else if (!strcmp(wordP, "eval")){
 			burps(&g_output, "eval(");
 			while (word_listP = word_listP->next) {
 				wordP = word_listP->word->word;
@@ -1993,10 +2020,9 @@ print_simple_command (SIMPLE_COM *simple_command)
 					burpc(&g_output, ',');
 			}	}
 			burpc(&g_output, ')');
-			return;
+			is_done = TRUE;
 		}
-	
-		if (!strcmp(wordP, "exit")){
+		else if (!strcmp(wordP, "exit")){
 			if (word_listP->next) {
 				burps(&g_output, "exit(");
 				for(;;) {
@@ -2010,30 +2036,29 @@ print_simple_command (SIMPLE_COM *simple_command)
 					burpc(&g_output, ' ');
 				}
 				burpc(&g_output, ')');
+				log_return();
 				return;
 			}
 			burps(&g_output, "exit()");
-			return;
+			is_done = TRUE;
 		}
-	
-		if (!strcmp(wordP, "export")){
+		else if (!strcmp(wordP, "export")){
 			print_export_cmd(word_listP->next, " ");
-			return;
+			is_done = TRUE;
 		}
 		break;
 	case 'f':
 		if (!strcmp(wordP, "false")){
 			burps(&g_output, "False");
-			return;
+			is_done = TRUE;
 		}
 		break;
 	case 'l':
 		if (!strcmp(wordP, "let")){
 			print_let_command(word_listP->next);
-			return;
+			is_done = TRUE;
 		}
-	
-		if (!strcmp(wordP, "local")) {
+		else if (!strcmp(wordP, "local")) {
 			for (; word_listP = word_listP->next;) {
 				wordP = word_listP->word->word;
 				if (!isAssignment(wordP, 1)) {
@@ -2044,9 +2069,9 @@ print_simple_command (SIMPLE_COM *simple_command)
 			 	if (word_listP->next) {
 					burpc(&g_output, '\n');
 			}	}
-			return;
+			is_done = TRUE;
 		}
-		if (!strcmp(wordP, "logout")) {
+		else if (!strcmp(wordP, "logout")) {
 			WORD_LIST *nextP;
 
 			g_translate.m_uses.m_sys = 1;
@@ -2061,29 +2086,27 @@ print_simple_command (SIMPLE_COM *simple_command)
 				}
 			}
 			burpc(&g_output, ')');
-			return;
+			is_done = TRUE;
 		}
 		break;
 	case 'p':
 		if (!strcmp(wordP, "printf")){
 			print_printf_cmd(word_listP->next, " ");
-			return;
+			is_done = TRUE;
 		} 
-	
-		if (!strcmp(wordP, "pwd")){
+		else if (!strcmp(wordP, "pwd")){
 			g_translate.m_uses.m_os = 1;
 			g_translate.m_uses.m_print = 1;
 			burps(&g_output, "print(os.getcwd())");
-			return;
+			is_done = TRUE;
 		} 
 		break;
 	case 'r':
 		if (!strcmp(wordP, "read")){
 			print_read_command(word_listP);
-			return;
+			is_done = TRUE;
 		}
-	
-		if (!strcmp(wordP, "return")){
+		else if (!strcmp(wordP, "return")){
 			burps(&g_output, wordP);
 			while (word_listP = word_listP->next) {
 				burpc(&g_output, '(');
@@ -2095,45 +2118,44 @@ print_simple_command (SIMPLE_COM *simple_command)
 				}
 				burpc(&g_output, ')');
 			}
-			return;
+			is_done = TRUE;
 		}
 		break;
 	case 't':
 		if (!strcmp(wordP, "test")) {
 			print_test_command(word_listP->next, negated);
-			return;
+			is_done = TRUE;
 		}
-
-		if (!strcmp(wordP, "times")) {
+		else if (!strcmp(wordP, "times")) {
 			g_translate.m_uses.m_os = 1;
 			burps(&g_output, "print (os.times())\n");
 			burp(&g_output, "_rc%d = 0", g_rc_identifier);
-			return;
+			is_done = TRUE;
 		}
-	
-		if (!strcmp(wordP, "true")){
+		else if (!strcmp(wordP, "true")){
 			burps(&g_output, "True");
-			return;
+			is_done = TRUE;
 		}
-	
-		if (!strcmp(wordP, "trap")) {
+		else if (!strcmp(wordP, "trap")) {
 			print_trap_command(word_listP);
-			return;
+			is_done = TRUE;
 		}
 		break;
 	case 'u':
-	
 		if (!strcmp(wordP, "umask")) {
 			print_umask_command(word_listP);
-			return;
+			is_done = TRUE;
 		}
-	
-		if (!strcmp(wordP, "unset")) {
+		else if (!strcmp(wordP, "unset")) {
 			print_unset_command(word_listP);
-			return;
+			is_done = TRUE;
 		}
-	
 		break;
+	}
+
+	if (is_done) {
+		log_return();
+		return;
 	}
 	
 	if (is_internal_function(wordP)) {
@@ -2147,6 +2169,7 @@ print_simple_command (SIMPLE_COM *simple_command)
 				burps(&g_output, ", ");
 		}	}
 		burpc(&g_output, ')');
+		log_return_msg("Internal function processed.");
 		return;
 	} 
 
@@ -2182,6 +2205,7 @@ print_simple_command (SIMPLE_COM *simple_command)
 			}
 			memcpy(g_output.m_P+offset, "Popen", 5);
 		}
+		log_return_msg("Redirect(s) processed.");
 		return;
 	} 
 	g_translate.m_uses.m_subprocess = 1;
@@ -2196,6 +2220,7 @@ print_simple_command (SIMPLE_COM *simple_command)
 		burpc(&g_output, ',');
 	}
 	burps(&g_output, "],shell=True)");
+	log_return();
 	return;
 }
 
@@ -2827,6 +2852,8 @@ FUNCTION_DEF *func;
 	char	 *P;
 	int		parm, save_parms;
 
+	log_enter("print_function_def (func=%s)", func->name->word);
+
 	function_nameP = (function_nameT *) xmalloc(sizeof(function_nameT) + strlen(nameP) + 1);
 	P = (char *) (function_nameP+1);
 	strcpy(P, nameP);
@@ -2904,6 +2931,8 @@ FUNCTION_DEF *func;
 	}
 
 	dispose_command (cmdcopy);
+
+	log_return();
 }
 
 static void
@@ -2935,140 +2964,141 @@ emit_command (COMMAND *command)
 {
 	int	old_embedded, old_started;
 
-	if (command) {
-		assert(0 <= command->position.byte);
-		print_comments(command->position.byte);
+	if (!command)
+		return;
 
-		handle_redirection_list(&command->redirects);
-		if (command->flags & CMD_TIME_PIPELINE) {
-			UNCHANGED;
-			burps(&g_output, "time ");
-			if (command->flags & CMD_TIME_POSIX) {
-				burps(&g_output, "-p ");
-			}
+	assert(0 <= command->position.byte);
+	print_comments(command->position.byte);
+
+	handle_redirection_list(&command->redirects);
+	if (command->flags & CMD_TIME_PIPELINE) {
+		UNCHANGED;
+		burps(&g_output, "time ");
+		if (command->flags & CMD_TIME_POSIX) {
+			burps(&g_output, "-p ");
 		}
+	}
 
-		if (command->flags & CMD_INVERT_RETURN) {
-			switch (command->type) {
-			case cm_simple:
-				command->value.Simple->flags |= CMD_INVERT_RETURN;
-				break;
-			case cm_connection:
-				command->value.Connection->second->flags |= CMD_INVERT_RETURN;
-				break;
-			default:
-				UNCHANGED;
-				burps(&g_output, "not ");
-		}	}
-
-		old_embedded = g_embedded;
-		old_started  = g_started;
-		++g_started;
-		++g_embedded;
+	if (command->flags & CMD_INVERT_RETURN) {
 		switch (command->type) {
 		case cm_simple:
-			print_simple_command (command->value.Simple);
-        	handle_redirection_list(&command->value.Simple->redirects);
+			command->value.Simple->flags |= CMD_INVERT_RETURN;
 			break;
+		case cm_connection:
+			command->value.Connection->second->flags |= CMD_INVERT_RETURN;
+			break;
+		default:
+			UNCHANGED;
+			burps(&g_output, "not ");
+	}	}
 
-		case cm_for:
-			print_for_command (command->value.For);
-			break;
+	old_embedded = g_embedded;
+	old_started  = g_started;
+	++g_started;
+	++g_embedded;
+	switch (command->type) {
+	case cm_simple:
+		print_simple_command (command->value.Simple);
+		handle_redirection_list(&command->value.Simple->redirects);
+		break;
+
+	case cm_for:
+		print_for_command (command->value.For);
+		break;
 
 #if defined (ARITH_FOR_COMMAND)
-		case cm_arith_for:
-			print_arith_for_command (command->value.ArithFor);
-			break;
+	case cm_arith_for:
+		print_arith_for_command (command->value.ArithFor);
+		break;
 #endif
 
 #if defined (DPAREN_ARITHMETIC)
-		case cm_arith:
-			g_embedded = old_embedded;
-			print_arith_command (command->value.Arith->exp);
-			break;
+	case cm_arith:
+		g_embedded = old_embedded;
+		print_arith_command (command->value.Arith->exp);
+		break;
 #endif
 
 #if defined (SELECT_COMMAND)
-		case cm_select:
-			print_select_command (command->value.Select);
-			break;
+	case cm_select:
+		print_select_command (command->value.Select);
+		break;
 #endif
 
-		case cm_case:
-			print_case_command (command->value.Case);
-			break;
+	case cm_case:
+		print_case_command (command->value.Case);
+		break;
 
-		case cm_while:
-			print_while_command (command->value.While);
-			break;
+	case cm_while:
+		print_while_command (command->value.While);
+		break;
 
-		case cm_until:
-			print_until_command (command->value.While);
-			break;
+	case cm_until:
+		print_until_command (command->value.While);
+		break;
 
-		case cm_if:
-			print_if_command (command->value.If);
-			break;
+	case cm_if:
+		print_if_command (command->value.If);
+		break;
 
 #if defined (COND_COMMAND)
-		case cm_cond:
-			g_embedded = old_embedded;
-			if (!old_started) {
-				if (0 == strcmp(command->value.Cond->op->word, "=~")) {
-					burp(&g_output, "match_object = ");
-				} else {
-					burp(&g_output, "_rc%d = ", g_rc_identifier);
-				}
+	case cm_cond:
+		g_embedded = old_embedded;
+		if (!old_started) {
+			if (0 == strcmp(command->value.Cond->op->word, "=~")) {
+				burp(&g_output, "match_object = ");
+			} else {
+				burp(&g_output, "_rc%d = ", g_rc_identifier);
 			}
-			print_cond_command (command->value.Cond);
-			break;
+		}
+		print_cond_command (command->value.Cond);
+		break;
 #endif
 
-		case cm_connection:
-			g_embedded = old_embedded;
-			print_connection_command (command->value.Connection);
-			break;
-
-		case cm_function_def:
-			g_embedded = 0;
-			print_function_def (command->value.Function_def);
-			break;
-
-		case cm_group:
-			print_group_command (command->value.Group);
-			break;
-
-		case cm_subshell:
-			/* IJD: This is all very silly:
-				The bash manual says that ( ... ) causes execution in a subshell
-				but in practice it seems the main purpose of this operation is
-				to do what it looks like doing.. bracketting an expression
-			 */
-			burpc(&g_output, '(');
-			emit_command(command->value.Subshell->command);
-			burpc(&g_output, ')');
-			break;
-
-		case cm_coproc:
-			UNCHANGED;
-			burps(&g_output, "coproc ");
-			burps(&g_output, command->value.Coproc->name);
-			burps(&g_output, "\n");
-			INDENT(g_output);
-			emit_command (command->value.Coproc->command);
-			OUTDENT(g_output);
-			break;
-
-		default:
-			UNCHANGED;
-			command_error ("print_command", CMDERR_BADTYPE, command->type, 0);
-			break;
-		}
+	case cm_connection:
 		g_embedded = old_embedded;
-		if (command->redirects) {
-			burpc(&g_output, ' ');
-			print_redirection_list (command->redirects);
-		}
+		print_connection_command (command->value.Connection);
+		break;
+
+	case cm_function_def:
+		g_embedded = 0;
+		print_function_def (command->value.Function_def);
+		break;
+
+	case cm_group:
+		print_group_command (command->value.Group);
+		break;
+
+	case cm_subshell:
+		/* IJD: This is all very silly:
+			The bash manual says that ( ... ) causes execution in a subshell
+			but in practice it seems the main purpose of this operation is
+			to do what it looks like doing.. bracketting an expression
+		 */
+		burpc(&g_output, '(');
+		emit_command(command->value.Subshell->command);
+		burpc(&g_output, ')');
+		break;
+
+	case cm_coproc:
+		UNCHANGED;
+		burps(&g_output, "coproc ");
+		burps(&g_output, command->value.Coproc->name);
+		burps(&g_output, "\n");
+		INDENT(g_output);
+		emit_command (command->value.Coproc->command);
+		OUTDENT(g_output);
+		break;
+
+	default:
+		UNCHANGED;
+		command_error ("print_command", CMDERR_BADTYPE, command->type, 0);
+		break;
+	}
+	g_embedded = old_embedded;
+	if (command->redirects) {
+		burpc(&g_output, ' ');
+		print_redirection_list (command->redirects);
 	}
 }
 
@@ -3147,6 +3177,8 @@ initialize_translator(const char *shell_scriptP)
 {
 	char *filenameP;
 
+	log_init();
+
 	if (!shell_scriptP) {
 	  if (g_translate_html) {
 		filenameP = "output.html";
@@ -3197,6 +3229,7 @@ initialize_translator(const char *shell_scriptP)
 	if (g_translate_html) {
 		fprintf(outputF, "</td></tr>\n");
 	}
+
 }
 
 void
@@ -3898,6 +3931,8 @@ close_translator()
 		fprintf(outputF, "</body>\n</html>\n");
 	}
 	fclose(outputF);
+
+	log_close();
 }
 
 #endif
