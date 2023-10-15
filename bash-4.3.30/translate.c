@@ -128,42 +128,44 @@ is_internal_function(char *nameP)
 	return (0);
 }
 
-static int capture_globals = 0;
-static function_nameT *g_globalsP = 0;
+static variable_nameT *g_variable_namesP = 0;
 
 void
 seen_global(const char *nameP, int local)
 {
-	function_nameT **tailPP, *globalP;
+	variable_nameT **tailPP, *globalP;
 	char *P,*P1;
 	int	 c;
 
-	if (capture_globals) {
-		if (!*nameP) {
-			return;
-		}
+	log_enter("seen_global (nameP=%s, local=%d)", nameP, local);
 
-		// Capture just the variable's name by stopping at [ or = sign
-		for (P1 = (char *) nameP; (c = *P1) && c != '[' && c != '='; ++P1);
-		*P1 = 0;
-
-		// If the name is already in the registry, return without doing anything
-		for (tailPP = &g_globalsP; globalP = *tailPP; tailPP = &(globalP->m_nextP)) {
-			if (!strcmp(globalP->m_nameP, nameP)) {
-				*((char *) P1) = c;
-				return;
-		}	}
-
-		// If the name is new, add it to the registry
-		globalP = (function_nameT *) xmalloc(sizeof(function_nameT) + strlen(nameP) + 1);
-		P = (char *) (globalP+1);
-		strcpy(P, nameP);
-		globalP->m_nameP = P;
-		globalP->m_nextP = 0;
-		globalP->m_isLocal = local;
-		*tailPP          = globalP;
-		*P1 = c;
+	if (!*nameP) {
+		log_return_msg("Return without processing");
+		return;
 	}
+
+	// Capture just the variable's name by stopping at [ or = sign
+	for (P1 = (char *) nameP; (c = *P1) && c != '[' && c != '='; ++P1);
+	*P1 = 0;
+
+	// If the name is already in the registry, return without doing anything
+	for (tailPP = &g_globalsP; globalP = *tailPP; tailPP = &(globalP->m_nextP)) {
+		if (!strcmp(globalP->m_nameP, nameP)) {
+			*((char *) P1) = c;
+			log_return_msg("Variable already seen, return without processing");
+			return;
+	}	}
+
+	// If the name is new, add it to the registry
+	globalP = (function_nameT *) xmalloc(sizeof(function_nameT) + strlen(nameP) + 1);
+	P = (char *) (globalP+1);
+	strcpy(P, nameP);
+	globalP->m_nameP = P;
+	globalP->m_nextP = 0;
+	globalP->m_isLocal = local;
+	*tailPP          = globalP;
+	*P1 = c;
+	log_return_msg("Variable added to registry");
 }
 
 //#define UNCHANGED burps(&g_output, "^^")
@@ -464,7 +466,7 @@ print_redirection_list (REDIRECT *redirects)
 	}
 
 	/* Now that we've printed all the other redirections (on one line),
-     print the here documents. */
+	 print the here documents. */
 	if (heredocs && printing_connection) {
 		deferred_heredocs = heredocs;
 	} else if (heredocs) {
@@ -709,8 +711,8 @@ print_popen_flags(REDIRECT *redirects, int printing)
 			break;
 		case r_input_direction:
 			burps(&g_output, ",stdin=file(");
-        	wordP = redirects->redirectee.filename->word;
-            wordP = fix_string(wordP, FIX_STRING, &got);
+			wordP = redirects->redirectee.filename->word;
+			wordP = fix_string(wordP, FIX_STRING, &got);
 			burps(&g_output, wordP);
 			burps(&g_output, ",'rb')");
 			break;
@@ -742,8 +744,8 @@ print_popen_flags(REDIRECT *redirects, int printing)
 				burp(&g_output, ",std%d", redirects->redirector.dest);
 			}
 			burps(&g_output, "=file(");
-        	wordP = redirects->redirectee.filename->word;
-            wordP = fix_string(wordP, FIX_STRING, &got);
+			wordP = redirects->redirectee.filename->word;
+			wordP = fix_string(wordP, FIX_STRING, &got);
 			burps(&g_output, wordP);
 			burps(&g_output, ",'wb')");
 			break;
@@ -765,8 +767,8 @@ print_popen_flags(REDIRECT *redirects, int printing)
 				burp(&g_output, ",std%d", redirects->redirector.dest);
 			}
 			burps(&g_output, "=file(");
-        	wordP = redirects->redirectee.filename->word;
-            wordP = fix_string(wordP, FIX_STRING, &got);
+			wordP = redirects->redirectee.filename->word;
+			wordP = fix_string(wordP, FIX_STRING, &got);
 			burps(&g_output, wordP);
 			burps(&g_output, ",'ab')");
 			break;
@@ -793,7 +795,7 @@ print_popen_redirection (REDIRECT *redirect)
 	{
 	case r_deblank_reading_until:
 	case r_reading_until:
-    {
+	{
 		int 	lth, c;
 		char	*P;
 
@@ -822,7 +824,7 @@ print_popen_redirection (REDIRECT *redirect)
 		}
 		burps(&g_output,")\n");
 		break;
-    }
+	}
 	case r_reading_string:
 		communicates = 1;
 		burp(&g_output,"_rc%d.communicate(", g_rc_identifier);
@@ -902,7 +904,7 @@ indent (int amount)
 
 	for (i = 0; amount > 0; amount--) {
 		burpc(&g_output, ' ');
-    }
+	}
 }
 
 typedef struct commentS {
@@ -1221,6 +1223,8 @@ char *separator;
 	char	  	*wordP = w->word->word;
 	fix_typeE	got;
 
+	log_enter("print_printf_cmd (list->word=%s, separator=%s)", wordP, separator);
+
 	if (!strcmp(wordP, "-v")) {
 		w = w->next;
 		if (w) {
@@ -1233,6 +1237,7 @@ char *separator;
 			wordP = w->word->word;
 			burps(&g_output, fix_string(wordP, FIX_STRING, &got));
 		}
+		log_return_msg("-v option: write to variable");
 		return;
 	}
 
@@ -1241,7 +1246,7 @@ char *separator;
 	wordP = fix_string(wordP, FIX_STRING, &got);
 	burps(&g_output, wordP);
 	w = w->next;
-    if (w) {
+	if (w) {
 		burps(&g_output, " % (");
 
 		for (; w; w = w->next){
@@ -1255,6 +1260,7 @@ char *separator;
 		burpc(&g_output, ')');
 	}
 	burps(&g_output, " )\n");
+	log_return_msg("default behavior: print to screen");
 }
 
 /* export [-fn] [-p] var[=value] */
@@ -1321,7 +1327,7 @@ print_test_command(WORD_LIST *word_listP, int negated)
 			if (!wordP[1]) {
 				burps(&g_output, "not ");
 				break;
-      }
+	  }
 		case '(':
 			if (!wordP[1]) {
 				burpc(&g_output, c);
@@ -1352,15 +1358,15 @@ print_test_command(WORD_LIST *word_listP, int negated)
 				break;
 			} 
 			if (!operatorP) {
-        switch (c) {
-        case '-':
-        case '!':
-        case '=':
-        case '<':
+		switch (c) {
+		case '-':
+		case '!':
+		case '=':
+		case '<':
 				case '>':
 				  operatorP = wordP;
 					continue;
-        default:
+		default:
 					// Very strange
 					operatorP = "";
 					continue;
@@ -1397,6 +1403,9 @@ print_assignment_command(char *nameP, char *end_variableP, char *end_arrayP, cha
 	char		*translationP;
 	int 		c;
 	fix_typeE	got;
+
+	log_enter("print_assignment_command (nameP=%s, end_var=%s, end_array=%s, end_assign=%s, local=%d)",
+			nameP, end_variableP, end_arrayP, end_assignmentP, local);
 
 	c              = *end_variableP;
 	*end_variableP = 0;
@@ -1438,11 +1447,13 @@ print_assignment_command(char *nameP, char *end_variableP, char *end_arrayP, cha
 		burps(&g_output, fix_string(end_assignmentP, FIX_VAR, &got));
 	}
 #if 0 
-      else {
+	  else {
 		burps(&g_output, "\"\"");
 	}
 #endif
 	burpc(&g_output, ')');
+
+	log_return();
 	return;
 }
 
@@ -1452,10 +1463,13 @@ isAssignment(char *startP, int local)
 	char	*P, *end_nameP, *end_arrayP;
 	int		c;
 
+	log_enter("isAssignment (startP=%s, local=%d)", startP, local);
+
 	P = startP;
 
 	// Left side must be an identifier
 	if ((c = *P) != '_' && !isalpha(c)) {
+		log_return();
 		return 0;
 	}
 	for (++P; (c = *P) == '_' || isalnum(c); ++P);
@@ -1476,8 +1490,10 @@ isAssignment(char *startP, int local)
 	}
 	if (*P == '=') {
 		print_assignment_command(startP, end_nameP, end_arrayP, P, local);
+		log_return();
 		return 1;
 	}
+	log_return();
 	return(0);
 }
 
@@ -1507,7 +1523,7 @@ print_declare_command(WORD_LIST	*word_listP)
 				is_int = TRUE;
 			} else if ((!strcmp(wordP, "-g")) && g_function_nesting_level > 0) {
 				is_local = FALSE;
-            }
+			}
 			continue;
 		}
 		if (separator != -1) {
@@ -1888,10 +1904,12 @@ print_expression(WORD_LIST *word_listP)
 	char 		*wordP;
 	fix_typeE	got;
 
+	log_enter("print_expression (word_list)");
+
 	start_offset = g_output.m_lth;
 	for (atP = word_listP; atP; atP = nextP) {
 		wordP = word_listP->word->word;
-    	burps(&g_output, wordP);
+		burps(&g_output, wordP);
 		nextP = atP->next;
 		if (nextP) {
 			burpc(&g_output, ' ');
@@ -1903,6 +1921,8 @@ print_expression(WORD_LIST *word_listP)
 	burps(&g_output, wordP);
 	burp_rtrim(&g_output);
 	unbrace();
+
+	log_return();
 }
 
 void
@@ -1912,6 +1932,7 @@ print_simple_command (SIMPLE_COM *simple_command)
 	char		*wordP;
 	int			c, negated;
 	fix_typeE	got;
+	int is_done = FALSE;
 
 	word_listP = simple_command->words;
 	if (!word_listP) {
@@ -1922,7 +1943,10 @@ print_simple_command (SIMPLE_COM *simple_command)
 		return;
 	}
 
+	log_enter("print_simple_command (simple_command->word=%s)", wordP);
+
 	if (isAssignment(wordP, 0)) {
+		log_return_msg("Command is an assignment");
 		return;
 	}
 
@@ -1932,28 +1956,27 @@ print_simple_command (SIMPLE_COM *simple_command)
 	case ':':
 		if (!strcmp(wordP,":")) {
 			burps(&g_output, "pass");
-			return;
+			is_done = TRUE;
 		}
 		break;
 	case '[':
 		if (!strcmp(wordP, "[")) {
 			print_test_command(word_listP->next, negated);
-			return;
+			is_done = TRUE;
 		}
 		break;
 	case 'b':
 		if (!strcmp(wordP, "break")){
 			burps(&g_output, "break");
-			return;
+			is_done = TRUE;
 		}
 		break;
 	case 'c':
 		if (!strcmp(wordP, "continue")){
 			burps(&g_output, "continue");
-			return;
+			is_done = TRUE;
 		}
-	
-		if (!strcmp(wordP, "cd")){
+		else if (!strcmp(wordP, "cd")){
 			g_translate.m_uses.m_os = 1;
 			if (word_listP->next) {
 				burps(&g_output, "os.chdir(");
@@ -1965,25 +1988,25 @@ print_simple_command (SIMPLE_COM *simple_command)
 						burpc(&g_output,',');
 				}	}
 				burpc(&g_output, ')');
+				log_return();
 				return;
 			}
 			burps(&g_output, "os.chdir(os.path.expanduser('~'))");			
-			return;
+			is_done = TRUE;
 		}
 		break;
 	case 'd':
 		if (!strcmp(wordP, "declare")) {
 			print_declare_command(word_listP);
-			return;
+			is_done = TRUE;
 		}
 		break;
 	case 'e':
 		if (!strcmp(wordP, "echo")){
 			print_echo_command(word_listP, simple_command->redirects);
-			return;
+			is_done = TRUE;
 		}
-	
-		if (!strcmp(wordP, "eval")){
+		else if (!strcmp(wordP, "eval")){
 			burps(&g_output, "eval(");
 			while (word_listP = word_listP->next) {
 				wordP = word_listP->word->word;
@@ -1993,10 +2016,9 @@ print_simple_command (SIMPLE_COM *simple_command)
 					burpc(&g_output, ',');
 			}	}
 			burpc(&g_output, ')');
-			return;
+			is_done = TRUE;
 		}
-	
-		if (!strcmp(wordP, "exit")){
+		else if (!strcmp(wordP, "exit")){
 			if (word_listP->next) {
 				burps(&g_output, "exit(");
 				for(;;) {
@@ -2010,30 +2032,29 @@ print_simple_command (SIMPLE_COM *simple_command)
 					burpc(&g_output, ' ');
 				}
 				burpc(&g_output, ')');
+				log_return();
 				return;
 			}
 			burps(&g_output, "exit()");
-			return;
+			is_done = TRUE;
 		}
-	
-		if (!strcmp(wordP, "export")){
+		else if (!strcmp(wordP, "export")){
 			print_export_cmd(word_listP->next, " ");
-			return;
+			is_done = TRUE;
 		}
 		break;
 	case 'f':
 		if (!strcmp(wordP, "false")){
 			burps(&g_output, "False");
-			return;
+			is_done = TRUE;
 		}
 		break;
 	case 'l':
 		if (!strcmp(wordP, "let")){
 			print_let_command(word_listP->next);
-			return;
+			is_done = TRUE;
 		}
-	
-		if (!strcmp(wordP, "local")) {
+		else if (!strcmp(wordP, "local")) {
 			for (; word_listP = word_listP->next;) {
 				wordP = word_listP->word->word;
 				if (!isAssignment(wordP, 1)) {
@@ -2044,9 +2065,9 @@ print_simple_command (SIMPLE_COM *simple_command)
 			 	if (word_listP->next) {
 					burpc(&g_output, '\n');
 			}	}
-			return;
+			is_done = TRUE;
 		}
-		if (!strcmp(wordP, "logout")) {
+		else if (!strcmp(wordP, "logout")) {
 			WORD_LIST *nextP;
 
 			g_translate.m_uses.m_sys = 1;
@@ -2061,29 +2082,27 @@ print_simple_command (SIMPLE_COM *simple_command)
 				}
 			}
 			burpc(&g_output, ')');
-			return;
+			is_done = TRUE;
 		}
 		break;
 	case 'p':
 		if (!strcmp(wordP, "printf")){
 			print_printf_cmd(word_listP->next, " ");
-			return;
+			is_done = TRUE;
 		} 
-	
-		if (!strcmp(wordP, "pwd")){
+		else if (!strcmp(wordP, "pwd")){
 			g_translate.m_uses.m_os = 1;
 			g_translate.m_uses.m_print = 1;
 			burps(&g_output, "print(os.getcwd())");
-			return;
+			is_done = TRUE;
 		} 
 		break;
 	case 'r':
 		if (!strcmp(wordP, "read")){
 			print_read_command(word_listP);
-			return;
+			is_done = TRUE;
 		}
-	
-		if (!strcmp(wordP, "return")){
+		else if (!strcmp(wordP, "return")){
 			burps(&g_output, wordP);
 			while (word_listP = word_listP->next) {
 				burpc(&g_output, '(');
@@ -2095,45 +2114,44 @@ print_simple_command (SIMPLE_COM *simple_command)
 				}
 				burpc(&g_output, ')');
 			}
-			return;
+			is_done = TRUE;
 		}
 		break;
 	case 't':
 		if (!strcmp(wordP, "test")) {
 			print_test_command(word_listP->next, negated);
-			return;
+			is_done = TRUE;
 		}
-
-		if (!strcmp(wordP, "times")) {
+		else if (!strcmp(wordP, "times")) {
 			g_translate.m_uses.m_os = 1;
 			burps(&g_output, "print (os.times())\n");
 			burp(&g_output, "_rc%d = 0", g_rc_identifier);
-			return;
+			is_done = TRUE;
 		}
-	
-		if (!strcmp(wordP, "true")){
+		else if (!strcmp(wordP, "true")){
 			burps(&g_output, "True");
-			return;
+			is_done = TRUE;
 		}
-	
-		if (!strcmp(wordP, "trap")) {
+		else if (!strcmp(wordP, "trap")) {
 			print_trap_command(word_listP);
-			return;
+			is_done = TRUE;
 		}
 		break;
 	case 'u':
-	
 		if (!strcmp(wordP, "umask")) {
 			print_umask_command(word_listP);
-			return;
+			is_done = TRUE;
 		}
-	
-		if (!strcmp(wordP, "unset")) {
+		else if (!strcmp(wordP, "unset")) {
 			print_unset_command(word_listP);
-			return;
+			is_done = TRUE;
 		}
-	
 		break;
+	}
+
+	if (is_done) {
+		log_return();
+		return;
 	}
 	
 	if (is_internal_function(wordP)) {
@@ -2147,6 +2165,7 @@ print_simple_command (SIMPLE_COM *simple_command)
 				burps(&g_output, ", ");
 		}	}
 		burpc(&g_output, ')');
+		log_return_msg("Internal function processed.");
 		return;
 	} 
 
@@ -2154,8 +2173,8 @@ print_simple_command (SIMPLE_COM *simple_command)
 		burp(&g_output, "_rc%d = ", g_rc_identifier);
 	}
 	if (negated) {
-    	burps(&g_output, "not ");
-    }
+		burps(&g_output, "not ");
+	}
 	if (simple_command->redirects) {
 		int communicates;
 		int offset, i;
@@ -2182,6 +2201,7 @@ print_simple_command (SIMPLE_COM *simple_command)
 			}
 			memcpy(g_output.m_P+offset, "Popen", 5);
 		}
+		log_return_msg("Redirect(s) processed.");
 		return;
 	} 
 	g_translate.m_uses.m_subprocess = 1;
@@ -2196,6 +2216,7 @@ print_simple_command (SIMPLE_COM *simple_command)
 		burpc(&g_output, ',');
 	}
 	burps(&g_output, "],shell=True)");
+	log_return();
 	return;
 }
 
@@ -2458,7 +2479,7 @@ IF_COM *if_command;
 	 some alternative processing. */
 
 	int regmatch_in_progress = FALSE;
-    int extra_indents = 0;
+	int extra_indents = 0;
 
 	if (is_test_condition_regmatch(if_command)) {
 		burps(&g_output, "match_object = ");
@@ -2669,7 +2690,7 @@ print_pipe_command(CONNECTION *connection)
 	INDENT(g_output);
 	burp(&g_output, "os.close(_rcw%d)\n", printing_connection);
 	burp(&g_output, "os.dup2(_rcr%d, 0)\n", printing_connection);
-    emit_command (connection->second);
+	emit_command (connection->second);
 	burpc(&g_output, '\n');
    	OUTDENT(g_output);
 	burps(&g_output, "else:\n");
@@ -2678,7 +2699,7 @@ print_pipe_command(CONNECTION *connection)
 	burp(&g_output, "os.dup2(_rcw%d, 1)\n", printing_connection);
 	old_stdout_connection = stdout_connection;
 	stdout_connection     = printing_connection;
-    emit_command (connection->first);
+	emit_command (connection->first);
 	stdout_connection     = old_stdout_connection;
 	burpc(&g_output, '\n');
 	burps(&g_output, "sys.exit(0)\n");
@@ -2772,11 +2793,11 @@ print_connection_command(CONNECTION *connection)
 			deferred_heredocs = 0;
 		}
 		burps(&g_output, "if ");
-	    emit_command (connection->first);
+		emit_command (connection->first);
 		burpc(&g_output, ':');
 		INDENT(g_output);
 		burpc(&g_output, '\n');
-	    emit_command (connection->second);
+		emit_command (connection->second);
 		OUTDENT(g_output);
 		break;
 	case OR_OR:
@@ -2785,11 +2806,11 @@ print_connection_command(CONNECTION *connection)
 			deferred_heredocs = 0;
 		}
 		burps(&g_output, "if not ");
-	    emit_command (connection->first);
+		emit_command (connection->first);
 		burpc(&g_output, ':');
 		INDENT(g_output);
 		burpc(&g_output, '\n');
-	    emit_command (connection->second);
+		emit_command (connection->second);
 		OUTDENT(g_output);
 		break;
 	default:
@@ -2808,7 +2829,7 @@ reset_locals ()
 	g_function_nesting_level   = 0;
 	g_output.m_indent   = 0;
 	printing_connection = 0;
-    stdout_connection   = 0;
+	stdout_connection   = 0;
 	deferred_heredocs   = 0;
 }
 
@@ -2823,9 +2844,11 @@ FUNCTION_DEF *func;
 	REDIRECT *func_redirects;
 	char	 *nameP = func->name->word;
 	function_nameT	 *function_nameP;
-	function_nameT	 *globalP, *nextP;
+	variable_nameT	 *current_varP, *nextP;
 	char	 *P;
 	int		parm, save_parms;
+
+	log_enter("print_function_def (func=%s)", func->name->word);
 
 	function_nameP = (function_nameT *) xmalloc(sizeof(function_nameT) + strlen(nameP) + 1);
 	P = (char *) (function_nameP+1);
@@ -2846,7 +2869,6 @@ FUNCTION_DEF *func;
 	burps(&g_output, "    ");
 	INDENT(g_output);
 
-	capture_globals = 1;
 	add_unwind_protect (reset_locals, 0);
 
 	g_function_nesting_level++;
@@ -2860,7 +2882,7 @@ FUNCTION_DEF *func;
 	save_parms       = g_function_parms;
 	g_function_parms = 0;
 	emit_command (cmdcopy->type == cm_group
-			        ? cmdcopy->value.Group->command
+				    ? cmdcopy->value.Group->command
 					: cmdcopy);
 
 	remove_unwind_protect ();
@@ -2873,17 +2895,26 @@ FUNCTION_DEF *func;
 	}
 	g_function_parms = save_parms;
 	burps(&save, ") :\n");
-	if (g_globalsP) {
-		for (globalP = g_globalsP; globalP; globalP = nextP) {
-			if (!globalP->m_isLocal) {
-				burps(&save, "    global ");
-				burps(&save, globalP->m_nameP);
-				burpc(&save, '\n');
+
+    // Prepend variable declarations and clean up names as needed
+	//TODO Choose keywords global or nonlocal, or skip. After prepending, delete only the locals.
+	//TODO Delete the others at program exit.
+	if (g_variable_namesP) {
+		for (current_varP = g_variable_namesP; current_varP; current_varP = current_varP->m_nextP) {
+			if (current_varP->m_was_declared_local) {
+			    //TODO locals: Delete without prepending a declaration. They cease to exist 
+			    //TODO outside the function we're emitting, so no keyword should be needed.
+			    Needs implementing
 			}
-			nextP = globalP->m_nextP;
-			xfree(globalP);
+			else {
+				//TODO Choose the keyword based on nesting level. If this variable
+				burps(&save, "    global ");
+				burps(&save, current_varP->m_nameP);
+				burpc(&save, '\n');
+            }
+			xfree(current_varP);
 	    }
-		g_globalsP = 0;
+		g_variable_namesP = NULL;
 		burpc(&save, '\n');
 	}
 
@@ -2894,7 +2925,6 @@ FUNCTION_DEF *func;
 	save     = g_output;
 	g_output = temp;
 
-	capture_globals = 0;
 	g_function_nesting_level--;
 
 	if (func_redirects)
@@ -2904,6 +2934,8 @@ FUNCTION_DEF *func;
 	}
 
 	dispose_command (cmdcopy);
+
+	log_return();
 }
 
 static void
@@ -2935,140 +2967,141 @@ emit_command (COMMAND *command)
 {
 	int	old_embedded, old_started;
 
-	if (command) {
-		assert(0 <= command->position.byte);
-		print_comments(command->position.byte);
+	if (!command)
+		return;
 
-		handle_redirection_list(&command->redirects);
-		if (command->flags & CMD_TIME_PIPELINE) {
-			UNCHANGED;
-			burps(&g_output, "time ");
-			if (command->flags & CMD_TIME_POSIX) {
-				burps(&g_output, "-p ");
-			}
+	assert(0 <= command->position.byte);
+	print_comments(command->position.byte);
+
+	handle_redirection_list(&command->redirects);
+	if (command->flags & CMD_TIME_PIPELINE) {
+		UNCHANGED;
+		burps(&g_output, "time ");
+		if (command->flags & CMD_TIME_POSIX) {
+			burps(&g_output, "-p ");
 		}
+	}
 
-		if (command->flags & CMD_INVERT_RETURN) {
-			switch (command->type) {
-			case cm_simple:
-				command->value.Simple->flags |= CMD_INVERT_RETURN;
-				break;
-			case cm_connection:
-				command->value.Connection->second->flags |= CMD_INVERT_RETURN;
-				break;
-			default:
-				UNCHANGED;
-				burps(&g_output, "not ");
-		}	}
-
-		old_embedded = g_embedded;
-		old_started  = g_started;
-		++g_started;
-		++g_embedded;
+	if (command->flags & CMD_INVERT_RETURN) {
 		switch (command->type) {
 		case cm_simple:
-			print_simple_command (command->value.Simple);
-        	handle_redirection_list(&command->value.Simple->redirects);
+			command->value.Simple->flags |= CMD_INVERT_RETURN;
 			break;
+		case cm_connection:
+			command->value.Connection->second->flags |= CMD_INVERT_RETURN;
+			break;
+		default:
+			UNCHANGED;
+			burps(&g_output, "not ");
+	}	}
 
-		case cm_for:
-			print_for_command (command->value.For);
-			break;
+	old_embedded = g_embedded;
+	old_started  = g_started;
+	++g_started;
+	++g_embedded;
+	switch (command->type) {
+	case cm_simple:
+		print_simple_command (command->value.Simple);
+		handle_redirection_list(&command->value.Simple->redirects);
+		break;
+
+	case cm_for:
+		print_for_command (command->value.For);
+		break;
 
 #if defined (ARITH_FOR_COMMAND)
-		case cm_arith_for:
-			print_arith_for_command (command->value.ArithFor);
-			break;
+	case cm_arith_for:
+		print_arith_for_command (command->value.ArithFor);
+		break;
 #endif
 
 #if defined (DPAREN_ARITHMETIC)
-		case cm_arith:
-			g_embedded = old_embedded;
-			print_arith_command (command->value.Arith->exp);
-			break;
+	case cm_arith:
+		g_embedded = old_embedded;
+		print_arith_command (command->value.Arith->exp);
+		break;
 #endif
 
 #if defined (SELECT_COMMAND)
-		case cm_select:
-			print_select_command (command->value.Select);
-			break;
+	case cm_select:
+		print_select_command (command->value.Select);
+		break;
 #endif
 
-		case cm_case:
-			print_case_command (command->value.Case);
-			break;
+	case cm_case:
+		print_case_command (command->value.Case);
+		break;
 
-		case cm_while:
-			print_while_command (command->value.While);
-			break;
+	case cm_while:
+		print_while_command (command->value.While);
+		break;
 
-		case cm_until:
-			print_until_command (command->value.While);
-			break;
+	case cm_until:
+		print_until_command (command->value.While);
+		break;
 
-		case cm_if:
-			print_if_command (command->value.If);
-			break;
+	case cm_if:
+		print_if_command (command->value.If);
+		break;
 
 #if defined (COND_COMMAND)
-		case cm_cond:
-			g_embedded = old_embedded;
-			if (!old_started) {
-				if (0 == strcmp(command->value.Cond->op->word, "=~")) {
-					burp(&g_output, "match_object = ");
-				} else {
-					burp(&g_output, "_rc%d = ", g_rc_identifier);
-				}
+	case cm_cond:
+		g_embedded = old_embedded;
+		if (!old_started) {
+			if (0 == strcmp(command->value.Cond->op->word, "=~")) {
+				burp(&g_output, "match_object = ");
+			} else {
+				burp(&g_output, "_rc%d = ", g_rc_identifier);
 			}
-			print_cond_command (command->value.Cond);
-			break;
+		}
+		print_cond_command (command->value.Cond);
+		break;
 #endif
 
-		case cm_connection:
-			g_embedded = old_embedded;
-			print_connection_command (command->value.Connection);
-			break;
-
-		case cm_function_def:
-			g_embedded = 0;
-			print_function_def (command->value.Function_def);
-			break;
-
-		case cm_group:
-			print_group_command (command->value.Group);
-			break;
-
-		case cm_subshell:
-			/* IJD: This is all very silly:
-				The bash manual says that ( ... ) causes execution in a subshell
-				but in practice it seems the main purpose of this operation is
-				to do what it looks like doing.. bracketting an expression
-			 */
-			burpc(&g_output, '(');
-			emit_command(command->value.Subshell->command);
-			burpc(&g_output, ')');
-			break;
-
-		case cm_coproc:
-			UNCHANGED;
-			burps(&g_output, "coproc ");
-			burps(&g_output, command->value.Coproc->name);
-			burps(&g_output, "\n");
-			INDENT(g_output);
-			emit_command (command->value.Coproc->command);
-			OUTDENT(g_output);
-			break;
-
-		default:
-			UNCHANGED;
-			command_error ("print_command", CMDERR_BADTYPE, command->type, 0);
-			break;
-		}
+	case cm_connection:
 		g_embedded = old_embedded;
-		if (command->redirects) {
-			burpc(&g_output, ' ');
-			print_redirection_list (command->redirects);
-		}
+		print_connection_command (command->value.Connection);
+		break;
+
+	case cm_function_def:
+		g_embedded = 0;
+		print_function_def (command->value.Function_def);
+		break;
+
+	case cm_group:
+		print_group_command (command->value.Group);
+		break;
+
+	case cm_subshell:
+		/* IJD: This is all very silly:
+			The bash manual says that ( ... ) causes execution in a subshell
+			but in practice it seems the main purpose of this operation is
+			to do what it looks like doing.. bracketting an expression
+		 */
+		burpc(&g_output, '(');
+		emit_command(command->value.Subshell->command);
+		burpc(&g_output, ')');
+		break;
+
+	case cm_coproc:
+		UNCHANGED;
+		burps(&g_output, "coproc ");
+		burps(&g_output, command->value.Coproc->name);
+		burps(&g_output, "\n");
+		INDENT(g_output);
+		emit_command (command->value.Coproc->command);
+		OUTDENT(g_output);
+		break;
+
+	default:
+		UNCHANGED;
+		command_error ("print_command", CMDERR_BADTYPE, command->type, 0);
+		break;
+	}
+	g_embedded = old_embedded;
+	if (command->redirects) {
+		burpc(&g_output, ' ');
+		print_redirection_list (command->redirects);
 	}
 }
 
@@ -3147,6 +3180,8 @@ initialize_translator(const char *shell_scriptP)
 {
 	char *filenameP;
 
+	log_init();
+
 	if (!shell_scriptP) {
 	  if (g_translate_html) {
 		filenameP = "output.html";
@@ -3158,7 +3193,7 @@ initialize_translator(const char *shell_scriptP)
 		fprintf(stderr, "Can't open %s\n", filenameP);
 		exit(1);
 	  }
-    } else {
+	} else {
 	  char *P;
 	  int  lth        = strlen(shell_scriptP);
 
@@ -3197,6 +3232,7 @@ initialize_translator(const char *shell_scriptP)
 	if (g_translate_html) {
 		fprintf(outputF, "</td></tr>\n");
 	}
+
 }
 
 void
@@ -3344,7 +3380,7 @@ emitExceptions(void)
 		"  def __init__(self, value=None):\n"
 		"    self.value = value\n"
 		"  def __str__(self):\n"
-        "    return repr(self.value)\n"
+		"    return repr(self.value)\n"
 		"\n"
 	);
 
@@ -3424,7 +3460,7 @@ emitFunctions(void)
 			"def Make(name, local=locals()):\n"
 			"  ret = GetVariable(name, local)\n"
 			"  if ret is None:\n"
-            "    ret = Bash2Py(0)\n"
+			"    ret = Bash2Py(0)\n"
 			"    globals()[name] = ret\n"
 			"  return ret\n"
 			"\n"
@@ -3460,7 +3496,7 @@ emitFunctions(void)
 			"def Str(value):\n"
 			"  if isinstance(value, list):\n"
 			"    return \" \".join(value)\n"
-            "  if isinstance(value, basestring):\n"
+			"  if isinstance(value, basestring):\n"
 			"    return value\n"
 			"  return str(value)\n"
 			"\n"
@@ -3531,7 +3567,7 @@ emitExpandClass(void)
 
 	/* If in_quotes should return concatenation of values separated by ' '
 	 * Otherwise should return an array
-     */
+	 */
 	if (g_translate.m_expand.m_star) {
 		fprintf(outputF,
 			"  @staticmethod\n"
@@ -3611,7 +3647,7 @@ emitExpandClass(void)
 			"  def qmark(name, value=None):\n"
 			"    if (not IsDefined(name)):\n"
 			"      if (value is None or value == ''):\n"
-            "        value = \"Bash variable \" + name + \" is not defined\"\n"
+			"        value = \"Bash variable \" + name + \" is not defined\"\n"
 			"      raise Bash2PyException(value)\n"
 			"    return GetValue(name)\n"
 		);
@@ -3722,7 +3758,7 @@ neededBash2Py(void)
 	if (g_translate.m_value.m_not_null_else) {
 		g_translate.m_value.m_is_null = 1;
 	}
-    if (g_translate.m_function.m_make) {
+	if (g_translate.m_function.m_make) {
 		g_translate.m_value.m_uses = 1;
 	}
 }
@@ -3898,6 +3934,8 @@ close_translator()
 		fprintf(outputF, "</body>\n</html>\n");
 	}
 	fclose(outputF);
+
+	log_close();
 }
 
 #endif

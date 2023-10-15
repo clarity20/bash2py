@@ -21,3 +21,10 @@ void burp_rtrim(burpT *burpP);
 
 #define INDENT(X) X.m_indent++
 #define OUTDENT(X) { assert(0 < X.m_indent); X.m_indent--; }
+
+void log_init();
+void log_close();
+void log_enter(char *format, ...);
+void log_info(char *format, ...);
+void log_return();
+void log_return_msg(char *msg);
