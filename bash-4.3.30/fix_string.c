@@ -715,6 +715,9 @@ emitFunction(char *nameP, char *parm1P, char *parm2P, int indirect, int under_qu
 	char 		*endP;
 	int	 		offset;
 
+	log_enter("emitFunction (nameP=%s, parm1P=%s, parm2P=%s, indirect=%d, under_quotes=%d)",
+			nameP, parm1P, parm2P, indirect, under_quotes);
+
 	burps(&g_new, nameP);
 	burpc(&g_new, '(');
 	if (indirect) {

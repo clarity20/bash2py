@@ -116,6 +116,11 @@ typedef struct function_nameS {
 
 function_nameT *g_function_namesP = 0;
 
+typedef struct function_queue {
+	FUNCTION_DEF *func_defP;
+	function_queue *nextP;
+} function_queueT;
+
 static int
 is_internal_function(char *nameP)
 {
@@ -2150,7 +2155,7 @@ print_simple_command (SIMPLE_COM *simple_command)
 	}
 
 	if (is_done) {
-		log_return();
+		log_return("%s command processed.", wordP);
 		return;
 	}
 	
@@ -2165,7 +2170,7 @@ print_simple_command (SIMPLE_COM *simple_command)
 				burps(&g_output, ", ");
 		}	}
 		burpc(&g_output, ')');
-		log_return_msg("Internal function processed.");
+		log_return_msg("Internal script function %s processed.", wordP);
 		return;
 	} 
 
@@ -2844,7 +2849,7 @@ FUNCTION_DEF *func;
 	REDIRECT *func_redirects;
 	char	 *nameP = func->name->word;
 	function_nameT	 *function_nameP;
-	variable_nameT	 *current_varP, *nextP;
+	variable_nameT	 *current_varP, *prev_varP;
 	char	 *P;
 	int		parm, save_parms;
 
@@ -2871,8 +2876,6 @@ FUNCTION_DEF *func;
 
 	add_unwind_protect (reset_locals, 0);
 
-	g_function_nesting_level++;
-
 	cmdcopy = copy_command (func->command);
 	if (cmdcopy->type == cm_group)
 	{
@@ -2884,6 +2887,8 @@ FUNCTION_DEF *func;
 	emit_command (cmdcopy->type == cm_group
 				    ? cmdcopy->value.Group->command
 					: cmdcopy);
+
+	g_function_nesting_level++;
 
 	remove_unwind_protect ();
 
@@ -2899,20 +2904,23 @@ FUNCTION_DEF *func;
     // Prepend variable declarations and clean up names as needed
 	//TODO Choose keywords global or nonlocal, or skip. After prepending, delete only the locals.
 	//TODO Delete the others at program exit.
+	prev_varP = NULL;
 	if (g_variable_namesP) {
 		for (current_varP = g_variable_namesP; current_varP; current_varP = current_varP->m_nextP) {
+			if (prev_varP) xfree(prev_varP);
 			if (current_varP->m_was_declared_local) {
 			    //TODO locals: Delete without prepending a declaration. They cease to exist 
 			    //TODO outside the function we're emitting, so no keyword should be needed.
-			    Needs implementing
+//			    Needs implementing
 			}
 			else {
 				//TODO Choose the keyword based on nesting level. If this variable
 				burps(&save, "    global ");
 				burps(&save, current_varP->m_nameP);
 				burpc(&save, '\n');
-            }
-			xfree(current_varP);
+			}
+			prev_varP = current_varP;
+//			xfree(current_varP);
 	    }
 		g_variable_namesP = NULL;
 		burpc(&save, '\n');
