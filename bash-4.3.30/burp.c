@@ -32,6 +32,7 @@ int g_log_indent=-FULL_INDENT;
 char **g_function_stack;
 char **g_current_function;
 FILE *g_log_stream;
+unsigned char g_log_is_on;
 
 int g_translate_html = 0;
 
@@ -275,6 +276,7 @@ burps_html(burpT *burpP, const char *stringP)
 void log_init()
 {
 	g_log_stream = stdout;
+	g_log_is_on = FALSE;
 	g_function_stack = (char **) malloc(MAX_CALL_DEPTH * sizeof(char **));
 	memset(g_function_stack, 0, MAX_CALL_DEPTH * sizeof(g_function_stack[0]));
 	g_current_function = g_function_stack-1;
@@ -287,6 +289,16 @@ void log_close()
 	free(g_function_stack);
 }
 
+void log_activate()
+{
+	g_log_is_on = TRUE;
+}
+
+void log_deactivate()
+{
+	g_log_is_on = FALSE;
+}
+
 // log_enter(): When invoking this function, be sure to invoke log_return() at all possible
 // return points in order to keep the logging consistent and avoid memory bugs.
 void log_enter(char *format, ...)
@@ -294,52 +306,59 @@ void log_enter(char *format, ...)
 	va_list args;
 	char *pNameEnd;
 	char full_format[256];
-	int i;
+	int length;
 
 	if (!g_log_stream)
 		return;
-
-	g_log_indent += FULL_INDENT;	// persistent full indent
-	sprintf(full_format, "%-*.0dEnter %s", g_log_indent, 0, format);
-	if (full_format[strlen(full_format)-1] != '\n')
-		strcat(full_format, "\n");
-	for (i=FULL_INDENT-1; i<g_log_indent; i+=FULL_INDENT)
-		full_format[i]='|';
-	if (i>=FULL_INDENT) full_format[i-FULL_INDENT]='.';
 
 	if (!(pNameEnd = strchr(format, '(')))
 	{
 		fprintf(stderr, "Error in call to log_enter(): Required format is funcname(args)\n");
 		return;
 	}
-	else
-	{
-		int length = (int)(pNameEnd-format);
-		g_current_function++;
-		*g_current_function = (char *) malloc((length+1)*sizeof(char));
-		strncpy(*g_current_function, format, length);
-		(*g_current_function)[length]='\0';
-	}
 
-	va_start(args, full_format);
-	vfprintf(g_log_stream, full_format, args);
-	va_end(args);
+	// Internal log bookkeeping
+	g_log_indent += FULL_INDENT;	// persistent full indent
+	length = (int)(pNameEnd-format);
+	g_current_function++;
+	*g_current_function = (char *) malloc((length+1)*sizeof(char));
+	strncpy(*g_current_function, format, length);
+	(*g_current_function)[length]='\0';
+
+	// Printing
+	if (g_log_is_on)
+	{
+	    int i;
+		sprintf(full_format, "%-*.0dEnter %s", g_log_indent, 0, format);
+		if (full_format[strlen(full_format)-1] != '\n')
+			strcat(full_format, "\n");
+		for (i=FULL_INDENT-1; i<g_log_indent; i+=FULL_INDENT)
+			full_format[i]='|';
+		if (i>=FULL_INDENT) full_format[i-FULL_INDENT]='.';
+
+		va_start(args, full_format);
+		vfprintf(g_log_stream, full_format, args);
+		va_end(args);
+	}
 }
 
 void log_info(char *format, ...)
 {
 	va_list args;
 	char full_format[256];
-	int i;
 
 	if (!g_log_stream)
 		return;
 
-	g_log_indent += SMALL_INDENT;	// temporary small indent
+    // No bookkeeping to do -- the internals are transient. Just print.
+	if (!g_log_is_on)
+		return;
+
+	g_log_indent += SMALL_INDENT;	// transient small indent
 	sprintf(full_format, "%-*.0d%s(): %s", g_log_indent, 0, *g_current_function, format);
 	if (full_format[strlen(full_format)-1] != '\n')
 		strcat(full_format, "\n");
-	for (i=FULL_INDENT-1; i<g_log_indent; i+=FULL_INDENT)
+	for (int i=FULL_INDENT-1; i<g_log_indent; i+=FULL_INDENT)
 		full_format[i]='|';
 	g_log_indent -= SMALL_INDENT;
 
@@ -355,23 +374,41 @@ void log_return()
 }
 
 // A variation of log_return() that allows an arbitrary message upon function return
-void log_return_msg(char *msg)
+void log_return_msg(char *msg_template, ...)
 {
 	char full_entry[256];
+	char *msg;
 	char entry_format[]="%-*.0dLeave %s() - %s\n";
-	int i;
 
 	if (!g_log_stream)
 		return;
 
 	// Construct the log entry, silently ignoring the msg if it is NULL.
-	if (!msg)
-		strcpy(entry_format+16, "\n");
-	sprintf(full_entry, entry_format, g_log_indent, 0, *g_current_function, msg);
-	for (i=FULL_INDENT-1; i<g_log_indent; i+=FULL_INDENT)
-		full_entry[i]='|';
-	if (i>=FULL_INDENT) full_entry[i-FULL_INDENT]='`';
-	fprintf(g_log_stream, full_entry);
+	if (g_log_is_on)
+	{
+	    int i;
+		if (!msg_template)
+		{
+			strcpy(entry_format+16, "\n");
+			msg = NULL;
+		}
+		else
+		{
+			va_list args;
+			va_start(args, msg_template);
+			msg = (char *) malloc(256);
+			vsprintf(msg, msg_template, args);
+			va_end(args);
+		}
+		sprintf(full_entry, entry_format, g_log_indent, 0, *g_current_function, msg);
+		if (msg) free(msg);
+		for (i=FULL_INDENT-1; i<g_log_indent; i+=FULL_INDENT)
+			full_entry[i]='|';
+		if (i>=FULL_INDENT) full_entry[i-FULL_INDENT]='`';
+		fprintf(g_log_stream, full_entry);
+	}
+
+	// Internal log bookkeeping
 	free(*g_current_function);
 	g_current_function--;
 	g_log_indent -= FULL_INDENT;

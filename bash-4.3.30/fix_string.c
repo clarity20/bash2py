@@ -1773,6 +1773,7 @@ fixBracedString(const char *startP, fix_typeE want, fix_typeE *gotP)
 	char	*resultP;
 
 	log_enter("fixBracedString (startP=%s, want=%d)", startP, want);
+log_deactivate();
 
 	if (want == FIX_EXPRESSION) {
 		goto dont_fire;
@@ -1866,6 +1867,7 @@ fire:
 		}
 		xfree(arrayPP);
 		if (resultP) {
+log_activate();
 		    log_return_msg("\'fire\' section");
 			return resultP;
 	}	}
@@ -1875,6 +1877,7 @@ dont_fire:
 	string_to_buffer(startP);
 	resultP = fix_string1(want, gotP);
 
+log_activate();
 	log_return_msg("\'dont fire\' section");
 	return resultP;
 }
