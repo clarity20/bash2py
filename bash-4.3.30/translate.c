@@ -58,7 +58,7 @@ extern int printf __P((const char *, ...));	/* Yuck.  Double yuck. */
 #endif
 
 extern int g_rc_identifier;
-extern int g_function_nesting_level;
+extern int g_is_inside_function;
 extern int g_function_parms;
 
 extern translateT	g_translate;
@@ -1513,7 +1513,7 @@ print_declare_command(WORD_LIST	*word_listP)
 	
 	separator = -1;
 	is_int    = FALSE;
-	is_local = (g_function_nesting_level > 0);
+	is_local = g_is_inside_function;
 
 	for (;word_listP = word_listP->next;) {
 		wordP = word_listP->word->word;
@@ -1526,7 +1526,7 @@ print_declare_command(WORD_LIST	*word_listP)
 				}
 			} else if (!strcmp(wordP, "-i")) {
 				is_int = TRUE;
-			} else if ((!strcmp(wordP, "-g")) && g_function_nesting_level > 0) {
+			} else if ((!strcmp(wordP, "-g")) && g_is_inside_function) {
 				is_local = FALSE;
 			}
 			continue;
@@ -2780,7 +2780,7 @@ print_connection_command(CONNECTION *connection)
 				was_heredoc = 0;
 			}
 		} else {
-			print_deferred_heredocs (g_function_nesting_level>0 ? "" : ";");
+			print_deferred_heredocs (g_is_inside_function ? "" : ";");
 		}
 		if (!g_embedded) {
 			g_started = 0;
@@ -2831,7 +2831,7 @@ print_connection_command(CONNECTION *connection)
 static void
 reset_locals ()
 {
-	g_function_nesting_level   = 0;
+	g_is_inside_function   = FALSE;
 	g_output.m_indent   = 0;
 	printing_connection = 0;
 	stdout_connection   = 0;
@@ -2867,7 +2867,7 @@ FUNCTION_DEF *func;
 
 	add_unwind_protect (reset_locals, 0);
 
-	g_function_nesting_level++;
+	g_is_inside_function = TRUE;
 
 	cmdcopy = copy_command (func->command);
 	if (cmdcopy->type == cm_group)
@@ -2926,7 +2926,7 @@ FUNCTION_DEF *func;
 	save     = g_output;
 	g_output = temp;
 
-	g_function_nesting_level--;
+	g_is_inside_function = FALSE;
 
 	if (func_redirects)
 	{
@@ -2943,7 +2943,7 @@ static void
 print_group_command (group_command)
 GROUP_COM *group_command;
 {
-	if (g_function_nesting_level > 0) {
+	if (g_is_inside_function) {
 		/* This is a group command { ... } inside of a function
 	 definition, and should be printed as a multiline group
 	 command, using the current indentation. */
@@ -2953,7 +2953,7 @@ GROUP_COM *group_command;
 
 	emit_command (group_command->command);
 
-	if (g_function_nesting_level > 0) {
+	if (g_is_inside_function) {
 		burpc(&g_output, '\n');
 		OUTDENT(g_output);
 	} else {
@@ -3091,7 +3091,7 @@ emit_command (COMMAND *command)
 	case cm_function_def:
 	    register_function_name(command->value.Function_def->name->word);
 
-		if (g_function_nesting_level > 0)
+		if (g_is_inside_function)
 		{
 			// Okay, this is an inner function (i.e. a nested one). Add it
 			// to the queue in order to unwind the function nesting before we print it
