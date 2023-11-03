@@ -102,27 +102,21 @@ burpT	g_output  = {0, 0, 0, 0, 0, 0};
 static burpT	g_comment = {0, 0, 0, 0, 0, 0};
 static burpT	g_temp    = {0, 0, 0, 0, 0, 0};
 
-typedef enum scopeTypeE {
-	sc_local,
-	sc_explicitGlobal,   // created inside a nonlocal scope, requiring keyword global
-	sc_implicitGlobal
-} scopeTypeE;
-
 typedef struct function_nameS {
 	struct function_nameS *m_nextP;
 	char	*m_nameP;
-	int		m_isLocal;
 } function_nameT;
 
 function_nameT *g_function_namesP = 0;
 
 typedef struct function_queue {
-	FUNCTION_DEF *func_defP;
-	function_queue *nextP;
+	struct function_def *func_defP;
+	struct function_queue *nextP;
 } function_queueT;
 
-static int
-is_internal_function(char *nameP)
+function_queueT *g_function_schedule_head = NULL, *g_function_schedule_tail = NULL;
+
+static int is_internal_function(char *nameP)
 {
 	function_nameT	*function_nameP;
 
@@ -132,6 +126,12 @@ is_internal_function(char *nameP)
 	}	}
 	return (0);
 }
+
+typedef struct variable_nameS {
+	struct variable_nameS *m_nextP;
+	char	*m_nameP;
+	int		m_isLocal;
+} variable_nameT;
 
 static variable_nameT *g_variable_namesP = 0;
 
@@ -154,7 +154,7 @@ seen_global(const char *nameP, int local)
 	*P1 = 0;
 
 	// If the name is already in the registry, return without doing anything
-	for (tailPP = &g_globalsP; globalP = *tailPP; tailPP = &(globalP->m_nextP)) {
+	for (tailPP = &g_variable_namesP; globalP = *tailPP; tailPP = &(globalP->m_nextP)) {
 		if (!strcmp(globalP->m_nameP, nameP)) {
 			*((char *) P1) = c;
 			log_return_msg("Variable already seen, return without processing");
@@ -162,7 +162,7 @@ seen_global(const char *nameP, int local)
 	}	}
 
 	// If the name is new, add it to the registry
-	globalP = (function_nameT *) xmalloc(sizeof(function_nameT) + strlen(nameP) + 1);
+	globalP = (variable_nameT *) xmalloc(sizeof(function_nameT) + strlen(nameP) + 1);
 	P = (char *) (globalP+1);
 	strcpy(P, nameP);
 	globalP->m_nameP = P;
@@ -2155,7 +2155,7 @@ print_simple_command (SIMPLE_COM *simple_command)
 	}
 
 	if (is_done) {
-		log_return("%s command processed.", wordP);
+		log_return_msg("%s command processed.", wordP);
 		return;
 	}
 	
@@ -2170,7 +2170,7 @@ print_simple_command (SIMPLE_COM *simple_command)
 				burps(&g_output, ", ");
 		}	}
 		burpc(&g_output, ')');
-		log_return_msg("Internal script function %s processed.", wordP);
+		log_return_msg("Script function \'%s\' was called.", wordP);
 		return;
 	} 
 
@@ -2848,20 +2848,11 @@ FUNCTION_DEF *func;
 	COMMAND *cmdcopy;
 	REDIRECT *func_redirects;
 	char	 *nameP = func->name->word;
-	function_nameT	 *function_nameP;
 	variable_nameT	 *current_varP, *prev_varP;
-	char	 *P;
 	int		parm, save_parms;
 
 	log_enter("print_function_def (func=%s)", func->name->word);
 
-	function_nameP = (function_nameT *) xmalloc(sizeof(function_nameT) + strlen(nameP) + 1);
-	P = (char *) (function_nameP+1);
-	strcpy(P, nameP);
-	function_nameP->m_nameP = P;
-	function_nameP->m_nextP = g_function_namesP;
-	g_function_namesP       = function_nameP;
-	
 	func_redirects = NULL;
 	burps(&g_output, "def ");
 	burps(&g_output, nameP);
@@ -2876,6 +2867,8 @@ FUNCTION_DEF *func;
 
 	add_unwind_protect (reset_locals, 0);
 
+	g_function_nesting_level++;
+
 	cmdcopy = copy_command (func->command);
 	if (cmdcopy->type == cm_group)
 	{
@@ -2888,8 +2881,6 @@ FUNCTION_DEF *func;
 				    ? cmdcopy->value.Group->command
 					: cmdcopy);
 
-	g_function_nesting_level++;
-
 	remove_unwind_protect ();
 
 	for (parm = 1; parm <= g_function_parms; ++parm) {
@@ -2901,14 +2892,14 @@ FUNCTION_DEF *func;
 	g_function_parms = save_parms;
 	burps(&save, ") :\n");
 
-    // Prepend variable declarations and clean up names as needed
+	// Prepend variable declarations and clean up names as needed
 	//TODO Choose keywords global or nonlocal, or skip. After prepending, delete only the locals.
 	//TODO Delete the others at program exit.
 	prev_varP = NULL;
 	if (g_variable_namesP) {
 		for (current_varP = g_variable_namesP; current_varP; current_varP = current_varP->m_nextP) {
 			if (prev_varP) xfree(prev_varP);
-			if (current_varP->m_was_declared_local) {
+			if (FALSE) { //TODO instead, possibly: if (current_varP->m_was_declared_local) {
 			    //TODO locals: Delete without prepending a declaration. They cease to exist 
 			    //TODO outside the function we're emitting, so no keyword should be needed.
 //			    Needs implementing
@@ -2922,12 +2913,14 @@ FUNCTION_DEF *func;
 			prev_varP = current_varP;
 //			xfree(current_varP);
 	    }
+		if (prev_varP) xfree(prev_varP);
 		g_variable_namesP = NULL;
 		burpc(&save, '\n');
 	}
 
 	burpc(&g_output, '\n');
 	OUTDENT(g_output);
+	burpc(&g_output, '\n');
 	burps_html(&save, g_output.m_P);
 	temp     = save;
 	save     = g_output;
@@ -2936,7 +2929,7 @@ FUNCTION_DEF *func;
 	g_function_nesting_level--;
 
 	if (func_redirects)
-	{ /* { */
+	{
 		print_redirection_list (func_redirects);
 		cmdcopy->redirects = func_redirects;
 	}
@@ -2968,12 +2961,36 @@ GROUP_COM *group_command;
 	}
 }
 
+static void register_function_name(char *func_name)
+{
+	function_nameT *function_nameP = (function_nameT *) xmalloc(sizeof(function_nameT) + strlen(func_name) + 1);
+	char *P = (char *) (function_nameP+1);
+	strcpy(P, func_name);
+	function_nameP->m_nameP = P;
+	function_nameP->m_nextP = g_function_namesP;
+	g_function_namesP       = function_nameP;
+}
+
+static void dispose_all_function_names(void)
+{
+	function_nameT *nameP = g_function_namesP;
+	while (nameP)
+	{
+		function_nameT *temp = nameP;
+		nameP = nameP->m_nextP;
+		free(temp);
+	}
+	g_function_namesP = NULL;
+}
+
 /* The internal function.  This is the real workhorse. */
 
 static void
 emit_command (COMMAND *command)
 {
 	int	old_embedded, old_started;
+	function_queueT *temp_funcP = NULL;
+	function_nameT	*temp_nameP = NULL;
 
 	if (!command)
 		return;
@@ -3072,8 +3089,56 @@ emit_command (COMMAND *command)
 		break;
 
 	case cm_function_def:
-		g_embedded = 0;
-		print_function_def (command->value.Function_def);
+	    register_function_name(command->value.Function_def->name->word);
+
+		if (g_function_nesting_level > 0)
+		{
+			// Okay, this is an inner function (i.e. a nested one). Add it
+			// to the queue in order to unwind the function nesting before we print it
+			temp_funcP = (function_queueT *) malloc(sizeof(function_queueT));
+			temp_funcP->func_defP = copy_function_def(command->value.Function_def);
+			temp_funcP->nextP = NULL;
+			if (!g_function_schedule_head)
+			{
+				// Initialize the queue
+				g_function_schedule_head = g_function_schedule_tail = temp_funcP;
+			}
+			else
+			{
+			    // Append the function to the tail of the queue
+				if (!g_function_schedule_tail)
+					g_function_schedule_tail = temp_funcP;
+				else
+				{
+					g_function_schedule_tail->nextP = temp_funcP;
+					g_function_schedule_tail = temp_funcP;
+				}
+			}
+		}
+		else
+		{
+			// We must be looking at an an outer function.
+			// (1) Print it out. If it has any inner functions we'll discover them here.
+			g_embedded = 0;
+			print_function_def (command->value.Function_def);
+
+			// (2) Service the queue of inner functions that need to be printed
+			if (g_function_schedule_head)
+			{
+				// Process the items in FIFO order until there is nothing left
+				do {
+					g_embedded = 0;
+					// N.B. this call to print() can extend the queue:
+					print_function_def(g_function_schedule_head->func_defP);
+
+					// Clean up and advance to the next record
+					temp_funcP = g_function_schedule_head->nextP;
+					dispose_function_def(g_function_schedule_head->func_defP);
+					free(g_function_schedule_head);
+					g_function_schedule_head = temp_funcP;
+				} while (g_function_schedule_head != NULL);
+			}
+		}
 		break;
 
 	case cm_group:
@@ -3189,6 +3254,7 @@ initialize_translator(const char *shell_scriptP)
 	char *filenameP;
 
 	log_init();
+    log_activate();
 
 	if (!shell_scriptP) {
 	  if (g_translate_html) {
@@ -3942,6 +4008,8 @@ close_translator()
 		fprintf(outputF, "</body>\n</html>\n");
 	}
 	fclose(outputF);
+
+	dispose_all_function_names();
 
 	log_close();
 }
