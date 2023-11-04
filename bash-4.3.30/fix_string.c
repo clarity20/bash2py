@@ -19,7 +19,7 @@ static burpT g_new = {0,0,0,0,0,0};
 static burpT g_braced = {0,0,0,0,0,0};
 
 int g_regmatch_special_case = FALSE;
-int	g_function_nesting_level = 0;
+int	g_is_inside_function = FALSE;
 int g_function_parms  = 0;
 
 int g_rc_identifier   = 0;
@@ -354,7 +354,7 @@ replaceSingleQuotes(void)
 				if (!in_quotes) {
 					in_quotes = '$';
 					++P;
-                    c         = '"';
+					c         = '"';
 					break;
 			}	}
 			if (P[1] == '"') {
@@ -463,8 +463,7 @@ replaceSingleQuotes(void)
 			break;
 		case '\n':
 			if (in_quotes == '\'') {
-				burpc(&g_new, '\\');
-				burpc(&g_new, 'n');
+				burp(&g_new, "\\n");
 				continue;
 			}
 			break;
@@ -599,7 +598,7 @@ emitSimpleVariable(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 	case '7':
 	case '8':
 	case '9':
-		if (g_function_nesting_level > 0) {
+		if (g_is_inside_function) {
 			int 	parameter;
 
 			parameter = c - '0';
@@ -609,9 +608,7 @@ emitSimpleVariable(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 			}
 		} else {
 			g_translate.m_uses.m_sys = 1;
-			burps(&g_new, "sys.argv[");
-			burpc(&g_new, c);
-			burps(&g_new, "]");
+			burp(&g_new, "sys.argv[%c]", c);
 		}
 		got = FIX_VAR;
 		break;
@@ -629,8 +626,8 @@ emitSimpleVariable(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 		    burps(&g_new, "match_object.group");
 			P += len-1;
 			c = *P;
-        }
-        else {
+		}
+		else {
 			burpc(&g_new, c);
 			for (; (c = *P) && (c == '_' || isalnum(c)); ++P) {
 				burpc(&g_new, c);
@@ -638,11 +635,9 @@ emitSimpleVariable(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 			if (!g_underDollarExpression) {
 				burps(&g_new, ".val");
 			}
-        }
+		}
 		got = FIX_VAR;
 #ifndef TEST
-		*P = 0;
-        seen_global(startP, 0);
 		*P = c;
 #endif
 	}
@@ -657,8 +652,8 @@ emitString(char *startP, const char *terminatorsP, int under_quotes)
 	int			c, offset, in_quotes;
 	fix_typeE	got;
 
-    log_enter("emitString (startP=%s, terminatorsP=%s, under_quotes=%d)",
-            startP, terminatorsP, under_quotes);
+	log_enter("emitString (startP=%s, terminatorsP=%s, under_quotes=%d)",
+			  startP, terminatorsP, under_quotes);
 	in_quotes = 0;
 	for (P = startP; ; ++P) {
 		c = *P;
@@ -720,8 +715,7 @@ emitFunction(char *nameP, char *parm1P, char *parm2P, int indirect, int under_qu
 	log_enter("emitFunction (nameP=%s, parm1P=%s, parm2P=%s, indirect=%d, under_quotes=%d)",
 			nameP, parm1P, parm2P, indirect, under_quotes);
 
-	burps(&g_new, nameP);
-	burpc(&g_new, '(');
+	burp(&g_new, "%s(", nameP);
 	if (indirect) {
 		g_translate.m_function.m_get_value = 1;
 		burp(&g_new, "GetValue(%s.val)", parm1P);
@@ -744,6 +738,9 @@ emitFunction(char *nameP, char *parm1P, char *parm2P, int indirect, int under_qu
 	return endP;
 }
 
+// Process variable names following $ or ${. Handles variables having the indirection 
+// prefix "!" and/or a postfix in the set { [*] [@] :- := :+ :? } while handing off 
+// simpler variable name instances to emitSimpleVariable, then finally some postprocessing.
 static char *
 emitVariable(char *startP, int braced, int in_quotes, fix_typeE want, fix_typeE *gotP)
 {
@@ -871,7 +868,7 @@ emitVariable(char *startP, int braced, int in_quotes, fix_typeE want, fix_typeE 
 	}	}
 	endP = emitSimpleVariable(startP, in_quotes, want, gotP);
 done:
-    if (braced) {
+	if (braced) {
 		int offset;
 
 		array = (*endP == '[' || g_regmatch_special_case);
@@ -1083,8 +1080,9 @@ done:
 	return P;
 }
 
-// Returns 0 if not special
-
+// Identifies tilde, backtick, subshell and double-paren expressions as well as 
+// variable names following $ or ${, dispatches each to their appropriate handler,
+// and attempts a type-fixing of the result
 static char *
 emitSpecial1(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 {
@@ -1303,7 +1301,7 @@ substitute(fix_typeE want)
 	char		**arrayPP, *P, *P1, *P2;
 	int			fileExpansion;
 
-    log_enter("substitute (want=%d)", want);
+	log_enter("substitute (want=%d)", want);
 	/* Return an array of strings; the brace expansion of TEXT.
 	 * Documentation says this is done before anything else
 	 */
@@ -1647,8 +1645,8 @@ unmarkQuotes(int delete_quotes)
 		}
 		*P1++ = c;
 	}	
-    *P1 = 0;
-    g_buffer.m_lth = P1 - g_buffer.m_P;
+	*P1 = 0;
+	g_buffer.m_lth = P1 - g_buffer.m_P;
 }
 
 static void
@@ -1665,8 +1663,8 @@ unmarkExpand(void)
 		}
 		*P1++ = c;
 	}	
-    *P1 = 0;
-    g_buffer.m_lth = P1 - g_buffer.m_P;
+	*P1 = 0;
+	g_buffer.m_lth = P1 - g_buffer.m_P;
 }
 
 static void
@@ -1691,7 +1689,7 @@ unescapeDollar(void)
 /* Transforms g_buffer
  * Separator can be:
 	 + indicating concatonate parts (normal behaviour)
-     " indicating we are embedding the contents of this string inside popen
+	 " indicating we are embedding the contents of this string inside popen
  */
 
 static char *
@@ -1703,7 +1701,7 @@ fix_string1(fix_typeE want, fix_typeE *gotP)
 	log_enter("fix_string1 (want=%d)", want);
 
 	got = FIX_NONE;
-    if (!g_buffer.m_lth) {
+	if (!g_buffer.m_lth) {
 		goto done;
 	}
 		
@@ -1715,7 +1713,7 @@ fix_string1(fix_typeE want, fix_typeE *gotP)
 
 	if (want != FIX_EXPRESSION) {
 		is_expression           = 0;
-    	g_underDollarExpression = 0;
+		g_underDollarExpression = 0;
 		got = substitute(want);	
 	} else {
 		is_expression           = 1;
@@ -1771,6 +1769,7 @@ fixBracedString(const char *startP, fix_typeE want, fix_typeE *gotP)
 	char	*resultP;
 
 	log_enter("fixBracedString (startP=%s, want=%d)", startP, want);
+log_deactivate();
 
 	if (want == FIX_EXPRESSION) {
 		goto dont_fire;
@@ -1864,6 +1863,7 @@ fire:
 		}
 		xfree(arrayPP);
 		if (resultP) {
+log_activate();
 		    log_return_msg("\'fire\' section");
 			return resultP;
 	}	}
@@ -1873,6 +1873,7 @@ dont_fire:
 	string_to_buffer(startP);
 	resultP = fix_string1(want, gotP);
 
+log_activate();
 	log_return_msg("\'dont fire\' section");
 	return resultP;
 }
@@ -1893,7 +1894,7 @@ fix_string(const char *stringP, fix_typeE want, fix_typeE *gotP)
 	save             = g_translate_html;
 #endif
 	g_translate_html        = 0;
-    g_underDollarExpression = 0;
+	g_underDollarExpression = 0;
 
 	P = fixBracedString(stringP, want, gotP);
 

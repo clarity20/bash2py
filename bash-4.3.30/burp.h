@@ -1,3 +1,7 @@
+#ifndef TRUE
+#  define TRUE 1
+#  define FALSE 0
+#endif
 
 typedef struct {
 	char	*m_P;
@@ -24,7 +28,9 @@ void burp_rtrim(burpT *burpP);
 
 void log_init();
 void log_close();
+void log_activate();
+void log_deactivate();
 void log_enter(char *format, ...);
 void log_info(char *format, ...);
 void log_return();
-void log_return_msg(char *msg);
+void log_return_msg(char *msg_template, ...);
