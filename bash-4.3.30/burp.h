@@ -3,6 +3,10 @@
 #  define FALSE 0
 #endif
 
+#define BASH2PY_STDIN 0
+#define BASH2PY_STDOUT 1
+#define BASH2PY_STDERR 2
+
 typedef struct {
 	char	*m_P;
 	int 	m_lth;
