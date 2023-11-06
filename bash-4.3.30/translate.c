@@ -1356,9 +1356,12 @@ static void print_assignment_command(char *nameP, char *end_variableP, char *end
 static int isAssignment(char *startP, int local)
 {
 	char	*P, *end_nameP, *end_arrayP;
+	char *local_text;
 	int		c;
 
-	log_enter("isAssignment (startP=%s, local=%d)", startP, local);
+	local_text = bool_to_text(local);  // Pushing a new local vbl *here* blows the stack. GRRRR !!!!
+	log_enter("isAssignment (startP=%s, local=%s)", startP, local_text);
+	free(local_text);
 
 	P = startP;
 

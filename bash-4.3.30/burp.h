@@ -11,7 +11,7 @@ typedef struct {
 	char	*m_P;
 	int 	m_lth;
 	int		m_max;
-    int		m_indent;
+	int		m_indent;
 	int		m_disable_indent;
 	int		m_ungetc;
 } burpT;
@@ -38,3 +38,6 @@ void log_enter(char *format, ...);
 void log_info(char *format, ...);
 void log_return();
 void log_return_msg(char *msg_template, ...);
+
+char *bool_to_text(int value);
+char *type_to_text(int value);

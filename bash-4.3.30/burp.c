@@ -22,6 +22,7 @@
 
 #include "bashansi.h"
 
+#include "fix_string.h"
 #include "burp.h"
 
 #define MAX_CALL_DEPTH 64
@@ -328,7 +329,7 @@ void log_enter(char *format, ...)
 	// Printing
 	if (g_log_is_on)
 	{
-	    int i;
+		int i;
 		sprintf(full_format, "%-*.0dEnter %s", g_log_indent, 0, format);
 		if (full_format[strlen(full_format)-1] != '\n')
 			strcat(full_format, "\n");
@@ -350,7 +351,7 @@ void log_info(char *format, ...)
 	if (!g_log_stream)
 		return;
 
-    // No bookkeeping to do -- the internals are transient. Just print.
+	// No bookkeeping to do -- the internals are transient. Just print.
 	if (!g_log_is_on)
 		return;
 
@@ -386,7 +387,7 @@ void log_return_msg(char *msg_template, ...)
 	// Construct the log entry, silently ignoring the msg if it is NULL.
 	if (g_log_is_on)
 	{
-	    int i;
+		int i;
 		if (!msg_template)
 		{
 			strcpy(entry_format+16, "\n");
@@ -414,5 +415,42 @@ void log_return_msg(char *msg_template, ...)
 	g_log_indent -= FULL_INDENT;
 }
 
+// String conversion utility for better logging.
+// THE CALLER NEEDS TO MANAGE THIS MEMORY CAREFULLY!
+char *bool_to_text(int value) //TODO _BOOL value)
+{
+	if (value) {
+		char *_true = (char *) malloc(5);
+		return strcpy(_true, "TRUE");
+	} else {
+		char *_false = (char *) malloc(6);
+		return strcpy(_false, "FALSE");
+	}
+}
 
+// See bool_to_text() function header
+char *type_to_text(int value) //TODO fix_typeE value)
+{
+	switch (value)
+	{
+		case FIX_INT:
+			char *_int = malloc(5);
+			return strcpy(_int, "_INT");
+		case FIX_STRING:
+			char *_string = malloc(8);
+			return strcpy(_string, "_STRING");
+		case FIX_VAR:
+			char *_var = malloc(5);
+			return strcpy(_var, "_VAR");
+		case FIX_NONE:
+			char *_none = malloc(6);
+			return strcpy(_none, "_NONE");
+		default:
+			char *_other = malloc(11);
+			return strcpy(_other, "_otherType");
+	}
+
+	assert(0);
+
+}
 #endif
