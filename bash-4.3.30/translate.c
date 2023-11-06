@@ -2854,8 +2854,7 @@ static void print_function_def_subtree(FUNCTION_DEF *func_def)
 
 /* The internal function.  This is the real workhorse. */
 
-static void
-emit_command (COMMAND *command)
+static void emit_command (COMMAND *command)
 {
 	int	old_embedded, old_started;
 	function_queueT *temp_funcP = NULL;
@@ -3064,46 +3063,36 @@ void seen_comment_char(int c)
 
 void initialize_translator(const char *shell_scriptP)
 {
-	char *filenameP;
+    char file_suffix[6];
 
 	log_init();
     log_activate();
 
+    strcpy(file_suffix, g_translate_html ? "html" : "py");
+
 	if (!shell_scriptP) {
-	  if (g_translate_html) {
-		filenameP = "output.html";
-	  } else {
-		filenameP = "output.py";
-	  }
+	  char filenameP[16];
+	  sprintf(filenameP, "output.%s", file_suffix);
 	  outputF = fopen(filenameP, "w");
 	  if (!outputF) {
 		fprintf(stderr, "Can't open %s\n", filenameP);
 		exit(1);
 	  }
 	} else {
-	  char *P;
-	  int  lth        = strlen(shell_scriptP);
+	  char *filenameP, *extensionP;
 
-	  if (lth > 3 && !strcmp(shell_scriptP+lth-3,".py")) {
+	  extensionP = strrchr(shell_scriptP, '.');
+	  if (extensionP && !strcmp(extensionP,".py")) {
 		fprintf(stderr,"The bash input %s looks like it is already in python\n", shell_scriptP);
 		exit(1);
 	  }
-	  if (lth > 5 && !strcmp(shell_scriptP+lth-3,".html")) {
+      else if (extensionP && !strcmp(extensionP,".html")) {
 		fprintf(stderr,"The bash input %s looks like it is already in html\n", shell_scriptP);
 		exit(1);
 	  }
-	  char *filenameP = P = (char *) alloca(lth+6);
-	  memcpy(filenameP, shell_scriptP, lth);
-	  P = filenameP + lth;
-	  if (g_translate_html) {
-	  	memcpy(P, ".html", 5);
-	  	P += 5;
-	  } else {
-	  	memcpy(P, ".py", 3);
-	  	P += 3;
-	  }
-	  *P = '\0';
-	  
+
+	  filenameP = (char *) malloc(strlen(shell_scriptP) + 6);
+	  sprintf(filenameP, "%s.%s", shell_scriptP, file_suffix);
 	  outputF = fopen(filenameP, "w");
 	  if (!outputF) {
 		fprintf(stderr, "Can't open %s\n", filenameP);
@@ -3113,7 +3102,7 @@ void initialize_translator(const char *shell_scriptP)
 	if (g_translate_html) {
 		fprintf(outputF, "<html>\n<body>\n<table>\n<tr><td></td><td>\n");
 	}
-	
+
 	fprintf(outputF,"#! /usr/bin/env python\n");
 
 	if (g_translate_html) {
