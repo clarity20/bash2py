@@ -1730,16 +1730,17 @@ done:
 
 static char * fixBracedString(const char *startP, fix_typeE want, fix_typeE *gotP)
 {
-#ifndef TEST
 	extern char **brace_expand(char *textP);
 
 	const char *P;
 
 	char	**arrayPP;
 	int		c, in_quotes, state;
-	char	*resultP;
+	char	*resultP, *type_text;
 
-	log_enter("fixBracedString (startP=%s, want=%d)", startP, want);
+	type_text = type_to_text(want);
+	log_enter("fixBracedString (startP=%s, want=%s)", startP, type_text);
+	free(type_text);
 log_deactivate();
 
 	if (want == FIX_EXPRESSION) {
@@ -1839,7 +1840,6 @@ log_activate();
 			return resultP;
 	}	}
 dont_fire:
-#endif
 
 	string_to_buffer(startP);
 	resultP = fix_string1(want, gotP);
