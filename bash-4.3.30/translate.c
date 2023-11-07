@@ -105,7 +105,6 @@ static burpT	g_temp    = {0, 0, 0, 0, 0, 0};
 typedef struct function_nameS {
 	struct function_nameS *m_nextP;
 	char	*m_nameP;
-	int _unused_placeholder_to_prevent_segfault;
 } function_nameT;
 
 function_nameT *g_function_namesP = NULL;
@@ -138,7 +137,7 @@ static int is_internal_function(char *nameP)
 
 void seen_global(const char *nameP, int local)
 {
-	variable_nameT **tailPP, *globalP;
+	variable_nameT *var_nameP, *last_nameP;
 	char *P,*P1;
 	int	 c;
 
@@ -154,21 +153,25 @@ void seen_global(const char *nameP, int local)
 	*P1 = '\0';
 
 	// If the name is already in the registry, return without doing anything
-	for (tailPP = &g_variable_namesP; globalP = *tailPP; tailPP = &(globalP->m_nextP)) {
-		if (!strcmp(globalP->m_nameP, nameP)) {
-			*((char *) P1) = c;
+	for (var_nameP = g_variable_namesP; var_nameP != NULL; var_nameP = var_nameP->m_nextP) {
+		if (!strcmp(var_nameP->m_nameP, nameP)) {
+			*P1 = c;
 			log_return_msg("Variable already seen, return without processing");
 			return;
-	}	}
+		}
+	}
+	last_nameP = var_nameP;
 
 	// If the name is new, add it to the registry
-	globalP = (variable_nameT *) xmalloc(sizeof(function_nameT) + strlen(nameP) + 1);
-	P = (char *) (globalP+1);
-	strcpy(P, nameP);
-	globalP->m_nameP = P;
-	globalP->m_nextP = 0;
-	globalP->m_isLocal = local;
-	*tailPP          = globalP;
+	var_nameP = (variable_nameT *) malloc(sizeof(function_nameT));
+	var_nameP->m_nameP = (char *) malloc(strlen(nameP)+1);
+	strcpy(var_nameP->m_nameP, nameP);
+	var_nameP->m_nextP = NULL;
+	var_nameP->m_isLocal = local;
+	if (last_nameP)
+		last_nameP->m_nextP = var_nameP;
+    else
+        g_variable_namesP = var_nameP;
 	*P1 = c;
 	log_return_msg("Variable added to registry");
 }
@@ -1356,10 +1359,9 @@ static void print_assignment_command(char *nameP, char *end_variableP, char *end
 static int isAssignment(char *startP, int local)
 {
 	char	*P, *end_nameP, *end_arrayP;
-	char *local_text;
 	int		c;
 
-	local_text = bool_to_text(local);  // Pushing a new local vbl *here* blows the stack. GRRRR !!!!
+	char *local_text = bool_to_text(local);
 	log_enter("isAssignment (startP=%s, local=%s)", startP, local_text);
 	free(local_text);
 
@@ -2726,6 +2728,7 @@ static void print_function_def (FUNCTION_DEF *func)
 		for (current_varP = g_variable_namesP; current_varP; current_varP = next_varP) {
 			burp(&save, "    global %s\n", current_varP->m_nameP);
 			next_varP = current_varP->m_nextP;
+			free(current_varP->m_nameP);
 			free(current_varP);
 	    }
 		g_variable_namesP = NULL;
