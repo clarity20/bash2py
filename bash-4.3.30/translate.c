@@ -58,7 +58,7 @@ extern int printf __P((const char *, ...));	/* Yuck.  Double yuck. */
 #endif
 
 extern int g_rc_identifier;
-extern int g_is_inside_function;
+extern _BOOL g_is_inside_function;
 extern int g_function_parms_count;
 
 extern translateT	g_translate;
@@ -78,7 +78,7 @@ static void fprintf(outputF, );
 		} while (0)
 
 /* Non-zero means the stuff being printed is inside of a function def. */
-static int was_heredoc         = FALSE;
+static _BOOL was_heredoc         = FALSE;
 static int printing_connection = 0;
 static int stdout_connection   = 0;
 static REDIRECT *deferred_heredocs = NULL;
@@ -90,7 +90,7 @@ static char indirection_string[100];
 
 //MIW var declarations begin
 
-extern int   g_translate_html;
+extern _BOOL   g_translate_html;
 static FILE* outputF = NULL;
 
 static burpT case_var = {0,0,0,0,0,0};
@@ -135,7 +135,7 @@ static int is_internal_function(char *nameP)
 	return (0);
 }
 
-void seen_global(const char *nameP, int local)
+void seen_global(const char *nameP, _BOOL local)
 {
 	variable_nameT *var_nameP, *last_nameP;
 	char *P,*P1;
@@ -202,7 +202,7 @@ static void print_heredoc_header (REDIRECT *redirect)
 
 static void print_heredoc_body ( REDIRECT *redirect)
 {
-	int disable_indent;
+	_BOOL disable_indent;
 
 	/* Here doc body */
 	burps(&g_output, redirect->redirectee.filename->word);
@@ -621,7 +621,7 @@ int has_equal_sign(SIMPLE_COM *simple_command)
 	return FALSE;
 }
 
-static void print_popen_flags(REDIRECT *redirects, int printing)
+static void print_popen_flags(REDIRECT *redirects, _BOOL printing)
 {
 	fix_typeE	got;
 	char		*wordP;
@@ -698,13 +698,13 @@ static void print_popen_flags(REDIRECT *redirects, int printing)
 	}
 }
 
-static int print_popen_redirection (REDIRECT *redirect)
+static _BOOL print_popen_redirection (REDIRECT *redirect)
 {
 	int redirector, redir_fd;
 	WORD_DESC *redirectee, *redir_word;
 	char	*wordP;
 	fix_typeE	got;
-	int	communicates = FALSE;
+	_BOOL	communicates = FALSE;
 
 	redirectee = redirect->redirectee.filename;
 	redir_fd = redirect->redirectee.dest;
@@ -762,7 +762,7 @@ static int print_popen_redirection (REDIRECT *redirect)
 
 static int print_popen_redirection_list (REDIRECT *redirects)
 {
-	int	ret = FALSE;
+	int ret = FALSE;
 	for (; redirects; redirects = redirects->next) {
 		ret |= print_popen_redirection(redirects);
 	}
@@ -1113,7 +1113,7 @@ is_var:
 // forward declaration
 static void emit_command (COMMAND *command);
 
-static int emit_embedded_command(COMMAND *commandP)
+static _BOOL emit_embedded_command(COMMAND *commandP)
 {
 	int	lth;
 
@@ -1201,7 +1201,7 @@ void print_export_cmd (WORD_LIST *list, char *separator)
 	I imagine was later replaced by the better COND syntax.
  */
 
-static void print_test_command(WORD_LIST *word_listP, int negated)
+static void print_test_command(WORD_LIST *word_listP, _BOOL negated)
 {
 	WORD_LIST	*atP;
 	char		*wordP, *operatorP,*leftP;
@@ -1297,7 +1297,7 @@ done:
 	return;
 }
 
-static void print_assignment_command(char *nameP, char *end_variableP, char *end_arrayP, char *end_assignmentP, int local)
+static void print_assignment_command(char *nameP, char *end_variableP, char *end_arrayP, char *end_assignmentP, _BOOL local)
 {
 	char		*translationP;
 	int 		c;
@@ -1356,7 +1356,7 @@ static void print_assignment_command(char *nameP, char *end_variableP, char *end
 	return;
 }
 
-static int isAssignment(char *startP, int local)
+static _BOOL isAssignment(char *startP, _BOOL local)
 {
 	char	*P, *end_nameP, *end_arrayP;
 	int		c;
@@ -1402,9 +1402,9 @@ static int isAssignment(char *startP, int local)
 static void print_declare_command(WORD_LIST	*word_listP)
 {
 	char		*wordP, *P;
-	int 		separator, is_int;
+	int 		separator;
 	fix_typeE	got;
-	int			is_local;
+	_BOOL		is_local, is_int;
 	
 	separator = -1;
 	is_int    = FALSE;
@@ -1464,7 +1464,7 @@ static void print_declare_command(WORD_LIST	*word_listP)
 static void print_echo_command(WORD_LIST *word_listP, REDIRECT *redirects)
 {
 	char		*wordP, *P, *P1;
-	int			n_flag, e_flag;
+	_BOOL		n_flag, e_flag;
 	fix_typeE	got;
 
 	int wordLen;
@@ -1531,7 +1531,7 @@ static void print_echo_command(WORD_LIST *word_listP, REDIRECT *redirects)
 		/* Only works with python 3 */
 		burps(&g_output, ",end=\"\"");
 	}
-	print_popen_flags(redirects, 1);
+	print_popen_flags(redirects, TRUE);
 	burpc(&g_output, ')');
 	return;
 }
@@ -1665,7 +1665,7 @@ static void print_umask_command(WORD_LIST *word_listP)
 {
 	/* umask [-p] [-S] [mode] */
 	char		*wordP;
-	int			p_flag, s_flag;
+	_BOOL		p_flag, s_flag;
 	fix_typeE	got;
 	
 	p_flag = FALSE;
@@ -1712,7 +1712,7 @@ static void print_unset_command(WORD_LIST *word_listP)
 	/* unset [-fv] [name] */
 	char	*wordP;
 	char	*separatorP;
-	int		f_flag, v_flag;
+	_BOOL	f_flag, v_flag;
 	
 	f_flag = FALSE;
 	v_flag = FALSE;
@@ -1739,7 +1739,7 @@ static void print_unset_command(WORD_LIST *word_listP)
 static void unbrace(void)
 {
 	char *P, *startP, *endP;
-	int	 lth, c, paren_nesting, in_quotes;
+	int	 lth, c, paren_nesting;
 
 	lth    = g_output.m_lth;
 	startP = g_output.m_P;
@@ -1816,9 +1816,9 @@ void print_simple_command (SIMPLE_COM *simple_command)
 {
 	WORD_LIST	*word_listP;
 	char		*wordP;
-	int			c, negated;
+	int			c;
 	fix_typeE	got;
-	int is_done = FALSE;
+	_BOOL is_done = FALSE, negated;
 
 	word_listP = simple_command->words;
 	if (!word_listP) {
@@ -1836,7 +1836,7 @@ void print_simple_command (SIMPLE_COM *simple_command)
 		return;
 	}
 
-	negated = (simple_command->flags & CMD_INVERT_RETURN);
+	negated = ((simple_command->flags & CMD_INVERT_RETURN) != 0);
 
 	switch (wordP[0]) {
 	case ':':
@@ -2061,7 +2061,7 @@ void print_simple_command (SIMPLE_COM *simple_command)
 		burps(&g_output, "not ");
 	}
 	if (simple_command->redirects) {
-		int communicates;
+		_BOOL communicates;
 		int offset, i;
 
 		g_translate.m_uses.m_subprocess = TRUE;
@@ -2078,7 +2078,7 @@ void print_simple_command (SIMPLE_COM *simple_command)
 		burps(&g_output, ",shell=True");
 		print_popen_flags(simple_command->redirects, FALSE);
 		burps(&g_output, ")\n");
-		communicates = print_popen_redirection_list(simple_command->redirects);
+		communicates = (print_popen_redirection_list(simple_command->redirects) != 0);
 		if (communicates) {
 			burpc(&g_output, ' ');
 			for (i = g_output.m_lth-1; offset < i; --i) {
@@ -2109,7 +2109,6 @@ void print_for_command_head (FOR_COM *for_command)
 {
 	WORD_LIST	*word_listP, *nextP;
 	char		*targetP, *wordP, *P, separator, c;
-	int			use_glob;
 	fix_typeE	got;
 
 	// Need to ensure target exists and is a bash2py object
@@ -2242,7 +2241,7 @@ static void print_case_ors(WORD_LIST* patterns){
 static void print_case_clauses (PATTERN_LIST *clauses)
 {
 	char *P;
-	static int first_if_clause = TRUE;
+	static _BOOL first_if_clause = TRUE;  // static -> retain value during recursion
 
 	while (clauses)
 	{
@@ -2325,7 +2324,7 @@ static void print_if_command (IF_COM *if_command)
 	 side effects of the shell variable BASH_REMATCH. This requires
 	 some alternative processing. */
 
-	int regmatch_in_progress = FALSE;
+	_BOOL regmatch_in_progress = FALSE;
 	int extra_indents = 0;
 
 	if (is_test_condition_regmatch(if_command)) {

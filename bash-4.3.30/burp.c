@@ -33,18 +33,18 @@ int g_log_indent=-FULL_INDENT;
 char **g_function_stack;
 char **g_current_function;
 FILE *g_log_stream;
-unsigned char g_log_is_on;
+_BOOL g_log_is_on;
 
-int g_translate_html = 0;
+_BOOL g_translate_html = 0;
 
 void
 burp_reset(burpT *burpP)
 {
-	memset(burpP->m_P, 0, burpP->m_max);
+	memset(burpP->m_P, '\0', burpP->m_max);
 
 	burpP->m_lth = 0;
 	burpP->m_indent = 0;
-	burpP->m_disable_indent = 0;
+	burpP->m_disable_indent = FALSE;
 	burpP->m_ungetc = 0;
 }
 
@@ -60,7 +60,7 @@ increase_burp(burpT *burpP)
 		burpP->m_P   = (char *) xmalloc(max);
 		if (!burpP->m_P) {
 			fprintf(stderr, "Burp can't xmalloc(%d)\n", max);
-			assert(0);
+			assert(FALSE);
 			exit(1);
 		}
 		burpP->m_max = max - 8;
@@ -70,13 +70,13 @@ increase_burp(burpT *burpP)
 	if (max & 0x40000000) {
 		// Very serious problems trying to print whatever it might be..
 		fprintf(stderr,"Burp can't print\n");
-		assert(0);
+		assert(FALSE);
 		exit(1);
 	}
 	burpP->m_P = realloc(burpP->m_P, max);
 	if (!burpP->m_P) {
 		fprintf(stderr, "Burp can't realloc(%d)\n", max);
-		assert(0);
+		assert(FALSE);
 		exit(1);
 	}
 	burpP->m_max = max - 8;
@@ -97,7 +97,7 @@ burp_extend(burpT *burpP, int offset, int need)
 	memmove(P+need, P, lth - offset);
 	lth          += need;
 	burpP->m_lth  = lth;
-	burpP->m_P[lth] = 0;
+	burpP->m_P[lth] = '\0';
 	return P;
 }
 	
@@ -112,7 +112,7 @@ burpc1(burpT *burpP, const char c)
 	P = burpP->m_P + burpP->m_lth;
 	*P++ = c;
 	burpP->m_lth++;
-	*P   = 0;
+	*P   = '\0';
 	return;
 }
 
@@ -135,19 +135,19 @@ burpc(burpT *burpP, const char c)
 		burpP->m_ungetc = burpP->m_lth;
 		switch (c) {
 		case '<':
-			g_translate_html = 0;
+			g_translate_html = FALSE;
 			burps(burpP, "&lt;");
-			g_translate_html = 1;
+			g_translate_html = TRUE;
 			return;
 		case '>':
-			g_translate_html = 0;
+			g_translate_html = FALSE;
 			burps(burpP, "&gt;");
-			g_translate_html = 1;
+			g_translate_html = TRUE;
 			return;
 		case '&':
-			g_translate_html = 0;
+			g_translate_html = FALSE;
 			burps(burpP, "&amp;");
-			g_translate_html = 1;
+			g_translate_html = TRUE;
 			return;
 	}	}
 	indentation(burpP);
@@ -176,7 +176,7 @@ burp(burpT *burpP, const char *fmtP, ...)	/* proc */
 		
 	if (!fmtP) {
 		fprintf(stderr, "Burp has no format string\n");
-		assert(0);
+		assert(FALSE);
 		exit(1);
 	}
 
@@ -268,7 +268,7 @@ burps_html(burpT *burpP, const char *stringP)
 {
 	int save = g_translate_html;
 
-	g_translate_html = 0;
+	g_translate_html = FALSE;
 	burps(burpP, stringP);
 	g_translate_html = save;
 }

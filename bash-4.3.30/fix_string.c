@@ -18,17 +18,17 @@ static burpT g_buffer = {0,0,0,0,0,0};
 static burpT g_new = {0,0,0,0,0,0};
 static burpT g_braced = {0,0,0,0,0,0};
 
-int g_regmatch_special_case = FALSE;
-int	g_is_inside_function = FALSE;
+_BOOL g_regmatch_special_case = FALSE;
+_BOOL g_is_inside_function = FALSE;
 int g_function_parms_count  = 0;
 
 int g_rc_identifier   = 0;
 
 static int g_dollar_expr_nesting_level = 0;
 
-extern int  		g_translate_html;
+extern _BOOL g_translate_html;
 
-extern	void seen_global(const char *nameP, int local);
+extern	void seen_global(const char *nameP, _BOOL local);
 
 char g_regmatch_var_name[] = "BASH_REMATCH";
 
@@ -1279,9 +1279,10 @@ static fix_typeE substitute(fix_typeE want)
 	fix_typeE	got;	// What I had
 	fix_typeE	got1;	// What I'm now seeing
 	fix_typeE	want1;
-	int 		i, outside_quotes, in_quotes, quoted, c, c1, c2, offset, quote_removal;
+	int 		i,  in_quotes, quoted, c, c1, c2, offset, quote_removal;
 	char		**arrayPP, *P, *P1, *P2;
 	int			fileExpansion;
+	_BOOL		is_outside_quotes;
 
 	log_enter("substitute (want=%d)", want);
 	/* Return an array of strings; the brace expansion of TEXT.
@@ -1297,7 +1298,7 @@ static fix_typeE substitute(fix_typeE want)
 		}
 	}
 
-	outside_quotes   = 1;
+	is_outside_quotes = TRUE;
 	fileExpansion    = 0;
 	offset           = g_new.m_lth;
 
@@ -1307,7 +1308,7 @@ static fix_typeE substitute(fix_typeE want)
 		case '*':
 		case '?':
 		case '[':
-			fileExpansion |= outside_quotes;
+			fileExpansion |= is_outside_quotes;
 			break;
 		case '~':
 		case '$':
@@ -1323,7 +1324,7 @@ static fix_typeE substitute(fix_typeE want)
 			g_new.m_P[offset] = '\0';
 			break;
 		case '"':
-			outside_quotes = !outside_quotes;
+			is_outside_quotes = !is_outside_quotes;
 			break;
 		case '\\':
 			if (P[1]) {
@@ -1433,9 +1434,10 @@ done:
 
 static void only_expand(void)
 {
-	int 		i, is_quoted, c, offset;
+	int 		i, c, offset;
 	char		*P, *P1;
 	fix_typeE	got1;
+	_BOOL		is_quoted;
 
 	if (P = isInteger(g_buffer.m_P)) {
 		burps(&g_new, P);
@@ -1452,7 +1454,7 @@ static void only_expand(void)
 		}
 		// Restore to where we were
 		g_new.m_lth = offset;
-		g_new.m_P[offset] = 0;
+		g_new.m_P[offset] = '\0';
 
 		if (c == '"') {
 			is_quoted = !is_quoted;
@@ -1473,14 +1475,13 @@ static void only_expand(void)
 
 static void rename_special(void)
 {
-	int 	in_quotes, c, c1, lth, in_word, expand;
+	int 	c, c1, lth, in_word;
 	char	*P, *P1;
 
-	in_quotes   = FALSE;
 	in_word     = FALSE;
 	lth         = 0;
 	for (P = g_buffer.m_P; c = *P; ++P) {
-		if (!in_quotes && !in_word) {
+		if (!in_word) {
 			switch (c) {
 			case '_':
 				if (!strncmp(P, "__debug__", 9)) {
@@ -1593,19 +1594,19 @@ static void compactWhiteSpace(void)
 	}
 }
 
-static void unmarkQuotes(int delete_quotes)
+static void unmarkQuotes(_BOOL delete_quotes)
 {
 	char	*P, *P1;
-	int		c, in_expand;
+	int		c, expand_depth;
 
-	in_expand = 0;
+	expand_depth = 0;
 	for (P = P1 = g_buffer.m_P; c = *P; ++P) {
 		switch (c) {
 		case START_EXPAND:
-			++in_expand;
+			++expand_depth;
 			break;
 		case END_EXPAND:
-			--in_expand;
+			--expand_depth;
 			break;
 		case END_QUOTE:
 			if (P[1] == START_QUOTE) {
@@ -1613,7 +1614,7 @@ static void unmarkQuotes(int delete_quotes)
 				continue;
 			}
 		case START_QUOTE:
-			if (delete_quotes && !in_expand) {
+			if (delete_quotes && !expand_depth) {
 				continue;
 			}
 			c = '"';
@@ -1668,7 +1669,7 @@ static void unescapeDollar(void)
 static char * fix_string1(fix_typeE want, fix_typeE *gotP)
 {
 	fix_typeE	got;
-	int			is_expression;
+	_BOOL		is_expression;
 
 	log_enter("fix_string1 (want=%d)", want);
 

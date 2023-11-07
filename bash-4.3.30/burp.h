@@ -17,7 +17,7 @@ typedef struct {
 	int 	m_lth;
 	int		m_max;
 	int		m_indent;
-	int		m_disable_indent;
+	_BOOL	m_disable_indent;
 	int		m_ungetc;
 } burpT;
 
