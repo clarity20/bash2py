@@ -18,24 +18,21 @@ static burpT g_buffer = {0,0,0,0,0,0};
 static burpT g_new = {0,0,0,0,0,0};
 static burpT g_braced = {0,0,0,0,0,0};
 
-int g_regmatch_special_case = FALSE;
-int	g_is_inside_function = FALSE;
-int g_function_parms  = 0;
+_BOOL g_regmatch_special_case = FALSE;
+_BOOL g_is_inside_function = FALSE;
+int g_function_parms_count  = 0;
 
 int g_rc_identifier   = 0;
 
-static int g_underDollarExpression = 0;
+static int g_dollar_expr_nesting_level = 0;
 
-extern int  		g_translate_html;
+extern _BOOL g_translate_html;
 
-#ifndef TEST
-extern	void seen_global(const char *nameP, int local);
-#endif
+extern	void seen_global(const char *nameP, _BOOL local);
 
 char g_regmatch_var_name[] = "BASH_REMATCH";
 
-static void
-exchange(burpT *oldP, burpT *newP)
+static void exchange_burp_buffers(burpT *oldP, burpT *newP)
 {
 	burpT	temp;
 
@@ -44,8 +41,8 @@ exchange(burpT *oldP, burpT *newP)
 	*newP  = temp;
 }
 
-char *
-endQuotedString(char *stringP)
+// Returns pointer to end of string (or NULL)
+char * endQuotedString(char *stringP)
 {
 	char	*P;
 	int		c;
@@ -56,8 +53,8 @@ endQuotedString(char *stringP)
 		int in_string = 1;
 		for (P = stringP + 1; ; ++P) {
 			switch (c = *P) {
-			case 0:
-				return 0;
+			case '\0':
+				return NULL;
 			case START_QUOTE:
 				++in_string;
 				continue;
@@ -70,8 +67,8 @@ endQuotedString(char *stringP)
 	case '"':
 		for (P = stringP + 1; ; ++P) {
 			switch (c = *P) {
-			case 0:
-				return 0;
+			case '\0':
+				return NULL;
 			case '"':
 				return P;
 			case '\\':
@@ -81,30 +78,28 @@ endQuotedString(char *stringP)
 	case '\'':
 		for (P = stringP + 1; ; ++P) {
 			switch (c = *P) {
-			case 0:
-				return 0;
+			case '\0':
+				return NULL;
 			case '\'':
 				return P;
 	}	}	}
-	return 0;
+	return NULL;
 }
 
-char *
-endArray(char *startP)
+char * endArray(char *startP)
 {
 	char	*P, *endP;
 	int		c, in_array;
-
 	
 	c = *startP;
 	if (c != '[') {
-		return 0;
+		return NULL;
 	}
 	in_array = 1;
 	for (P = startP + 1; ; ++P) {
 		switch (c = *P) {
-		case 0:
-			return 0;
+		case '\0':
+			return NULL;
 		case ']':
 			if (--in_array) {
 				continue;
@@ -115,7 +110,7 @@ endArray(char *startP)
 		case START_QUOTE:
 			endP = endQuotedString(P);
 			if (!endP) {
-				return 0;
+				return NULL;
 			}
 			P = endP;
 			continue;
@@ -127,8 +122,7 @@ endArray(char *startP)
 
 /* Returns pointer to character after end of expansion */
 
-char *
-endExpand(char *startP)
+char * endExpand(char *startP)
 {
 	char *endP;
 	int	 expand;
@@ -137,7 +131,7 @@ endExpand(char *startP)
 	expand = 1;
 	for (endP = startP+1; expand; ++endP) {
 		switch(*endP) {
-		case 0:
+		case '\0':
 			return endP;
 		case START_EXPAND:
 			++expand;
@@ -149,8 +143,7 @@ endExpand(char *startP)
 	return endP;
 }
 
-static int
-read_hex(char **PP, int max_digits)
+static int read_hex(char **PP, int max_digits)
 {
 	char *P    = *PP;
 	char *endP = P + max_digits;
@@ -179,8 +172,7 @@ read_hex(char **PP, int max_digits)
 	return ret;
 }
 	
-static void
-emit_hex(int c)
+static void emit_hex(int c)
 {
 	int c1;
 
@@ -203,8 +195,7 @@ emit_hex(int c)
 
 // Try to decide if the string is an integer:
 
-char *
-isInteger(char *startP)
+char * isInteger(char *startP)
 {
 	static char	temp[32];
 
@@ -229,21 +220,21 @@ isInteger(char *startP)
 			break;
 		}
 		if (endP <= P1) {
-			return 0;
+			return FALSE;
 		}
 		*P1++ = c;
 	}
-	*P1 = 0;
+	*P1 = '\0';
 		
 	base = 10;
 	P    = temp;
 	switch (*P) {
-	case 0:
-		return 0;
+	case '\0':
+		return FALSE;
 	case '-':
 	case '+':
 		if (!P[1]) {
-			return 0;
+			return FALSE;
 		}
 		++P;
 		break;
@@ -255,11 +246,11 @@ isInteger(char *startP)
 		case 'X':
 			P += 2;
 			if (!*P) {
-				return 0;
+				return FALSE;
 			}
 			value = read_hex(&P, sizeof(temp));
 			if (*P) {
-				return 0;
+				return FALSE;
 			}
 			return temp;
 		default:
@@ -269,12 +260,12 @@ isInteger(char *startP)
 
 	for (; ; ++P) {
 		switch (c = *P) {
-		case 0:
+		case '\0':
 			return temp;
 		case '9':
 		case '8':
 			if (base < 10) {
-				return 0;
+				return FALSE;
 			}
 		case '7':
 		case '6':
@@ -286,14 +277,13 @@ isInteger(char *startP)
 		case '0':
 			continue;
 		}
-		return 0;
+		return FALSE;
 	}
 }
 
 /* Initialise starting g_buffer with content of stringP */
 
-static void
-string_to_buffer(const char *stringP)
+static void string_to_buffer(const char *stringP)
 {
 	const char	*P0;
 	int			lth;
@@ -316,8 +306,7 @@ string_to_buffer(const char *stringP)
 
 static int g_little_endian = -1;
 
-static void
-replaceSingleQuotes(void)
+static void replaceSingleQuotes(void)
 {
 	int 	in_quotes;
 	unsigned char c, c1;
@@ -498,11 +487,10 @@ replaceSingleQuotes(void)
 		}	}
 		burpc(&g_new, c);
 	}
-	exchange(&g_buffer, &g_new);
+	exchange_burp_buffers(&g_buffer, &g_new);
 }
 
-static void
-emitQuotedString(char *startP)
+static void emitQuotedString(char *startP)
 {
 	char *P;
 	int	 c;
@@ -512,7 +500,7 @@ emitQuotedString(char *startP)
 	for (P = startP; ; ++P) {
 		c = *P;
 		switch (c) {
-		case 0:
+		case '\0':
 			burpc(&g_new, '"');
 			return;
 		case '\\':
@@ -532,11 +520,10 @@ emitQuotedString(char *startP)
 	log_return();
 }
 
+// forward declaration
 static char *emitSpecial1(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP);
 
-static char *
-emitSimpleVariable(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
-
+static char * emitSimpleVariable(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 {
 	char		*P, *endP;
 	int			c, len;
@@ -547,41 +534,41 @@ emitSimpleVariable(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 	P = startP;
 	switch (c = *P++) {
 	case '*':
-		g_translate.m_expand.m_star = 1;
+		g_translate.m_expand.m_star = TRUE;
 		burp(&g_new,"Expand.star(%d)", in_quotes);
 		got = (in_quotes ? FIX_STRING : FIX_ARRAY);
 		break;
 	case '@':
-		g_translate.m_expand.m_at = 1;
+		g_translate.m_expand.m_at = TRUE;
 		burp(&g_new,"Expand.at()");
 		got = FIX_ARRAY;
 		break;
 	case '#':
 		// Expands to the number of positional parameters
-		g_translate.m_expand.m_hash = 1;
+		g_translate.m_expand.m_hash = TRUE;
 		burps(&g_new, "Expand.hash()");
 		got = FIX_INT;
 		break;
 	case '$':
 		// Expands to the process id of the shell
-		g_translate.m_expand.m_dollar = 1;
+		g_translate.m_expand.m_dollar = TRUE;
 		burps(&g_new, "Expand.dollar()");
 		got = FIX_INT;
 		break;
 	case '!':
 		// Expands to the process ID of the background (asynchronous) command
-		g_translate.m_expand.m_exclamation = 1;
+		g_translate.m_expand.m_exclamation = TRUE;
 		burps(&g_new, "Expand.exclamation()");
 		got = FIX_INT;
 		break;
 	case '_':
-		g_translate.m_expand.m_underbar = 1;
+		g_translate.m_expand.m_underbar = TRUE;
 		burps(&g_new, "Expand.underbar()");
 		got = FIX_STRING;
 		break;
 	case '-':
 		// Expands to the current option flags
-		g_translate.m_expand.m_hyphen = 1;
+		g_translate.m_expand.m_hyphen = TRUE;
 		burps(&g_new, "Expand.hyphen()");
 		got = FIX_STRING;	// This is a string with the flag chars in it
 		break;
@@ -603,11 +590,11 @@ emitSimpleVariable(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 
 			parameter = c - '0';
 			burp(&g_new, "_p%d", parameter);
-			if (g_function_parms < parameter) {
-				g_function_parms = parameter;
+			if (g_function_parms_count < parameter) {
+				g_function_parms_count = parameter;
 			}
 		} else {
-			g_translate.m_uses.m_sys = 1;
+			g_translate.m_uses.m_sys = TRUE;
 			burp(&g_new, "sys.argv[%c]", c);
 		}
 		got = FIX_VAR;
@@ -618,7 +605,7 @@ emitSimpleVariable(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 		break;
 	default:
 		if (c != '_' && !isalpha(c)) {
-			return 0;
+			return NULL;
 		}
 		len = strlen(g_regmatch_var_name);
 		if (0 == strncmp(startP, g_regmatch_var_name, len)) {
@@ -632,7 +619,7 @@ emitSimpleVariable(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 			for (; (c = *P) && (c == '_' || isalnum(c)); ++P) {
 				burpc(&g_new, c);
 			}
-			if (!g_underDollarExpression) {
+			if (!g_dollar_expr_nesting_level) {
 				burps(&g_new, ".val");
 			}
 		}
@@ -645,8 +632,7 @@ emitSimpleVariable(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 	return P;
 }
 	
-static char *
-emitString(char *startP, const char *terminatorsP, int under_quotes)
+static char * emitString(char *startP, const char *terminatorsP, int under_quotes)
 {
 	char 		*P, *endP;
 	int			c, offset, in_quotes;
@@ -654,7 +640,7 @@ emitString(char *startP, const char *terminatorsP, int under_quotes)
 
 	log_enter("emitString (startP=%s, terminatorsP=%s, under_quotes=%d)",
 			  startP, terminatorsP, under_quotes);
-	in_quotes = 0;
+	in_quotes = FALSE;
 	for (P = startP; ; ++P) {
 		c = *P;
 		offset = g_new.m_lth;
@@ -666,14 +652,14 @@ emitString(char *startP, const char *terminatorsP, int under_quotes)
 		}
 		endP = emitSpecial1(P, under_quotes, FIX_STRING, &got);
 		if (endP) {
-			in_quotes = 0;
+			in_quotes = FALSE;
 			P = endP - 1;
 			continue;
 		}
 		// Undo emission
 		g_new.m_lth = offset;
 		if (!c) {
-			return 0;
+			return NULL;
 		}
 		if (strchr(terminatorsP, c)) {
 			goto done;
@@ -683,7 +669,7 @@ emitString(char *startP, const char *terminatorsP, int under_quotes)
 				burpc(&g_new, '+');
 			}
 			burpc(&g_new, '"');
-			in_quotes = 1;
+			in_quotes = TRUE;
 		}
 		switch(c) {
 		case '"':
@@ -706,8 +692,7 @@ done:
 	return P;
 }
 
-static char *
-emitFunction(char *nameP, char *parm1P, char *parm2P, int indirect, int under_quotes)
+static char * emitFunction(char *nameP, char *parm1P, char *parm2P, int indirect, int under_quotes)
 {
 	char 		*endP;
 	int	 		offset;
@@ -717,7 +702,7 @@ emitFunction(char *nameP, char *parm1P, char *parm2P, int indirect, int under_qu
 
 	burp(&g_new, "%s(", nameP);
 	if (indirect) {
-		g_translate.m_function.m_get_value = 1;
+		g_translate.m_function.m_get_value = TRUE;
 		burp(&g_new, "GetValue(%s.val)", parm1P);
 	} else {
 		emitQuotedString(parm1P);
@@ -727,7 +712,7 @@ emitFunction(char *nameP, char *parm1P, char *parm2P, int indirect, int under_qu
 		burpc(&g_new, ',');
 		endP = emitString(parm2P, "[}", under_quotes);
 		if (!endP) {
-			return 0;
+			return NULL;
 		}
 		if (endP == parm2P) {
 			g_new.m_lth = offset;
@@ -741,98 +726,98 @@ emitFunction(char *nameP, char *parm1P, char *parm2P, int indirect, int under_qu
 // Process variable names following $ or ${. Handles variables having the indirection 
 // prefix "!" and/or a postfix in the set { [*] [@] :- := :+ :? } while handing off 
 // simpler variable name instances to emitSimpleVariable, then finally some postprocessing.
-static char *
-emitVariable(char *startP, int braced, int in_quotes, fix_typeE want, fix_typeE *gotP)
+
+static char * emitVariable(char *startP, int is_braced, int in_quotes, fix_typeE want, fix_typeE *gotP)
 {
 	char		*P, *endP, *functionP, *end_start1P, *start2P;
-	int			c, array, indirect;
+	int			c, is_array, is_indirect;
 	fix_typeE	got;
 
-	log_enter("emitVariable (startP=%s, braced=%d, in_quotes=%d, want=%d)",
-			startP, braced, in_quotes, want);
+	log_enter("emitVariable (startP=%s, is_braced=%d, in_quotes=%d, want=%d)",
+			startP, is_braced, in_quotes, want);
 	start2P     = 0;
 	functionP   = 0;
 
 	*gotP = FIX_STRING;
 
-	if (braced) {
+	if (is_braced) {
 
-		indirect = (*startP == '!');
-		if (indirect) {
-			indirect = 1;
+		is_indirect = (*startP == '!');
+		if (is_indirect) {
+			is_indirect = TRUE;
 			++startP;
 		}
 		for (start2P = startP; ; ++start2P) {
 			end_start1P = start2P;
 			switch(c = *start2P) {
-			case 0:
+			case '\0':
 				log_return_msg("Early return, null character");
-				return 0;
+				return NULL;
 			case '*':
-				if (indirect == 1 && start2P[1] == '}') { 	// ${!prefix*}
-					g_translate.m_expand.m_prefixStar = 1;
+				if (is_indirect == TRUE && start2P[1] == '}') { 	// ${!prefix*}
+					g_translate.m_expand.m_prefixStar = TRUE;
 					functionP = "Expand.prefixStar";
-					indirect  = 0;
+					is_indirect = FALSE;
 				}
 				break;
 			case '@': 					// ${!prefix@}
-				if (indirect == 1 && start2P[1] == '}') {
-					g_translate.m_expand.m_prefixAt = 1;
+				if (is_indirect == TRUE && start2P[1] == '}') {
+					g_translate.m_expand.m_prefixAt = TRUE;
 					functionP = "Expand.prefixAt";
-					indirect  = 0;
+					is_indirect = FALSE;
 				}
 				break;
 				
 
 			case '[':	// Subscript
-				if (indirect == 1) {
+				if (is_indirect == TRUE) {
 					if (!strncmp(start2P, "[*]}", 4)) {	// ${!name[*]}
-						g_translate.m_expand.m_indicesStar = 1;
+						g_translate.m_expand.m_indicesStar = TRUE;
 						functionP = "Expand.indicesStar";
-						indirect  = 0;
+						is_indirect = FALSE;
 						start2P  += 2;
 					}
 					if (!strncmp(start2P, "[@]}", 4)) {	// ${!name[@]}
-						g_translate.m_expand.m_indicesAt = 1;
+						g_translate.m_expand.m_indicesAt = TRUE;
 						functionP = "Expand.indicesAt";
-						indirect  = 0;
+						is_indirect = FALSE;
 						start2P  += 2;
 					}
 				} 
 			case '}':	// End of expansion
 				break;
 			case '-':
-				g_translate.m_expand.m_minus = 1;
+				g_translate.m_expand.m_minus = TRUE;
 				functionP = "Expand.minus";
 				break;
 			case '=':
-				g_translate.m_expand.m_eq = 1;
+				g_translate.m_expand.m_eq = TRUE;
 				functionP = "Expand.eq";
 				break;
 			case '?':
-				g_translate.m_expand.m_qmark = 1;
+				g_translate.m_expand.m_qmark = TRUE;
 				functionP = "Expand.qmark";
 				break;
 			case '+':
-				g_translate.m_expand.m_plus = 1;
+				g_translate.m_expand.m_plus = TRUE;
 				functionP = "Expand.plus";
 				break;
 			case ':':
 				switch (*++start2P) {
 				case '-':
-					g_translate.m_expand.m_colon_minus = 1;
+					g_translate.m_expand.m_colon_minus = TRUE;
 					functionP = "Expand.colonMinus";
 					break;
 				case '=':
-					g_translate.m_expand.m_colon_eq = 1;
+					g_translate.m_expand.m_colon_eq = TRUE;
 					functionP   = "Expand.colonEq";
 					break;
 				case '?':
-					g_translate.m_expand.m_colon_qmark = 1;
+					g_translate.m_expand.m_colon_qmark = TRUE;
 					functionP   = "Expand.colonQmark";
 					break;
 				case '+':
-					g_translate.m_expand.m_colon_plus = 1;
+					g_translate.m_expand.m_colon_plus = TRUE;
 					functionP = "Expand.colonPlus";
 					break;
 				default:
@@ -843,9 +828,9 @@ emitVariable(char *startP, int braced, int in_quotes, fix_typeE want, fix_typeE 
 				continue;
 			}
 			if (!functionP) {
-				if (indirect) {
+				if (is_indirect) {
 					c = *end_start1P;
-					*end_start1P = 0;
+					*end_start1P = '\0';
 					burp(&g_new,"GetValue(%s.val)", startP);
 				    *end_start1P = c;
 					endP = end_start1P;
@@ -855,12 +840,12 @@ emitVariable(char *startP, int braced, int in_quotes, fix_typeE want, fix_typeE 
 				assert(start2P);
 				++start2P;
 				c = *end_start1P;
-				*end_start1P = 0;
-				endP = emitFunction(functionP, startP, start2P, indirect, in_quotes);
+				*end_start1P = '\0';
+				endP = emitFunction(functionP, startP, start2P, is_indirect, in_quotes);
 				*end_start1P = c;
 				if (!endP) {
 					log_return_msg("Early return, null character");
-					return 0;
+					return NULL;
 				}
 				goto done;
 			}
@@ -868,11 +853,11 @@ emitVariable(char *startP, int braced, int in_quotes, fix_typeE want, fix_typeE 
 	}	}
 	endP = emitSimpleVariable(startP, in_quotes, want, gotP);
 done:
-	if (braced) {
+	if (is_braced) {
 		int offset;
 
-		array = (*endP == '[' || g_regmatch_special_case);
-		if (array) {
+		is_array = (*endP == '[' || g_regmatch_special_case);
+		if (is_array) {
 			*gotP = FIX_VAR;
 			if (g_regmatch_special_case) {
 				// Python gets the regmatch member by a function call () not a direct lookup []
@@ -890,17 +875,17 @@ done:
 			// Undo emission
 			g_new.m_lth = offset;
 			switch (c) {
-			case 0:
+			case '\0':
 				log_return_msg("Early return, null character");
-				return 0;
+				return NULL;
 			case '}':
 				++endP;
 				goto finish;
 			case ']':
-				if (array) {
+				if (is_array) {
 					// We don't know what an array is of..
 					burps(&g_new, g_regmatch_special_case ? ")" : "]");
-					array = 0;
+					is_array = FALSE;
 					g_regmatch_special_case = FALSE;
 					continue;
 				}
@@ -918,20 +903,20 @@ static char *
 emitDollarExpression(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 {
 	char 		*P, *P1, *endP;
-	int  		start, offset, blank, c, brackets;
+	int  		start, offset, is_blank, c, paren_depth;
 	fix_typeE	got;
 
 	log_enter("emitDollarExpression (startP=%s, in_quotes=%d, want=%d)", startP, in_quotes, want);
 
-	++g_underDollarExpression;
+	++g_dollar_expr_nesting_level;
 	*gotP    = FIX_INT;
-	brackets = 0;
-	blank    = 1;
+	paren_depth = 0;
+	is_blank    = TRUE;
 	start    = g_new.m_lth;
 	burpc(&g_new, '(');
 	for (P = startP; (c = *P); ++P) {
 		if (!isspace(c)) {
-			blank = 0;
+			is_blank = FALSE;
 			offset = g_new.m_lth;
 			endP = emitSpecial1(P, in_quotes, FIX_INT, &got);
 			if (endP) {
@@ -942,7 +927,7 @@ emitDollarExpression(char *startP, int in_quotes, fix_typeE want, fix_typeE *got
 			g_new.m_lth = offset;
 		}
 		switch (c) {
-		case 0:
+		case '\0':
 			// Allow it not to be terminated with ))
 			// Makes some logic simpler
 			goto done;
@@ -961,11 +946,11 @@ emitDollarExpression(char *startP, int in_quotes, fix_typeE want, fix_typeE *got
 			}
 			break;
 		case '(':
-			++brackets;
+			++paren_depth;
 			break;
 		case ')':
-			if (brackets) {
-				--brackets;
+			if (paren_depth > 0) {
+				--paren_depth;
 				break;
 			}
 			if (P[1] == ')') {
@@ -977,7 +962,7 @@ emitDollarExpression(char *startP, int in_quotes, fix_typeE want, fix_typeE *got
 		burpc(&g_new, c);
 	}
 done:
-	if (blank) {
+	if (is_blank) {
 		g_new.m_lth = start;
 		burpc(&g_new, '0');
 	} else {
@@ -985,18 +970,18 @@ done:
 #ifndef TEST
 		// Only do for the outermost $((...))
 		// Otherwise we will be translating Python output instead of the Bash
-		if (g_underDollarExpression == 1) {
+		if (g_dollar_expr_nesting_level == 1) {
 			// Do allow array
-			if (!translate_expression(g_new.m_P + start, &P1, 1)) {
+			if (!translate_expression(g_new.m_P + start, &P1, TRUE)) {
 				log_return_msg("Early exit after translation");
-				return 0;
+				return NULL;
 			}
 			g_new.m_lth = start;
 			burps(&g_new, P1);
 		}
 #endif
 	}
-	--g_underDollarExpression;
+	--g_dollar_expr_nesting_level;
 	log_return();
 	return P;
 } 
@@ -1004,14 +989,13 @@ done:
 /* When the old-style backquote form of substitution is used, backslash retains its literal meaning except when followed by ‘$’, ‘`’, or ‘\’. The first backquote not preceded by a backslash terminates the command substitution. When using the $(command) form, all characters between the parentheses make up the command; none are treated specially. 
 */
 
-static char *
-emitCommand(char *startP, int new_style, int under_quotes, fix_typeE want, fix_typeE *gotP)
+static char * emitCommand(char *startP, int new_style, int under_quotes, fix_typeE want, fix_typeE *gotP)
 {
-	int			old_underDollarExpression;
+	int			old_dollar_expr_nesting_level;
 	char 		*endP;
 
-	old_underDollarExpression = g_underDollarExpression;
-	g_underDollarExpression   = 0;
+	old_dollar_expr_nesting_level = g_dollar_expr_nesting_level;
+	g_dollar_expr_nesting_level   = 0;
 	*gotP = FIX_STRING;
 	burps(&g_new, "os.popen(");
 
@@ -1022,15 +1006,14 @@ emitCommand(char *startP, int new_style, int under_quotes, fix_typeE want, fix_t
 	}
 	if (endP) {
 		++endP;
-		g_translate.m_uses.m_os = 1;
+		g_translate.m_uses.m_os = TRUE;
 		burps(&g_new, ").read().rstrip(\"\\n\")");
 	}
-	g_underDollarExpression = old_underDollarExpression;
+	g_dollar_expr_nesting_level = old_dollar_expr_nesting_level;
 	return endP;
 }
 
-static char *
-emitTilde(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
+static char * emitTilde(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 {
 	char 		*P, *endP;
 	int			c, offset, in_string;
@@ -1038,12 +1021,12 @@ emitTilde(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 
 	*gotP = FIX_STRING;
 	burps(&g_new, "os.path.expanduser(\"~");
-	in_string = 1;
+	in_string = TRUE;
 	for (P = startP+1; ; ++P) {
 		offset = g_new.m_lth;
 		if (in_string) {
 			burpc(&g_new, '"');
-			in_string = 0;
+			in_string = FALSE;
 		}
 		burpc(&g_new, '+');
 		endP = emitSpecial1(P, in_quotes, FIX_STRING, &got);
@@ -1065,7 +1048,7 @@ emitTilde(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 		}	}
 		if (!in_string) {
 			burps(&g_new, "+\"");
-			in_string = 1;
+			in_string = TRUE;
 		}
 		burpc(&g_new, c);
 	}
@@ -1083,15 +1066,15 @@ done:
 // Identifies tilde, backtick, subshell and double-paren expressions as well as 
 // variable names following $ or ${, dispatches each to their appropriate handler,
 // and attempts a type-fixing of the result
-static char *
-emitSpecial1(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
+
+static char * emitSpecial1(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 {
 	char *endP, *P;
 	int	 c, c1, start;
 	
 	log_enter("emitSpecial1 (startP=%s, in_quotes=%d, want=%d)", startP, in_quotes, want);
 
-	endP   = 0;
+	endP   = NULL;
 	start  = g_new.m_lth;
 
 	switch (c = *startP) {
@@ -1102,7 +1085,7 @@ emitSpecial1(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 		}
 		break;
 	case '`':
-		endP = emitCommand(startP, 0, in_quotes, want, gotP);
+		endP = emitCommand(startP, FALSE, in_quotes, want, gotP);
 		if (gotP) {
 			*gotP = FIX_STRING;
 		}
@@ -1116,16 +1099,16 @@ emitSpecial1(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 					*gotP = FIX_INT;
 				}
 			} else {
-				endP = emitCommand(startP, 1, in_quotes, want, gotP);
+				endP = emitCommand(startP, TRUE, in_quotes, want, gotP);
 				if (gotP) {
 					*gotP = FIX_STRING;
 			}	}
 			break;
 		case '{':
-			endP = emitVariable(startP+2, 1, in_quotes, want, gotP);
+			endP = emitVariable(startP+2, TRUE, in_quotes, want, gotP);
 			break;
 		default:
-			endP = emitVariable(startP+1, 0, in_quotes, want, gotP);
+			endP = emitVariable(startP+1, FALSE, in_quotes, want, gotP);
 			break;
 		}
 		break;
@@ -1147,7 +1130,7 @@ emitSpecial1(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 				memcpy(P, "str(", 4);
 				if (got == FIX_ARRAY) {
 					*P = 'S';
-					g_translate.m_function.m_str = 1;
+					g_translate.m_function.m_str = TRUE;
 				}
 				burpc(&g_new, ')');
 				got = FIX_STRING;
@@ -1158,7 +1141,7 @@ emitSpecial1(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 			if (got != FIX_ARRAY) {
 				log_info("Casting %s to array", start);
 				P = burp_extend(&g_new, start, 6);	
-				g_translate.m_function.m_array = 1;
+				g_translate.m_function.m_array = TRUE;
 				memcpy(P, "Array(", 6);
 				burps(&g_new, ")");
 				got = FIX_ARRAY;
@@ -1174,8 +1157,7 @@ emitSpecial1(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 
 // Returns 0 if not a special
 
-static char *
-emitSpecial(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
+static char * emitSpecial(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 {
 	char		*endP;
 	fix_typeE 	got;
@@ -1187,8 +1169,7 @@ emitSpecial(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 	return endP;
 }
 
-static fix_typeE
-combine_types(int offset, fix_typeE want_type, fix_typeE was_type, fix_typeE new_type)
+static fix_typeE combine_types(int offset, fix_typeE want_type, fix_typeE was_type, fix_typeE new_type)
 {
 	char	*P;
 
@@ -1199,7 +1180,7 @@ combine_types(int offset, fix_typeE want_type, fix_typeE was_type, fix_typeE new
 	case FIX_ARRAY:
 		if (new_type != FIX_ARRAY) {
 			P  = burp_extend(&g_new, offset, 6);
-			g_translate.m_function.m_array = 1;
+			g_translate.m_function.m_array = TRUE;
 			memcpy(P, "Array(", 6);
 			burpc(&g_new, ')');
 			new_type = FIX_ARRAY;
@@ -1211,7 +1192,7 @@ combine_types(int offset, fix_typeE want_type, fix_typeE was_type, fix_typeE new
 			memcpy(P, "str(", 4);
 			if (was_type == FIX_ARRAY) {
 				*P = 'S';
-				g_translate.m_function.m_str = 1;
+				g_translate.m_function.m_str = TRUE;
 			}
 			burpc(&g_new, ')');
 			new_type = FIX_STRING;
@@ -1227,7 +1208,7 @@ combine_types(int offset, fix_typeE want_type, fix_typeE was_type, fix_typeE new
 				memcpy(P, "str(", 4);
 				if (was_type == FIX_ARRAY) {
 					*P = 'S';
-					g_translate.m_function.m_str = 1;
+					g_translate.m_function.m_str = TRUE;
 				}
 				new_type = FIX_STRING;
 			}
@@ -1261,7 +1242,7 @@ combine_types(int offset, fix_typeE want_type, fix_typeE was_type, fix_typeE new
 		memcpy(P, "+str(", 5);
 		if (new_type == FIX_ARRAY) {
 			P[1] = 'S';
-			g_translate.m_function.m_str = 1;
+			g_translate.m_function.m_str = TRUE;
 		}
 		burpc(&g_new, ')');
 	} else {
@@ -1276,11 +1257,13 @@ combine_types(int offset, fix_typeE want_type, fix_typeE was_type, fix_typeE new
 		memcpy(P, "str(", 4);
 		if (was_type == FIX_ARRAY) {
 			*P = 'S';
-			g_translate.m_function.m_str = 1;
+			g_translate.m_function.m_str = TRUE;
 	}	}
 	log_return_msg("Cast to strings and concatenated");
 	return FIX_STRING;
 }
+
+// substitute(): a mysterious and troubling function
 
 /* Convert double quotes so that all non-escaped bracketting double quotes
  * are given clear internal codes  to simplify subsequent logic 
@@ -1291,15 +1274,15 @@ combine_types(int offset, fix_typeE want_type, fix_typeE was_type, fix_typeE new
  * Returns the type of the result
  */
 
-static fix_typeE
-substitute(fix_typeE want)
+static fix_typeE substitute(fix_typeE want)
 {
 	fix_typeE	got;	// What I had
 	fix_typeE	got1;	// What I'm now seeing
 	fix_typeE	want1;
-	int 		i, outside_quotes, in_quotes, quoted, c, c1, c2, offset, quote_removal;
+	int 		i,  in_quotes, quoted, c, c1, c2, offset, quote_removal;
 	char		**arrayPP, *P, *P1, *P2;
 	int			fileExpansion;
+	_BOOL		is_outside_quotes;
 
 	log_enter("substitute (want=%d)", want);
 	/* Return an array of strings; the brace expansion of TEXT.
@@ -1315,7 +1298,7 @@ substitute(fix_typeE want)
 		}
 	}
 
-	outside_quotes   = 1;
+	is_outside_quotes = TRUE;
 	fileExpansion    = 0;
 	offset           = g_new.m_lth;
 
@@ -1325,11 +1308,12 @@ substitute(fix_typeE want)
 		case '*':
 		case '?':
 		case '[':
-			fileExpansion |= outside_quotes;
+			fileExpansion |= is_outside_quotes;
 			break;
 		case '~':
 		case '$':
 		case '`':
+			//TODO:  Very bad!!!  quoted is not initialized! Compare to other invocations.
 			P1 = emitSpecial(P, quoted, want, &got1);
 			if (P1 && P1 != P) {
 				P   = --P1;
@@ -1337,10 +1321,10 @@ substitute(fix_typeE want)
 			}
 			// Restore to where we were
 			g_new.m_lth = offset;
-			g_new.m_P[offset] = 0;
+			g_new.m_P[offset] = '\0';
 			break;
 		case '"':
-			outside_quotes = !outside_quotes;
+			is_outside_quotes = !is_outside_quotes;
 			break;
 		case '\\':
 			if (P[1]) {
@@ -1382,7 +1366,7 @@ substitute(fix_typeE want)
 			}
 			// Restore to where we were
 			g_new.m_lth = offset;
-			g_new.m_P[offset] = 0;
+			g_new.m_P[offset] = '\0';
 		}
 
 		if (c == '"') {
@@ -1407,9 +1391,9 @@ substitute(fix_typeE want)
 done:
 
 	if (fileExpansion) {
-		g_translate.m_uses.m_glob = 1;
+		g_translate.m_uses.m_glob = TRUE;
 		burp_extend(&g_new, 0, 5);
-		g_translate.m_function.m_glob = 1;
+		g_translate.m_function.m_glob = TRUE;
 		memcpy(g_new.m_P, "Glob(", 5);
 		burpc(&g_new, ')');
 		got = FIX_ARRAY;
@@ -1433,7 +1417,7 @@ done:
 			memcpy(P, "str(", 4);
 			if (got == FIX_ARRAY) {
 				*P = 'S';
-				g_translate.m_function.m_str = 1;
+				g_translate.m_function.m_str = TRUE;
 			}
 			burpc(&g_new, ')');
 			got = FIX_STRING;
@@ -1448,36 +1432,32 @@ done:
 // Can't do any translation because we will later be calling
 // translate_expression
 
-static void
-only_expand(void)
+static void only_expand(void)
 {
-	int 		i, quoted, c, offset;
+	int 		i, c, offset;
 	char		*P, *P1;
 	fix_typeE	got1;
-
-	/* Return an array of strings; the brace expansion of TEXT.
-	 * Documentation says this is done before anything else
-	 */
+	_BOOL		is_quoted;
 
 	if (P = isInteger(g_buffer.m_P)) {
 		burps(&g_new, P);
 		return;
 	}
 
-	quoted = 0;
+	is_quoted = FALSE;
 	for (P = g_buffer.m_P; c = *P; ++P) {
 		offset = g_new.m_lth;
-		P1 = emitSpecial(P, quoted, FIX_EXPRESSION, &got1);
+		P1 = emitSpecial(P, is_quoted, FIX_EXPRESSION, &got1);
 		if (P1 && P1 != P) {
 			P   = --P1;
 			continue;
 		}
 		// Restore to where we were
 		g_new.m_lth = offset;
-		g_new.m_P[offset] = 0;
+		g_new.m_P[offset] = '\0';
 
 		if (c == '"') {
-			quoted = !quoted;
+			is_quoted = !is_quoted;
 			// Quote removal
 			continue;
 		}
@@ -1493,17 +1473,15 @@ only_expand(void)
 
 /* Avoid using keywords with special values in python but not in bash */
 
-static void
-rename_special(void)
+static void rename_special(void)
 {
-	int 	in_quotes, c, c1, lth, in_word, expand;
+	int 	c, c1, lth, in_word;
 	char	*P, *P1;
 
-	in_quotes   = 0;
-	in_word     = 0;
+	in_word     = FALSE;
 	lth         = 0;
 	for (P = g_buffer.m_P; c = *P; ++P) {
-		if (!in_quotes && !in_word) {
+		if (!in_word) {
 			switch (c) {
 			case '_':
 				if (!strncmp(P, "__debug__", 9)) {
@@ -1553,7 +1531,7 @@ rename_special(void)
 				goto ignore;
 			}
 			switch (P[lth]) {
-			case 0:
+			case '\0':
 			case '\n':
 			case '\t':
 			case ' ':
@@ -1586,19 +1564,18 @@ ignore:
 		case '[':
 		case '(':
 		case ')':
-			in_word = 0;
+			in_word = FALSE;
 			break;
 		case START_EXPAND:
 			P = endExpand(P) - 1;
 		default:
-			in_word = 1;
+			in_word = TRUE;
 		}
 	}
 }
 
 
-static void
-compactWhiteSpace(void)
+static void compactWhiteSpace(void)
 {
 	char *P, *P1, *P3;
 	int	 separation;
@@ -1612,25 +1589,24 @@ compactWhiteSpace(void)
 			// Join two adjacent strings with a blank
 			memcpy(P1+2, P3, g_buffer.m_lth - (P3 - g_buffer.m_P));
 			g_buffer.m_lth -= (separation - 2);
-			g_buffer.m_P[g_buffer.m_lth] = 0;
+			g_buffer.m_P[g_buffer.m_lth] = '\0';
 		}
 	}
 }
 
-static void
-unmarkQuotes(int delete_quotes)
+static void unmarkQuotes(_BOOL delete_quotes)
 {
 	char	*P, *P1;
-	int		c, in_expand;
+	int		c, expand_depth;
 
-	in_expand = 0;
+	expand_depth = 0;
 	for (P = P1 = g_buffer.m_P; c = *P; ++P) {
 		switch (c) {
 		case START_EXPAND:
-			++in_expand;
+			++expand_depth;
 			break;
 		case END_EXPAND:
-			--in_expand;
+			--expand_depth;
 			break;
 		case END_QUOTE:
 			if (P[1] == START_QUOTE) {
@@ -1638,19 +1614,18 @@ unmarkQuotes(int delete_quotes)
 				continue;
 			}
 		case START_QUOTE:
-			if (delete_quotes && !in_expand) {
+			if (delete_quotes && !expand_depth) {
 				continue;
 			}
 			c = '"';
 		}
 		*P1++ = c;
-	}	
-	*P1 = 0;
+	}
+	*P1 = '\0';
 	g_buffer.m_lth = P1 - g_buffer.m_P;
 }
 
-static void
-unmarkExpand(void)
+static void unmarkExpand(void)
 {
 	char	*P, *P1;
 	int		c;
@@ -1663,12 +1638,11 @@ unmarkExpand(void)
 		}
 		*P1++ = c;
 	}	
-	*P1 = 0;
+	*P1 = '\0';
 	g_buffer.m_lth = P1 - g_buffer.m_P;
 }
 
-static void
-unescapeDollar(void)
+static void unescapeDollar(void)
 {
 	char *P, *P1;
 
@@ -1682,7 +1656,7 @@ unescapeDollar(void)
 		*P1++ = *P;
 	}
 	g_buffer.m_lth = P1 - g_buffer.m_P;
-	*P1 = 0;
+	*P1 = '\0';
 	return;
 }
 	
@@ -1692,11 +1666,10 @@ unescapeDollar(void)
 	 " indicating we are embedding the contents of this string inside popen
  */
 
-static char *
-fix_string1(fix_typeE want, fix_typeE *gotP)
+static char * fix_string1(fix_typeE want, fix_typeE *gotP)
 {
 	fix_typeE	got;
-	int			is_expression;
+	_BOOL		is_expression;
 
 	log_enter("fix_string1 (want=%d)", want);
 
@@ -1709,24 +1682,24 @@ fix_string1(fix_typeE want, fix_typeE *gotP)
 
 	// Nothing yet written to g_new
 	g_new.m_lth  = 0;
-	g_new.m_P[0] = 0;
+	g_new.m_P[0] = '\0';
 
 	if (want != FIX_EXPRESSION) {
-		is_expression           = 0;
-		g_underDollarExpression = 0;
+		is_expression           = FALSE;
+		g_dollar_expr_nesting_level = 0;
 		got = substitute(want);	
 	} else {
-		is_expression           = 1;
-		g_underDollarExpression = 1;
+		is_expression           = TRUE;
+		g_dollar_expr_nesting_level = 1;
 		only_expand();
 	}
 
 	// Everything has been written to g_new
 	// Make it look as if it never left g_buffer
-	exchange(&g_buffer, &g_new);
+	exchange_burp_buffers(&g_buffer, &g_new);
 
 	compactWhiteSpace();
-	rename_special();			
+	rename_special();
 finish:
 	unmarkQuotes(is_expression);
 	unescapeDollar();
@@ -1734,11 +1707,11 @@ finish:
 		char 		*translationP;
 
 		// Don't allow array
-		if (translate_expression(g_buffer.m_P, &translationP, 0)) {
+		if (translate_expression(g_buffer.m_P, &translationP, FALSE)) {
 			got         = FIX_EXPRESSION;
 			g_new.m_lth = 0;
 			burps(&g_new, translationP);
-			exchange(&g_buffer, &g_new);
+			exchange_burp_buffers(&g_buffer, &g_new);
 		}
 	}
 	unmarkExpand();
@@ -1756,19 +1729,19 @@ done:
    expression. Any incorrectly formed brace expansion is left unchanged. 
  */
 
-static char *
-fixBracedString(const char *startP, fix_typeE want, fix_typeE *gotP)
+static char * fixBracedString(const char *startP, fix_typeE want, fix_typeE *gotP)
 {
-#ifndef TEST
 	extern char **brace_expand(char *textP);
 
 	const char *P;
 
 	char	**arrayPP;
 	int		c, in_quotes, state;
-	char	*resultP;
+	char	*resultP, *type_text;
 
-	log_enter("fixBracedString (startP=%s, want=%d)", startP, want);
+	type_text = type_to_text(want);
+	log_enter("fixBracedString (startP=%s, want=%s)", startP, type_text);
+	free(type_text);
 log_deactivate();
 
 	if (want == FIX_EXPRESSION) {
@@ -1831,7 +1804,7 @@ log_deactivate();
 	}
 	goto dont_fire;
 fire:
-	resultP = 0;
+	resultP = NULL;
 	arrayPP = brace_expand((char *) startP);
 	if (arrayPP) {
 		if (arrayPP[0]) {
@@ -1868,7 +1841,6 @@ log_activate();
 			return resultP;
 	}	}
 dont_fire:
-#endif
 
 	string_to_buffer(startP);
 	resultP = fix_string1(want, gotP);
@@ -1878,37 +1850,29 @@ log_activate();
 	return resultP;
 }
 
-char *
-fix_string(const char *stringP, fix_typeE want, fix_typeE *gotP)
+char * fix_string(const char *stringP, fix_typeE want, fix_typeE *gotP)
 {
 	char *P;
 
-#ifndef TEST
 	int save;
-#endif
 	if (want == FIX_NONE || !*stringP) {
 		return (char *) stringP;
 	}
 
-#ifndef TEST
 	save             = g_translate_html;
-#endif
 	g_translate_html        = 0;
-	g_underDollarExpression = 0;
+	g_dollar_expr_nesting_level = 0;
 
 	P = fixBracedString(stringP, want, gotP);
 
-#ifndef TEST
 	g_translate_html = save;
-	g_underDollarExpression = 0;
+	g_dollar_expr_nesting_level = 0;
 
-#endif
 	return P;
 }
 
 #if defined(TEST) && !defined(SKIPMAIN)
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
 	char		*bufferP   = 0;
 	size_t		buffer_lth = 0;

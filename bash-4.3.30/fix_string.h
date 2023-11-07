@@ -1,3 +1,8 @@
+#ifndef __FIX_STRING_H__
+#define __FIX_STRING_H__
+
+typedef int _BOOL;
+
 /* We handle 5 types of data:
 	NONE, INT, STRING, VAR, ARRAY
  */
@@ -11,74 +16,74 @@ typedef enum {
 } fix_typeE;
 
 typedef struct {
-	int m_exception;
+	_BOOL m_exception;
 	// Things to include
 	struct usesS {
-		int m_sys;
-		int m_os;
-		int m_subprocess;
-		int	m_signal;
-		int	m_threading;
-		int m_glob;
-		int m_re;
-		int	m_stat;
-		int m_print;
+		_BOOL m_sys;
+		_BOOL m_os;
+		_BOOL m_subprocess;
+		_BOOL m_signal;
+		_BOOL m_threading;
+		_BOOL m_glob;
+		_BOOL m_re;
+		_BOOL m_stat;
+		_BOOL m_print;
 	} m_uses;
 	// Basic functions needed
 	struct functionS {
-		int m_is_defined;
-		int m_get_variable;
-        int m_make;
-		int m_get_value;
-		int m_set_value;
-		int m_str;
-		int m_array;
-		int m_glob;
+		_BOOL m_is_defined;
+		_BOOL m_get_variable;
+        _BOOL m_make;
+		_BOOL m_get_value;
+		_BOOL m_set_value;
+		_BOOL m_str;
+		_BOOL m_array;
+		_BOOL m_glob;
 	} m_function;
 	// Expansions performed
 	struct expandS {
-		int m_star;
-		int m_at;
-		int m_hash;
-		int m_dollar;
-		int m_exclamation;
-		int m_underbar;
-		int m_hyphen;
+		_BOOL m_star;
+		_BOOL m_at;
+		_BOOL m_hash;
+		_BOOL m_dollar;
+		_BOOL m_exclamation;
+		_BOOL m_underbar;
+		_BOOL m_hyphen;
 
-		int	m_minus;
-		int	m_plus;
-		int	m_eq;
-		int	m_qmark;
+		_BOOL m_minus;
+		_BOOL m_plus;
+		_BOOL m_eq;
+		_BOOL m_qmark;
 
-		int	m_colon_minus;
-		int	m_colon_plus;
-		int	m_colon_eq;
-		int	m_colon_qmark;
+		_BOOL m_colon_minus;
+		_BOOL m_colon_plus;
+		_BOOL m_colon_eq;
+		_BOOL m_colon_qmark;
 
-		int m_prefixStar;
-		int	m_prefixAt;
-		int	m_indicesStar;
-		int m_indicesAt;
+		_BOOL m_prefixStar;
+		_BOOL m_prefixAt;
+		_BOOL m_indicesStar;
+		_BOOL m_indicesAt;
 	} m_expand;
 	// Methods of Bash2Py
 	struct valueS {
-		int m_uses;
-		int m_set_value;
-		int m_preincrement;
-		int m_postincrement;
-		int m_is_null;
-		int m_not_null_else;
+		_BOOL m_uses;
+		_BOOL m_set_value;
+		_BOOL m_preincrement;
+		_BOOL m_postincrement;
+		_BOOL m_is_null;
+		_BOOL m_not_null_else;
 
-		int m_plus;
-		int m_minus;
-		int m_multiply;
-		int m_idivide;
-		int m_mod;
-		int m_lsh;
-		int m_rsh;
-		int m_band;
-		int m_bor;
-		int m_bxor;
+		_BOOL m_plus;
+		_BOOL m_minus;
+		_BOOL m_multiply;
+		_BOOL m_idivide;
+		_BOOL m_mod;
+		_BOOL m_lsh;
+		_BOOL m_rsh;
+		_BOOL m_band;
+		_BOOL m_bor;
+		_BOOL m_bxor;
 	} m_value;
 } translateT;
 
@@ -86,7 +91,7 @@ char *endQuotedString(char *startP);
 char *endArray(char *startP);
 char *endExpand(char *startP);
 
-int  translate_expression(char *startP, char **translationPP, int allow_array);
+_BOOL  translate_expression(char *startP, char **translationPP, _BOOL allow_array);
 
 char *fix_string(const char *stringP, fix_typeE type, fix_typeE *gotP);
 
@@ -105,3 +110,5 @@ char *fix_string(const char *stringP, fix_typeE type, fix_typeE *gotP);
 #define PLACEHOLDER  3
 #define START_EXPAND 4
 #define END_EXPAND   5	// Must be last
+
+#endif // __FIX_STRING_H__

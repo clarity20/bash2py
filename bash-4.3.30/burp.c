@@ -22,6 +22,7 @@
 
 #include "bashansi.h"
 
+#include "fix_string.h"
 #include "burp.h"
 
 #define MAX_CALL_DEPTH 64
@@ -32,18 +33,18 @@ int g_log_indent=-FULL_INDENT;
 char **g_function_stack;
 char **g_current_function;
 FILE *g_log_stream;
-unsigned char g_log_is_on;
+_BOOL g_log_is_on;
 
-int g_translate_html = 0;
+_BOOL g_translate_html = 0;
 
 void
 burp_reset(burpT *burpP)
 {
-	memset(burpP->m_P, 0, burpP->m_max);
+	memset(burpP->m_P, '\0', burpP->m_max);
 
 	burpP->m_lth = 0;
 	burpP->m_indent = 0;
-	burpP->m_disable_indent = 0;
+	burpP->m_disable_indent = FALSE;
 	burpP->m_ungetc = 0;
 }
 
@@ -59,7 +60,7 @@ increase_burp(burpT *burpP)
 		burpP->m_P   = (char *) xmalloc(max);
 		if (!burpP->m_P) {
 			fprintf(stderr, "Burp can't xmalloc(%d)\n", max);
-			assert(0);
+			assert(FALSE);
 			exit(1);
 		}
 		burpP->m_max = max - 8;
@@ -69,13 +70,13 @@ increase_burp(burpT *burpP)
 	if (max & 0x40000000) {
 		// Very serious problems trying to print whatever it might be..
 		fprintf(stderr,"Burp can't print\n");
-		assert(0);
+		assert(FALSE);
 		exit(1);
 	}
 	burpP->m_P = realloc(burpP->m_P, max);
 	if (!burpP->m_P) {
 		fprintf(stderr, "Burp can't realloc(%d)\n", max);
-		assert(0);
+		assert(FALSE);
 		exit(1);
 	}
 	burpP->m_max = max - 8;
@@ -96,7 +97,7 @@ burp_extend(burpT *burpP, int offset, int need)
 	memmove(P+need, P, lth - offset);
 	lth          += need;
 	burpP->m_lth  = lth;
-	burpP->m_P[lth] = 0;
+	burpP->m_P[lth] = '\0';
 	return P;
 }
 	
@@ -111,7 +112,7 @@ burpc1(burpT *burpP, const char c)
 	P = burpP->m_P + burpP->m_lth;
 	*P++ = c;
 	burpP->m_lth++;
-	*P   = 0;
+	*P   = '\0';
 	return;
 }
 
@@ -134,19 +135,19 @@ burpc(burpT *burpP, const char c)
 		burpP->m_ungetc = burpP->m_lth;
 		switch (c) {
 		case '<':
-			g_translate_html = 0;
+			g_translate_html = FALSE;
 			burps(burpP, "&lt;");
-			g_translate_html = 1;
+			g_translate_html = TRUE;
 			return;
 		case '>':
-			g_translate_html = 0;
+			g_translate_html = FALSE;
 			burps(burpP, "&gt;");
-			g_translate_html = 1;
+			g_translate_html = TRUE;
 			return;
 		case '&':
-			g_translate_html = 0;
+			g_translate_html = FALSE;
 			burps(burpP, "&amp;");
-			g_translate_html = 1;
+			g_translate_html = TRUE;
 			return;
 	}	}
 	indentation(burpP);
@@ -175,7 +176,7 @@ burp(burpT *burpP, const char *fmtP, ...)	/* proc */
 		
 	if (!fmtP) {
 		fprintf(stderr, "Burp has no format string\n");
-		assert(0);
+		assert(FALSE);
 		exit(1);
 	}
 
@@ -267,7 +268,7 @@ burps_html(burpT *burpP, const char *stringP)
 {
 	int save = g_translate_html;
 
-	g_translate_html = 0;
+	g_translate_html = FALSE;
 	burps(burpP, stringP);
 	g_translate_html = save;
 }
@@ -328,7 +329,7 @@ void log_enter(char *format, ...)
 	// Printing
 	if (g_log_is_on)
 	{
-	    int i;
+		int i;
 		sprintf(full_format, "%-*.0dEnter %s", g_log_indent, 0, format);
 		if (full_format[strlen(full_format)-1] != '\n')
 			strcat(full_format, "\n");
@@ -350,7 +351,7 @@ void log_info(char *format, ...)
 	if (!g_log_stream)
 		return;
 
-    // No bookkeeping to do -- the internals are transient. Just print.
+	// No bookkeeping to do -- the internals are transient. Just print.
 	if (!g_log_is_on)
 		return;
 
@@ -386,7 +387,7 @@ void log_return_msg(char *msg_template, ...)
 	// Construct the log entry, silently ignoring the msg if it is NULL.
 	if (g_log_is_on)
 	{
-	    int i;
+		int i;
 		if (!msg_template)
 		{
 			strcpy(entry_format+16, "\n");
@@ -414,5 +415,42 @@ void log_return_msg(char *msg_template, ...)
 	g_log_indent -= FULL_INDENT;
 }
 
+// String conversion utility for better logging.
+// THE CALLER NEEDS TO MANAGE THIS MEMORY CAREFULLY!
+char *bool_to_text(_BOOL value)
+{
+	if (value) {
+		char *_true = (char *) malloc(5);
+		return strcpy(_true, "TRUE");
+	} else {
+		char *_false = (char *) malloc(6);
+		return strcpy(_false, "FALSE");
+	}
+}
 
-#endif
+// See bool_to_text() function header
+char *type_to_text(fix_typeE value)
+{
+	switch (value)
+	{
+		case FIX_INT:
+			char *_int = malloc(5);
+			return strcpy(_int, "_INT");
+		case FIX_STRING:
+			char *_string = malloc(8);
+			return strcpy(_string, "_STRING");
+		case FIX_VAR:
+			char *_var = malloc(5);
+			return strcpy(_var, "_VAR");
+		case FIX_NONE:
+			char *_none = malloc(6);
+			return strcpy(_none, "_NONE");
+		default:
+			char *_other = malloc(11);
+			return strcpy(_other, "_otherType");
+	}
+
+	assert(0);
+
+}
+#endif // BASH2PY

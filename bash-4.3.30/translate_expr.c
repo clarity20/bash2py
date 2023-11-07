@@ -112,7 +112,7 @@ typedef struct nodeS {
 static char		*g_stringP;
 static char		*g_atP;
 static burpT	g_expression  = {0,0,0,0,0,0};
-static int		g_allow_array = 0;
+static _BOOL	g_allow_array = FALSE;
 static nodeT	*g_headP      = 0;
 static jmp_buf  longbuf;
 
@@ -174,8 +174,8 @@ makeLeaf(nodeE type, char *startP, char *endP, returnsE returns)
 	g_headP               = (nodeT *) leafP;
 	leafP->m_type         = type;
 	leafP->m_returns      = returns;
-	leafP->m_firstChildP  = 0;
-	leafP->m_nextSiblingP = 0;
+	leafP->m_firstChildP  = NULL;
+	leafP->m_nextSiblingP = NULL;
 	leafP->m_startP       = startP;
 	leafP->m_endP         = endP;
 	return leafP;
@@ -195,7 +195,7 @@ makeNode(nodeE type, nodeT *childP, returnsE returns)
 	nodeP->m_type         = type;
 	nodeP->m_returns      = returns;
 	nodeP->m_firstChildP  = childP;
-	nodeP->m_nextSiblingP = 0;
+	nodeP->m_nextSiblingP = NULL;
 	return nodeP;
 }
 
@@ -215,7 +215,7 @@ makeClass(nodeT *nodeP)
 	}
 	default:
 		translation_error("Can't make class from value");
-		return 0;
+		return NULL;
 	}
 	return (nodeP);
 }
@@ -965,29 +965,29 @@ print_translation(nodeT *nodeP)
 		break;
 	}
 	case Makeclass:
-		g_translate.m_function.m_make = 1;
+		g_translate.m_function.m_make = TRUE;
 		EMITS("Make(\"");
 		print_translation(nodeP->m_firstChildP);
 		EMITS("\")");
 		break;
 	case Makevalue:
-		g_translate.m_value.m_uses = 1;
+		g_translate.m_value.m_uses = TRUE;
 		textP = ".val";
 		goto suffix;
 	case Preinc:
-		g_translate.m_value.m_preincrement = 1;
+		g_translate.m_value.m_preincrement = TRUE;
 		textP = ".preinc()";
 		goto suffix;
 	case Predec:
-		g_translate.m_value.m_preincrement = 1;
+		g_translate.m_value.m_preincrement = TRUE;
 		textP = ".preinc(-1)";
 		goto suffix;
 	case Postinc:
-		g_translate.m_value.m_postincrement = 1;
+		g_translate.m_value.m_postincrement = TRUE;
 		textP = ".postinc()";
 		goto suffix;
 	case Postdec:
-		g_translate.m_value.m_postincrement = 1;
+		g_translate.m_value.m_postincrement = TRUE;
 		textP = ".postinc(-1)";
 suffix:
 		print_translation(nodeP->m_firstChildP);
@@ -1089,47 +1089,47 @@ binary:
 		}
 		break;
 	case Assign:
-		g_translate.m_value.m_set_value = 1;
+		g_translate.m_value.m_set_value = TRUE;
 		textP = "setValue";
 		goto assign;
 	case Multiply_assign:
-		g_translate.m_value.m_multiply = 1;
+		g_translate.m_value.m_multiply = TRUE;
 		textP = "multiply";
 		goto assign;
 	case Divide_assign:
-		g_translate.m_value.m_idivide = 1;
+		g_translate.m_value.m_idivide = TRUE;
 		textP = "idivide";
 		goto assign;
 	case Mod_assign:
-		g_translate.m_value.m_mod = 1;
+		g_translate.m_value.m_mod = TRUE;
 		textP = "mod";
 		goto assign;
 	case Plus_assign:
-		g_translate.m_value.m_plus = 1;
+		g_translate.m_value.m_plus = TRUE;
 		textP = "plus";
 		goto assign;
 	case Minus_assign:
-		g_translate.m_value.m_minus = 1;
+		g_translate.m_value.m_minus = TRUE;
 		textP = "minus";
 		goto assign;
 	case Lsh_assign:
-		g_translate.m_value.m_lsh = 1;
+		g_translate.m_value.m_lsh = TRUE;
 		textP = "lsh";
 		goto assign;
 	case Rsh_assign:
-		g_translate.m_value.m_rsh = 1;
+		g_translate.m_value.m_rsh = TRUE;
 		textP = "rsh";
 		goto assign;
 	case Band_assign:
-		g_translate.m_value.m_band = 1;
+		g_translate.m_value.m_band = TRUE;
 		textP = "band";
 		goto assign;
 	case Bxor_assign:
-		g_translate.m_value.m_bxor = 1;
+		g_translate.m_value.m_bxor = TRUE;
 		textP = "bxor";
 		goto assign;
 	case Bor_assign:
-		g_translate.m_value.m_bor = 1;
+		g_translate.m_value.m_bor = TRUE;
 		textP = "bor";
 assign:
 		{
@@ -1173,11 +1173,10 @@ assign:
  */
 
 
-int
-translate_expression(char *stringP, char **translationPP, int allow_array)
+_BOOL translate_expression(char *stringP, char **translationPP, _BOOL allow_array)
 {
 	nodeT	*treeP;
-	int		ret;
+	int 	ret;
 
 	g_stringP = g_atP = stringP;
 	skipspace(0);
@@ -1186,11 +1185,11 @@ translate_expression(char *stringP, char **translationPP, int allow_array)
 
  	ret = setjmp (longbuf);
 	if (ret) {
-		*translationPP = 0;
-		return 0;
+		*translationPP = '\0';
+		return FALSE;
 	}
 
-	g_headP = 0;
+	g_headP = NULL;
   	treeP   = translate_comma();
 	assert(treeP);
   
@@ -1205,7 +1204,7 @@ translate_expression(char *stringP, char **translationPP, int allow_array)
   	}
 
   	*translationPP = g_expression.m_P;
-  	return 1;
+	return TRUE;
 }
 
 #ifdef TEST
@@ -1225,7 +1224,7 @@ main(int argc, char **argv)
 			bufferP[lth-1] = 0;
 		}
 		printf("> %s\n", bufferP);
-		if (!translate_expression(bufferP, &translationP, 1)) {
+		if (!translate_expression(bufferP, &translationP, TRUE)) {
 			printf("Can't translate\n");
 			continue;
 		}
