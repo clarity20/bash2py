@@ -3806,4 +3806,4 @@ void close_translator()
 	log_close();
 }
 
-#endif
+#endif //BASH2PY

@@ -1871,8 +1871,7 @@ char * fix_string(const char *stringP, fix_typeE want, fix_typeE *gotP)
 }
 
 #if defined(TEST) && !defined(SKIPMAIN)
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
 	char		*bufferP   = 0;
 	size_t		buffer_lth = 0;

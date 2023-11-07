@@ -417,7 +417,7 @@ void log_return_msg(char *msg_template, ...)
 
 // String conversion utility for better logging.
 // THE CALLER NEEDS TO MANAGE THIS MEMORY CAREFULLY!
-char *bool_to_text(int value) //TODO _BOOL value)
+char *bool_to_text(_BOOL value)
 {
 	if (value) {
 		char *_true = (char *) malloc(5);
@@ -429,7 +429,7 @@ char *bool_to_text(int value) //TODO _BOOL value)
 }
 
 // See bool_to_text() function header
-char *type_to_text(int value) //TODO fix_typeE value)
+char *type_to_text(fix_typeE value)
 {
 	switch (value)
 	{
@@ -453,4 +453,4 @@ char *type_to_text(int value) //TODO fix_typeE value)
 	assert(0);
 
 }
-#endif
+#endif // BASH2PY

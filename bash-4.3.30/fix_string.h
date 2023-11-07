@@ -1,3 +1,8 @@
+#ifndef __FIX_STRING_H__
+#define __FIX_STRING_H__
+
+typedef int _BOOL;
+
 /* We handle 5 types of data:
 	NONE, INT, STRING, VAR, ARRAY
  */
@@ -105,3 +110,5 @@ char *fix_string(const char *stringP, fix_typeE type, fix_typeE *gotP);
 #define PLACEHOLDER  3
 #define START_EXPAND 4
 #define END_EXPAND   5	// Must be last
+
+#endif // __FIX_STRING_H__
