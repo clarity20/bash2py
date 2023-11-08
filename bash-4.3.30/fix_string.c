@@ -1740,7 +1740,7 @@ static char * fixBracedString(const char *startP, fix_typeE want, fix_typeE *got
 	char	*resultP, *type_text;
 
 	type_text = type_to_text(want);
-	log_enter("fixBracedString (startP=%s, want=%s)", startP, type_text);
+	log_enter("fixBracedString (startP=%q, want=%s)", startP, type_text);
 	free(type_text);
 log_deactivate();
 

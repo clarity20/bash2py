@@ -1362,7 +1362,7 @@ static _BOOL isAssignment(char *startP, _BOOL local)
 	int		c;
 
 	char *local_text = bool_to_text(local);
-	log_enter("isAssignment (startP=%s, local=%s)", startP, local_text);
+	log_enter("isAssignment (startP=%q, local=%s)", startP, local_text);
 	free(local_text);
 
 	P = startP;
