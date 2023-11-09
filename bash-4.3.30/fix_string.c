@@ -1126,8 +1126,7 @@ static char * emitSpecial1(char *startP, int in_quotes, fix_typeE want, fix_type
 			case FIX_VAR:
 			case FIX_ARRAY:
 				log_info("Casting %s to string", start);
-				P = burp_extend(&g_new, start, 4);
-				memcpy(P, "str(", 4);
+				P = burp_insert(&g_new, start, "str(");
 				if (got == FIX_ARRAY) {
 					*P = 'S';
 					g_translate.m_function.m_str = TRUE;
@@ -1140,9 +1139,8 @@ static char * emitSpecial1(char *startP, int in_quotes, fix_typeE want, fix_type
 		case FIX_ARRAY:
 			if (got != FIX_ARRAY) {
 				log_info("Casting %s to array", start);
-				P = burp_extend(&g_new, start, 6);	
 				g_translate.m_function.m_array = TRUE;
-				memcpy(P, "Array(", 6);
+				P = burp_insert(&g_new, start, "Array(");
 				burps(&g_new, ")");
 				got = FIX_ARRAY;
 			}
@@ -1179,17 +1177,15 @@ static fix_typeE combine_types(int offset, fix_typeE want_type, fix_typeE was_ty
 	switch (want_type) {
 	case FIX_ARRAY:
 		if (new_type != FIX_ARRAY) {
-			P  = burp_extend(&g_new, offset, 6);
 			g_translate.m_function.m_array = TRUE;
-			memcpy(P, "Array(", 6);
+			P = burp_insert(&g_new, offset, "Array(");
 			burpc(&g_new, ')');
 			new_type = FIX_ARRAY;
 		}
 		break;
 	case FIX_STRING:
 		if (new_type != FIX_STRING) {
-			P = burp_extend(&g_new, offset, 4);
-			memcpy(P, "str(", 4);
+			P = burp_insert(&g_new, offset, "str(");
 			if (was_type == FIX_ARRAY) {
 				*P = 'S';
 				g_translate.m_function.m_str = TRUE;
@@ -1200,12 +1196,11 @@ static fix_typeE combine_types(int offset, fix_typeE want_type, fix_typeE was_ty
 		break;
 	case FIX_INT:
 		if (new_type != FIX_INT) {
-			P = burp_extend(&g_new, offset, 4);
 			if (was_type == FIX_NONE) {
-				memcpy(P, "int(", 4);
+				P = burp_insert(&g_new, offset, "int(");
 				new_type = FIX_INT;
 			} else {
-				memcpy(P, "str(", 4);
+				P = burp_insert(&g_new, offset, "str(");
 				if (was_type == FIX_ARRAY) {
 					*P = 'S';
 					g_translate.m_function.m_str = TRUE;
@@ -1230,31 +1225,26 @@ static fix_typeE combine_types(int offset, fix_typeE want_type, fix_typeE was_ty
 		case FIX_ARRAY:
 		case FIX_STRING:
 			// Join two things together
-			P = burp_extend(&g_new, offset, 1);
-			*P ='+';
+			P = burp_insert(&g_new, offset, "+");
 			log_return_msg("Concatenated");
 			return new_type;
 	}	}
 
 	// Make them both strings and combine them
 	if (new_type != FIX_STRING) {
-		P = burp_extend(&g_new, offset, 5);
-		memcpy(P, "+str(", 5);
+		P = burp_insert(&g_new, offset, "+str(");
 		if (new_type == FIX_ARRAY) {
 			P[1] = 'S';
 			g_translate.m_function.m_str = TRUE;
 		}
 		burpc(&g_new, ')');
 	} else {
-		P = burp_extend(&g_new, offset, 1);
-		*P = '+';
+		P = burp_insert(&g_new, offset, "+");
 	}
 
 	if (was_type != FIX_STRING) {
-		P = burp_extend(&g_new, offset, 1);
-		*P = ')';
-		P = burp_extend(&g_new, 0, 4);
-		memcpy(P, "str(", 4);
+		P = burp_insert(&g_new, offset, ")");
+		P = burp_insert(&g_new, 0, "str(");
 		if (was_type == FIX_ARRAY) {
 			*P = 'S';
 			g_translate.m_function.m_str = TRUE;
@@ -1340,7 +1330,7 @@ static fix_typeE substitute(fix_typeE want)
 	for (P = g_buffer.m_P; ; ++P) {
 
 		switch (c = *P) {
-		case 0:
+		case '\0':
 		case '~':
 		case '$':
 		case '`':
@@ -1392,9 +1382,8 @@ done:
 
 	if (fileExpansion) {
 		g_translate.m_uses.m_glob = TRUE;
-		burp_extend(&g_new, 0, 5);
+		burp_insert(&g_new, 0, "Glob(");
 		g_translate.m_function.m_glob = TRUE;
-		memcpy(g_new.m_P, "Glob(", 5);
 		burpc(&g_new, ')');
 		got = FIX_ARRAY;
 	}
@@ -1405,16 +1394,14 @@ done:
 	switch (want) {
 	case FIX_INT:
 		if (got != FIX_INT) {
-			P = burp_extend(&g_new, 0, 4);
-			memcpy(P, "int(", 4);
+			P = burp_insert(&g_new, 0, "int(");
 			burpc(&g_new, ')');
 			got = FIX_INT;
 		}
 		break;
 	case FIX_STRING:
 		if (got != FIX_STRING) {
-			P = burp_extend(&g_new, 0, 4);
-			memcpy(P, "str(", 4);
+			P = burp_insert(&g_new, 0, "str(");
 			if (got == FIX_ARRAY) {
 				*P = 'S';
 				g_translate.m_function.m_str = TRUE;
