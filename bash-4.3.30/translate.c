@@ -73,28 +73,24 @@ static void fprintf(outputF, );
 
 #define PRINT_DEFERRED_HEREDOCS(x) \
 		do { \
-			if (deferred_heredocs) \
+			if (g_deferred_heredocs) \
 			print_deferred_heredocs (x); \
 		} while (0)
 
 /* Non-zero means the stuff being printed is inside of a function def. */
-static _BOOL was_heredoc         = FALSE;
-static int printing_connection = 0;
-static int stdout_connection   = 0;
-static REDIRECT *deferred_heredocs = NULL;
+static _BOOL g_was_heredoc         = FALSE;
+static int g_printing_connection = 0;
+static int g_stdout_connection   = 0;
+static REDIRECT *g_deferred_heredocs = NULL;
 static int g_embedded          = 0;
 static int g_started           = 0;
-
-/* A buffer to indicate the indirection level (PS4) when set -x is enabled. */
-static char indirection_string[100];
 
 //MIW var declarations begin
 
 extern _BOOL   g_translate_html;
 static FILE* outputF = NULL;
 
-static burpT case_var = {0,0,0,0,0,0};
-static burpT temp_burp = {0, 0, 0, 0, 0, 0};
+static burpT g_case_var = {0,0,0,0,0,0};
 //MIW var declarations end
 
 burpT	g_output  = {0, 0, 0, 0, 0, 0};
@@ -383,7 +379,7 @@ static void print_heredocs (REDIRECT *heredocs)
 		print_redirection (hdtail);
 		burpc(&g_output, '\n');
 	}
-	was_heredoc = TRUE;
+	g_was_heredoc = TRUE;
 }
 
 static void print_redirection_list (REDIRECT *redirects)
@@ -393,7 +389,7 @@ static void print_redirection_list (REDIRECT *redirects)
 	heredocs = (REDIRECT *)NULL;
 	hdtail = heredocs;
 
-	was_heredoc = FALSE;
+	g_was_heredoc = FALSE;
 	while (redirects)
 	{
 		/* Defer printing the here documents until we've printed the
@@ -428,8 +424,8 @@ static void print_redirection_list (REDIRECT *redirects)
 
 	/* Now that we've printed all the other redirections (on one line),
 	 print the here documents. */
-	if (heredocs && printing_connection) {
-		deferred_heredocs = heredocs;
+	if (heredocs && g_printing_connection) {
+		g_deferred_heredocs = heredocs;
 	} else if (heredocs) {
 		print_heredocs (heredocs);
 		dispose_redirects (heredocs);
@@ -642,10 +638,10 @@ static void print_popen_flags(REDIRECT *redirects, _BOOL printing)
 			break;
 		case r_duplicating_output:
 			burps(&g_output, ",stderr=");
-			if (!stdout_connection) {
+			if (!g_stdout_connection) {
 				burps(&g_output, "subprocess.STDOUT");
 			} else {
-				burp(&g_output, "_rcw%d", stdout_connection);
+				burp(&g_output, "_rcw%d", g_stdout_connection);
 			}
 			break;
 		case r_err_and_out:
@@ -780,28 +776,28 @@ static void print_deferred_heredocs (const char *cstring)
 {
 	REDIRECT *hdtail;
 
-	for (hdtail = deferred_heredocs; hdtail; hdtail = hdtail->next) {
+	for (hdtail = g_deferred_heredocs; hdtail; hdtail = hdtail->next) {
 		burpc(&g_output, ' ');
 		print_heredoc_header (hdtail);
 	}
 	if (cstring[0] && (cstring[0] != ';' || cstring[1])) {
 		burps(&g_output, cstring);
 	}
-	if (deferred_heredocs) {
+	if (g_deferred_heredocs) {
 		burpc(&g_output, '\n');
 	}
-	for (hdtail = deferred_heredocs; hdtail; hdtail = hdtail->next) {
+	for (hdtail = g_deferred_heredocs; hdtail; hdtail = hdtail->next) {
 		print_heredoc_body (hdtail);
 		burpc(&g_output, '\n');
 	}
-	if (deferred_heredocs) {
+	if (g_deferred_heredocs) {
 		if (cstring && cstring[0] && (cstring[0] != ';' || cstring[1])) {
 			burpc(&g_output, ' ');	/* make sure there's at least one space */
 		}
-		dispose_redirects (deferred_heredocs);
-		was_heredoc = TRUE;
+		dispose_redirects (g_deferred_heredocs);
+		g_was_heredoc = TRUE;
 	}
-	deferred_heredocs = (REDIRECT *)NULL;
+	g_deferred_heredocs = (REDIRECT *)NULL;
 }
 
 static void newline (char *string)
@@ -2217,9 +2213,9 @@ void print_case_command_head (CASE_COM *case_command)
 	char 		*P;
 	fix_typeE	got;
 
-	case_var.m_lth = 0;
+	g_case_var.m_lth = 0;
 	P = fix_string(case_command->word->word, FIX_STRING, &got);
-	burps(&case_var, P);
+	burps(&g_case_var, P);
 }
 
 static void print_case_ors(WORD_LIST* patterns){
@@ -2230,7 +2226,7 @@ static void print_case_ors(WORD_LIST* patterns){
 		if (!strcmp(w->word->word, "*")){
 			continue;
 		}
-		burp(&g_output, " or %s == '", case_var.m_P);
+		burp(&g_output, " or %s == '", g_case_var.m_P);
 		P = translate_dequote(w->word->word);
 		burp(&g_output, "%s'", P);
 	}
@@ -2248,10 +2244,10 @@ static void print_case_clauses (PATTERN_LIST *clauses)
 			burps(&g_output, "else:");
 		} else {
 			if (first_if_clause) {
-				burp(&g_output, "if ( %s == ", case_var.m_P);
+				burp(&g_output, "if ( %s == ", g_case_var.m_P);
 				first_if_clause = FALSE;
 			} else{
-				burp(&g_output, "elif ( %s == ", case_var.m_P);
+				burp(&g_output, "elif ( %s == ", g_case_var.m_P);
 			}
 			burpc(&g_output, '\'');
 
@@ -2517,30 +2513,30 @@ void print_cond_command (COND_COM *cond)
 
 static void print_pipe_command(CONNECTION *connection)
 {
-	int old_stdout_connection;
+	int old_g_stdout_connection;
 
-	if (deferred_heredocs) {
+	if (g_deferred_heredocs) {
 		fprintf(stderr, "### Can't handle heredocs with | connector\n");
-		deferred_heredocs = NULL;
+		g_deferred_heredocs = NULL;
 	}
 	g_translate.m_uses.m_os  = TRUE;
 	g_translate.m_uses.m_sys = TRUE;
-	burp(&g_output, "_rcr%d, _rcw%d = os.pipe()\n", printing_connection, printing_connection);
+	burp(&g_output, "_rcr%d, _rcw%d = os.pipe()\n", g_printing_connection, g_printing_connection);
 	burps(&g_output, "if os.fork():\n");
 	INDENT(g_output);
-	burp(&g_output, "os.close(_rcw%d)\n", printing_connection);
-	burp(&g_output, "os.dup2(_rcr%d, 0)\n", printing_connection);
+	burp(&g_output, "os.close(_rcw%d)\n", g_printing_connection);
+	burp(&g_output, "os.dup2(_rcr%d, 0)\n", g_printing_connection);
 	emit_command (connection->second);
 	newline("");
    	OUTDENT(g_output);
 	burps(&g_output, "else:\n");
 	INDENT(g_output);
-	burp(&g_output, "os.close(_rcr%d)\n", printing_connection);
-	burp(&g_output, "os.dup2(_rcw%d, 1)\n", printing_connection);
-	old_stdout_connection = stdout_connection;
-	stdout_connection     = printing_connection;
+	burp(&g_output, "os.close(_rcr%d)\n", g_printing_connection);
+	burp(&g_output, "os.dup2(_rcw%d, 1)\n", g_printing_connection);
+	old_g_stdout_connection = g_stdout_connection;
+	g_stdout_connection     = g_printing_connection;
 	emit_command (connection->first);
-	stdout_connection     = old_stdout_connection;
+	g_stdout_connection     = old_g_stdout_connection;
 	newline("");
 	burps(&g_output, "sys.exit(0)\n");
 	OUTDENT(g_output);
@@ -2561,9 +2557,9 @@ static void print_async_command(COMMAND *command)
 	}	}
 
 	thread  = ++g_translate.m_uses.m_threading;
-	if (deferred_heredocs) {
+	if (g_deferred_heredocs) {
 		fprintf(stderr, "### Can't handle heredocs with & connector\n");
-		deferred_heredocs = NULL;
+		g_deferred_heredocs = NULL;
 	}
 	burp(&g_output, "def thread%d():\n", thread);
 	INDENT(g_output);
@@ -2575,7 +2571,7 @@ static void print_async_command(COMMAND *command)
 
 static void print_connection_command(CONNECTION *connection)
 {
-	printing_connection++;
+	g_printing_connection++;
 
 	switch (connection->connector) {
 	case '|':
@@ -2606,11 +2602,11 @@ static void print_connection_command(CONNECTION *connection)
 			burp(&g_output, "_rc%d = ", g_rc_identifier);
 		}
 		emit_command (connection->first);
-		if (deferred_heredocs == 0) {
-			if (was_heredoc == FALSE) {
+		if (g_deferred_heredocs == 0) {
+			if (g_was_heredoc == FALSE) {
 				burpc(&g_output, '\n');
 			} else {
-				was_heredoc = FALSE;
+				g_was_heredoc = FALSE;
 			}
 		} else {
 			print_deferred_heredocs (g_is_inside_function ? "" : ";");
@@ -2626,9 +2622,9 @@ static void print_connection_command(CONNECTION *connection)
 		are very different from -a and -o in being viewed as connectors
 	 */
 	case AND_AND:
-		if (deferred_heredocs) {
+		if (g_deferred_heredocs) {
 			fprintf(stderr, "### Can't handle deferred heredocs with && connector\n");
-			deferred_heredocs = NULL;
+			g_deferred_heredocs = NULL;
 		}
 		burps(&g_output, "if ");
 		emit_command (connection->first);
@@ -2639,9 +2635,9 @@ static void print_connection_command(CONNECTION *connection)
 		OUTDENT(g_output);
 		break;
 	case OR_OR:
-		if (deferred_heredocs) {
+		if (g_deferred_heredocs) {
 			fprintf(stderr, "### Can't handle deferred heredocs with || connector\n");
-			deferred_heredocs = NULL;
+			g_deferred_heredocs = NULL;
 		}
 		burps(&g_output, "if not ");
 		emit_command (connection->first);
@@ -2658,16 +2654,16 @@ static void print_connection_command(CONNECTION *connection)
 		exit(TRUE);
 	}
 
-	printing_connection--;
+	g_printing_connection--;
 }
 
 static void reset_locals ()
 {
 	g_is_inside_function   = FALSE;
 	g_output.m_indent   = 0;
-	printing_connection = 0;
-	stdout_connection   = 0;
-	deferred_heredocs   = NULL;
+	g_printing_connection = 0;
+	g_stdout_connection   = 0;
+	g_deferred_heredocs   = NULL;
 }
 
 static void print_function_def (FUNCTION_DEF *func)
@@ -3002,8 +2998,8 @@ static void emit_command (COMMAND *command)
 
 char * make_command_string (COMMAND *command)
 {
-	was_heredoc = FALSE;
-	deferred_heredocs = NULL;
+	g_was_heredoc = FALSE;
+	g_deferred_heredocs = NULL;
 	g_embedded = 0;
 	g_started  = 0;
 	emit_command (command);
