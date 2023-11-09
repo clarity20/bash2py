@@ -304,7 +304,7 @@ void log_deactivate()
 // that we choose to invent by rewriting them in terms of standard specifiers
 static char * convert_format_specifiers(char *msg)
 {
-	const int EXTRA_SPACE = 16;
+	const int EXTRA_SPACE = 32;
 	char specifier[3];
 	char *pSpecifier, *converted;
 	int len;
@@ -318,6 +318,7 @@ static char * convert_format_specifiers(char *msg)
 	{
 		memmove(pSpecifier+4, pSpecifier+2, (int)((converted+len)-pSpecifier)-1);
 		memcpy(pSpecifier, "\"%s\"", 4);
+		len += 2;
 	}
 
 	// All further conversions can be performed here
