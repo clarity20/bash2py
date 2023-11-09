@@ -495,7 +495,7 @@ static void emitQuotedString(char *startP)
 	char *P;
 	int	 c;
 
-	log_enter("emitQuotedString (startP=%s)", startP);
+	log_enter("emitQuotedString (startP=%q)", startP);
 	burpc(&g_new, '"');
 	for (P = startP; ; ++P) {
 		c = *P;
@@ -638,7 +638,7 @@ static char * emitString(char *startP, const char *terminatorsP, int under_quote
 	int			c, offset, in_quotes;
 	fix_typeE	got;
 
-	log_enter("emitString (startP=%s, terminatorsP=%s, under_quotes=%d)",
+	log_enter("emitString (startP=%q, terminatorsP=%q, under_quotes=%d)",
 			  startP, terminatorsP, under_quotes);
 	in_quotes = FALSE;
 	for (P = startP; ; ++P) {
@@ -692,13 +692,13 @@ done:
 	return P;
 }
 
-static char * emitFunction(char *nameP, char *parm1P, char *parm2P, int indirect, int under_quotes)
+static char * emitFunction(char *nameP, char *parm1P, char *parm2P, _BOOL indirect, int under_quotes)
 {
 	char 		*endP;
 	int	 		offset;
 
-	log_enter("emitFunction (nameP=%s, parm1P=%s, parm2P=%s, indirect=%d, under_quotes=%d)",
-			nameP, parm1P, parm2P, indirect, under_quotes);
+	log_enter("emitFunction (nameP=%q, parm1P=%q, parm2P=%q, indirect=%d, under_quotes=%d)",
+			nameP, parm1P, parm2P, bool_to_text(indirect), under_quotes);
 
 	burp(&g_new, "%s(", nameP);
 	if (indirect) {
@@ -727,14 +727,15 @@ static char * emitFunction(char *nameP, char *parm1P, char *parm2P, int indirect
 // prefix "!" and/or a postfix in the set { [*] [@] :- := :+ :? } while handing off 
 // simpler variable name instances to emitSimpleVariable, then finally some postprocessing.
 
-static char * emitVariable(char *startP, int is_braced, int in_quotes, fix_typeE want, fix_typeE *gotP)
+static char * emitVariable(char *startP, _BOOL is_braced, int in_quotes, fix_typeE want, fix_typeE *gotP)
 {
 	char		*P, *endP, *functionP, *end_start1P, *start2P;
-	int			c, is_array, is_indirect;
+	int			c, is_array;
+	_BOOL		is_indirect;
 	fix_typeE	got;
 
-	log_enter("emitVariable (startP=%s, is_braced=%d, in_quotes=%d, want=%d)",
-			startP, is_braced, in_quotes, want);
+	log_enter("emitVariable (startP=%q, is_braced=%s, in_quotes=%d, want=%s)",
+			startP, bool_to_text(is_braced), in_quotes, type_to_text(want));
 	start2P     = 0;
 	functionP   = 0;
 
@@ -744,7 +745,6 @@ static char * emitVariable(char *startP, int is_braced, int in_quotes, fix_typeE
 
 		is_indirect = (*startP == '!');
 		if (is_indirect) {
-			is_indirect = TRUE;
 			++startP;
 		}
 		for (start2P = startP; ; ++start2P) {
@@ -906,7 +906,7 @@ emitDollarExpression(char *startP, int in_quotes, fix_typeE want, fix_typeE *got
 	int  		start, offset, is_blank, c, paren_depth;
 	fix_typeE	got;
 
-	log_enter("emitDollarExpression (startP=%s, in_quotes=%d, want=%d)", startP, in_quotes, want);
+	log_enter("emitDollarExpression (startP=%q, in_quotes=%d, want=%s)", startP, in_quotes, type_to_text(want));
 
 	++g_dollar_expr_nesting_level;
 	*gotP    = FIX_INT;
@@ -1072,7 +1072,7 @@ static char * emitSpecial1(char *startP, int in_quotes, fix_typeE want, fix_type
 	char *endP, *P;
 	int	 c, c1, start;
 	
-	log_enter("emitSpecial1 (startP=%s, in_quotes=%d, want=%d)", startP, in_quotes, want);
+	log_enter("emitSpecial1 (startP=%q, in_quotes=%d, want=%s)", startP, in_quotes, type_to_text(want));
 
 	endP   = NULL;
 	start  = g_new.m_lth;
@@ -1173,8 +1173,8 @@ static fix_typeE combine_types(int offset, fix_typeE want_type, fix_typeE was_ty
 {
 	char	*P;
 
-	log_enter("combine_types (offset=%d, want=%d, was=%d, new=%d)",
-				offset, want_type, was_type, new_type);
+	log_enter("combine_types (offset=%d, want=%s, was=%s, new=%s)",
+				offset, type_to_text(want_type), type_to_text(was_type), type_to_text(new_type));
 
 	switch (want_type) {
 	case FIX_ARRAY:
@@ -1284,7 +1284,7 @@ static fix_typeE substitute(fix_typeE want)
 	int			fileExpansion;
 	_BOOL		is_outside_quotes;
 
-	log_enter("substitute (want=%d)", want);
+	log_enter("substitute (want=%s)", type_to_text(want));
 	/* Return an array of strings; the brace expansion of TEXT.
 	 * Documentation says this is done before anything else
 	 */
@@ -1671,7 +1671,7 @@ static char * fix_string1(fix_typeE want, fix_typeE *gotP)
 	fix_typeE	got;
 	_BOOL		is_expression;
 
-	log_enter("fix_string1 (want=%d)", want);
+	log_enter("fix_string1 (want=%s)", type_to_text(want));
 
 	got = FIX_NONE;
 	if (!g_buffer.m_lth) {
@@ -1737,11 +1737,9 @@ static char * fixBracedString(const char *startP, fix_typeE want, fix_typeE *got
 
 	char	**arrayPP;
 	int		c, in_quotes, state;
-	char	*resultP, *type_text;
+	char	*resultP;
 
-	type_text = type_to_text(want);
-	log_enter("fixBracedString (startP=%s, want=%s)", startP, type_text);
-	free(type_text);
+	log_enter("fixBracedString (startP=%q, want=%s)", startP, type_to_text(want));
 log_deactivate();
 
 	if (want == FIX_EXPRESSION) {
@@ -1809,7 +1807,7 @@ fire:
 	if (arrayPP) {
 		if (arrayPP[0]) {
 			fix_typeE	want1;
-			int			i, want_array, separator;
+			int			i, want_array;
 	
 			want_array = (want == FIX_ARRAY);
 			g_braced.m_lth = 0;

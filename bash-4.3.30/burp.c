@@ -300,7 +300,33 @@ void log_deactivate()
 	g_log_is_on = FALSE;
 }
 
-// log_enter(): When invoking this function, be sure to invoke log_return() at all possible
+// convert_format_specifiers(): Implements any printf-like specifiers
+// that we choose to invent by rewriting them in terms of standard specifiers
+static char * convert_format_specifiers(char *msg)
+{
+	const int EXTRA_SPACE = 32;
+	char specifier[3];
+	char *pSpecifier, *converted;
+	int len;
+
+	// Convert %q specifiers to "%s" in quote marks
+	strcpy(specifier, "%q");
+	len = strlen(msg);
+	converted = (char *) malloc(len + EXTRA_SPACE);
+	strcpy(converted, msg);
+	while (pSpecifier = strstr(converted, specifier))
+	{
+		memmove(pSpecifier+4, pSpecifier+2, (int)((converted+len)-pSpecifier)-1);
+		memcpy(pSpecifier, "\"%s\"", 4);
+		len += 2;
+	}
+
+	// All further conversions can be performed here
+
+	return converted;
+}
+
+// log_enter(): When invoking this function, invoke log_return() at all possible
 // return points in order to keep the logging consistent and avoid memory bugs.
 void log_enter(char *format, ...)
 {
@@ -312,9 +338,11 @@ void log_enter(char *format, ...)
 	if (!g_log_stream)
 		return;
 
+	format = convert_format_specifiers(format);
 	if (!(pNameEnd = strchr(format, '(')))
 	{
 		fprintf(stderr, "Error in call to log_enter(): Required format is funcname(args)\n");
+		free(format);
 		return;
 	}
 
@@ -341,6 +369,7 @@ void log_enter(char *format, ...)
 		vfprintf(g_log_stream, full_format, args);
 		va_end(args);
 	}
+	free(format);
 }
 
 void log_info(char *format, ...)
@@ -356,6 +385,7 @@ void log_info(char *format, ...)
 		return;
 
 	g_log_indent += SMALL_INDENT;	// transient small indent
+	format = convert_format_specifiers(format);
 	sprintf(full_format, "%-*.0d%s(): %s", g_log_indent, 0, *g_current_function, format);
 	if (full_format[strlen(full_format)-1] != '\n')
 		strcat(full_format, "\n");
@@ -366,6 +396,8 @@ void log_info(char *format, ...)
 	va_start(args, full_format);
 	vfprintf(g_log_stream, full_format, args);
 	va_end(args);
+
+	free(format);
 }
 
 // log_return: Simple logging and bookkeeping for function returns
@@ -395,10 +427,12 @@ void log_return_msg(char *msg_template, ...)
 		}
 		else
 		{
+			msg_template = convert_format_specifiers(msg_template);
 			va_list args;
 			va_start(args, msg_template);
 			msg = (char *) malloc(256);
 			vsprintf(msg, msg_template, args);
+			if (msg_template) free(msg_template);
 			va_end(args);
 		}
 		sprintf(full_entry, entry_format, g_log_indent, 0, *g_current_function, msg);
@@ -419,38 +453,20 @@ void log_return_msg(char *msg_template, ...)
 // THE CALLER NEEDS TO MANAGE THIS MEMORY CAREFULLY!
 char *bool_to_text(_BOOL value)
 {
-	if (value) {
-		char *_true = (char *) malloc(5);
-		return strcpy(_true, "TRUE");
-	} else {
-		char *_false = (char *) malloc(6);
-		return strcpy(_false, "FALSE");
-	}
+	static char text[6];
+	strcpy(text, value ? "TRUE" : "FALSE");
+	return text;
 }
 
 // See bool_to_text() function header
 char *type_to_text(fix_typeE value)
 {
-	switch (value)
-	{
-		case FIX_INT:
-			char *_int = malloc(5);
-			return strcpy(_int, "_INT");
-		case FIX_STRING:
-			char *_string = malloc(8);
-			return strcpy(_string, "_STRING");
-		case FIX_VAR:
-			char *_var = malloc(5);
-			return strcpy(_var, "_VAR");
-		case FIX_NONE:
-			char *_none = malloc(6);
-			return strcpy(_none, "_NONE");
-		default:
-			char *_other = malloc(11);
-			return strcpy(_other, "_otherType");
-	}
-
-	assert(0);
-
+	static char text[11];
+	strcpy(text, value == FIX_INT    ? "_INT" : 
+				(value == FIX_STRING ? "_STRING" : 
+				(value == FIX_VAR    ? "_VAR" : 
+				(value == FIX_NONE   ? "_NONE" : 
+									   "_otherType"))));
+	return text;
 }
 #endif // BASH2PY

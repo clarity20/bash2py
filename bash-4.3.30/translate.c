@@ -141,7 +141,7 @@ void seen_global(const char *nameP, _BOOL local)
 	char *P,*P1;
 	int	 c;
 
-	log_enter("seen_global (nameP=%s, local=%d)", nameP, local);
+	log_enter("seen_global (nameP=%q, local=%s)", nameP, bool_to_text(local));
 
 	if (!*nameP) {
 		log_return_msg("Return without processing");
@@ -1131,7 +1131,7 @@ void print_printf_cmd (WORD_LIST *list, char *separator)
 	char	  	*wordP = w->word->word;
 	fix_typeE	got;
 
-	log_enter("print_printf_cmd (list->word=%s, separator=%s)", wordP, separator);
+	log_enter("print_printf_cmd (list->word=%q, separator=%q)", wordP, separator);
 
 	if (!strcmp(wordP, "-v")) {
 		w = w->next;
@@ -1303,8 +1303,8 @@ static void print_assignment_command(char *nameP, char *end_variableP, char *end
 	int 		c;
 	fix_typeE	got;
 
-	log_enter("print_assignment_command (nameP=%s, end_var=%s, end_array=%s, end_assign=%s, local=%d)",
-			nameP, end_variableP, end_arrayP, end_assignmentP, local);
+	log_enter("print_assignment_command (nameP=%q, end_var=%q, end_array=%s, end_assign=%q, local=%s)",
+			nameP, end_variableP, end_arrayP, end_assignmentP, bool_to_text(local));
 
 	c              = *end_variableP;
 	*end_variableP = '\0';
@@ -1361,9 +1361,7 @@ static _BOOL isAssignment(char *startP, _BOOL local)
 	char	*P, *end_nameP, *end_arrayP;
 	int		c;
 
-	char *local_text = bool_to_text(local);
-	log_enter("isAssignment (startP=%s, local=%s)", startP, local_text);
-	free(local_text);
+	log_enter("isAssignment (startP=%q, local=%s)", startP, bool_to_text(local));
 
 	P = startP;
 
@@ -1829,7 +1827,7 @@ void print_simple_command (SIMPLE_COM *simple_command)
 		return;
 	}
 
-	log_enter("print_simple_command (simple_command->word=%s)", wordP);
+	log_enter("print_simple_command (simple_command->word=%q)", wordP);
 
 	if (isAssignment(wordP, FALSE)) {
 		log_return_msg("Command is an assignment");
@@ -2036,7 +2034,7 @@ void print_simple_command (SIMPLE_COM *simple_command)
 	}
 
 	if (is_done) {
-		log_return_msg("%s command processed.", wordP);
+		log_return_msg("%q command processed.", wordP);
 		return;
 	}
 	
@@ -2050,7 +2048,7 @@ void print_simple_command (SIMPLE_COM *simple_command)
 				burps(&g_output, ", ");
 		}	}
 		burpc(&g_output, ')');
-		log_return_msg("Script function \'%s\' was called.", wordP);
+		log_return_msg("Script function %q was called.", wordP);
 		return;
 	} 
 
@@ -2683,7 +2681,7 @@ static void print_function_def (FUNCTION_DEF *func)
 	variable_nameT	 *current_varP, *next_varP;
 	int		parm, save_parms;
 
-	log_enter("print_function_def (func=%s)", func->name->word);
+	log_enter("print_function_def (func=%q)", func->name->word);
 
 	func_redirects = NULL;
 	burp(&g_output, "def %s (", nameP);
