@@ -1370,7 +1370,7 @@ static _BOOL isAssignment(char *startP, _BOOL local)
 
 	// Left side must be an identifier
 	if ((c = *P) != '_' && !isalpha(c)) {
-		log_return();
+		log_return_msg("%q is NOT an assignment.", startP);
 		return FALSE;
 	}
 	for (++P; (c = *P) == '_' || isalnum(c); ++P);
@@ -1392,10 +1392,10 @@ static _BOOL isAssignment(char *startP, _BOOL local)
 	if (*P == '=') {
 //TODO: Move print_assignment() out to the caller(s)
 		print_assignment_command(startP, end_nameP, end_arrayP, P, local);
-		log_return();
+		log_return_msg("%q IS an assignment.", startP);
 		return TRUE;
 	}
-	log_return();
+    log_return_msg("%q is NOT an assignment.", startP);
 	return FALSE;
 }
 
