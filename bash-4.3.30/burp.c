@@ -80,24 +80,11 @@ static void increase_burp(burpT *burpP)
 	burpP->m_max = max - 8;
 }
 
-char * burp_extend(burpT *burpP, int offset, int need)
+char * burp_extend(burpT *burpP, char *text)
 {
-	int		lth;
-	char	*P;
-	
-	lth = burpP->m_lth;
-	assert(0 <= offset && offset <= lth);
-	while ((burpP->m_max - lth) <= need) {
-		increase_burp(burpP);
-	}
-	P = burpP->m_P + offset;
-	memmove(P+need, P, lth - offset);
-	lth          += need;
-	burpP->m_lth  = lth;
-	burpP->m_P[lth] = '\0';
-	return P;
+	return burp_insert(burpP, burpP->m_lth, text);
 }
-	
+
 char * burp_insert(burpT *burpP, int offset, char *text)
 {
 	int		lth = burpP->m_lth;
@@ -306,8 +293,8 @@ void log_deactivate()
 	g_log_is_on = FALSE;
 }
 
-// convert_format_specifiers(): Implements any printf-like specifiers
-// that we choose to invent by rewriting them in terms of standard specifiers
+// convert_format_specifiers(): Rewrites any of our custom,
+// printf-like codes in terms of the standard format specifiers
 static char * convert_format_specifiers(char *msg)
 {
 	const int EXTRA_SPACE = 32;
