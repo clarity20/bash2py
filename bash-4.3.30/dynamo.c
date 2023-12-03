@@ -15,11 +15,10 @@
 
 #include "burp.h"
 
-typedef int _BOOL;
-#define TRUE 1
-#define FALSE 0
+#ifndef TEST
+extern
+#endif
 FILE *outputF;
-//outputF = stdout; // TODO Change, of course.
 
 #if !HAVE_STPCPY
 char *stpcpy(char *s1, const char *s2) {
@@ -37,7 +36,9 @@ char *strdup(const char *s) {
 }
 #endif
 
-unsigned char g_left_margin=0, g_return_count=0, g_if_count=0, g_asgn_count=0;
+#define LEFT_MARGIN "%-*.0d"
+
+unsigned char g_left_margin = 0, g_return_count = 0, g_if_count = 0, g_asgn_count = 0;
 unsigned char g_lines_in_func = 0, g_conditional_nesting = 0;
 _BOOL g_inside_class = FALSE, g_is_static = FALSE;
 char _EXCEPT[] = "Bash2PyException";
@@ -186,57 +187,51 @@ void dispose_macro_dictionaries(void)
 
 char *_static() {
     static char sm[32];
-    memset(sm, ' ', g_left_margin); 
-    strcpy(sm+g_left_margin, "@staticmethod\n");
+    sprintf(sm, LEFT_MARGIN "@staticmethod\n", g_left_margin, 0);
     return sm;
 }
 
 void _set_static(_BOOL is_static) { g_is_static = is_static; };
-
-char *_add_to_list(char *s1, char *s2) {
-    /* dangerous memory modification */
-    char *p = memchr(s1, '\0', 80);
-    stpcpy(stpcpy(p, s2), ", ");
-    return s1;
-}
+char *_add_to_list(char *l, const char *s) { return stpcpy(stpcpy(l, s), ", "); }
 
 char *_def(char *name, char *sig)
 {
     static char py_buf[80];
-    char value_buf[16];
+    char value_buf[16], signature[8];
     char *p = py_buf;
     int len;
 
-    // Do NOT init/reset the subsystem state because not all objects start with 
+    // Do NOT init/reset the dynamo state because the objects do not need to start with
     // def() even though most of them do. We will reset in write_func() instead.
     g_left_margin = g_inside_class ? 2 : 0;
 
     // Indent and begin
-    if (g_is_static) p = stpcpy(py_buf, _static());
-    memset(p, '\0', sizeof(py_buf)-(p-py_buf));
-    memset(p, ' ', g_left_margin);
-    sprintf(p+g_left_margin, "def %s(", _expand_macros_internal(name, TRUE));
+    if (g_is_static) p = stpcpy(p, _static());
+    sprintf(p, LEFT_MARGIN "def %s(", g_left_margin, 0, _expand_macros_internal(name, TRUE));
+    p = memchr(p, '\0', sizeof(py_buf));
 
-    // Build list of args
+    // Build the argument list
+    if (g_inside_class && !g_is_static) {
+        p = _add_to_list(p, "self");
+    }
     if (sig) {
         // Check for every possible flag in "bash2py standard" order
-        if (p = strchr(sig,'S')) _add_to_list(py_buf, "self");
-        if (p = strchr(sig,'N')) _add_to_list(py_buf, "name");
-        if (p = strchr(sig,'V')) {
-            sprintf(value_buf, "value%s", (p[1] == '0') ? "=None" : 
-                                     (p[1] == '\'' ? "=''" : 
-                                      ""));
-            _add_to_list(py_buf, value_buf);
+        char *s = sig;
+        if (strchr(sig,'N')) p = _add_to_list(p, "name");
+        if (s = strchr(sig,'V')) {
+            sprintf(value_buf, "value%s", (s[1] == '0') ? "=None" :
+                                          (s[1] == '\'' ? "=''" :
+                                           ""));
+            p = _add_to_list(p, value_buf);
         }
-        if (p = strchr(sig,'L')) _add_to_list(py_buf, "local=locals()");
-        if (p = strchr(sig,'I')) _add_to_list(py_buf, "inc=1");
-        if (p = strchr(sig,'Q')) _add_to_list(py_buf, "in_quotes");
+        if (strchr(sig,'L')) p = _add_to_list(p, "local=locals()");
+        if (strchr(sig,'I')) p = _add_to_list(p, "inc=1");
+        if (strchr(sig,'Q')) p = _add_to_list(p, "in_quotes");
     }
 
     // Terminate the list of args and close the header
-    len = strlen(py_buf);
-    if (py_buf[len-1] == ' ') py_buf[len-2] = '\0';
-    strcat(py_buf, "):\n");
+    if (*(p-1) == ' ') { --p; *--p = '\0'; }
+    strcpy(p, "):\n");
     g_left_margin += 2;
     g_lines_in_func++;
     return py_buf;
@@ -249,11 +244,7 @@ char *_ret_internal(char *return_what) {
     char *ret = rets[g_return_count++];
     assert(g_return_count <= 3);
 
-    memset(ret, ' ', g_left_margin);
-    if (return_what)
-        sprintf(ret+g_left_margin, "return %s\n", return_what);
-    else
-        strcpy(ret+g_left_margin, "return ret\n");
+    sprintf(ret, LEFT_MARGIN "return %s\n", g_left_margin, 0, return_what ? return_what : "ret");
     g_left_margin -= 2;
     if (g_conditional_nesting == 0) g_lines_in_func++;
     return ret;
@@ -264,8 +255,7 @@ char *_raise_internal(char *desc, _BOOL need_quotes) {
     static char _raised[64];
     char quote[2];
     strcpy(quote, need_quotes ? "\"" : "");
-    memset(_raised, ' ', g_left_margin);
-    sprintf(_raised+g_left_margin, "raise %s(%s%s%s)\n", _EXCEPT, quote, desc, quote);
+    sprintf(_raised, LEFT_MARGIN "raise %s(%s%s%s)\n", g_left_margin, 0, _EXCEPT, quote, desc, quote);
     if (g_conditional_nesting == 0) g_lines_in_func++;
     return _raised;
 }
@@ -280,29 +270,22 @@ char *_if_internal(char *cond) {
     char *if_stmt = if_stmts[g_if_count++];
     assert(g_if_count <= 3);
 
-    memset(if_stmt, ' ', g_left_margin);
-    if (cond)
-        sprintf(if_stmt+g_left_margin, "if %s:\n", cond);
-    else
-        sprintf(if_stmt+g_left_margin, "else:\n");
+    sprintf(if_stmt, LEFT_MARGIN "%s%s:\n", g_left_margin, 0, cond?"if ":"else", cond?cond:"");
     g_left_margin += 2;
     if (g_conditional_nesting == 0) g_lines_in_func++;
     return if_stmt;
 }
-//char *_if(char *cond) { return _if_internal(expand_macros(cond)); }
 
-char *_asgn_internal(char *l_name, char *oper, char *r_name) {
-    static char ops[3][128]; 
-    char *op = ops[g_asgn_count++];
+char *_asgn_internal(char *l_name, char *operator, char *r_name) {
+    static char assignments[3][128];
+    char *assignment = assignments[g_asgn_count++];
     assert(g_asgn_count <= 3);
 
     if (g_inside_class && g_left_margin == 0)
         g_left_margin = 2;
-    memset(op, '\0', 128);
-    memset(op, ' ', g_left_margin);
-    sprintf(op+g_left_margin, "%s %s= %s\n", l_name, oper?oper:"", r_name);
+    sprintf(assignment, LEFT_MARGIN "%s %s= %s\n", g_left_margin, 0, l_name, operator?operator:"", r_name);
     if (g_conditional_nesting == 0) g_lines_in_func++;
-    return op;
+    return assignment;
 }
 char *_asgn(char *l_name, char *r_name) { 
     char *expanded_lname = strdup(expand_macros(l_name));
@@ -314,7 +297,7 @@ char *_asgn(char *l_name, char *r_name) {
 void _assignment_func_internal(char *name, char *type_signature, char *oper)
 {
     char *def, *tmp_asgn, *asgn, *p;
-    _BOOL is_initializer = (0 == strcmp(name , "__init__"));
+    _BOOL is_initializer = (0 == strcmp(name, "__init__"));
     _BOOL has_tmp_line = (p = strchr(type_signature, '+')) != NULL;
     if (p) *p = '\0';
 
@@ -385,10 +368,13 @@ char *_process_ifelse_subordinates(char *buf, char *types, va_list *thens)
                 free(expanded_stmt);
                 break;
             case 'I': 
-                // As in _if(), process the "if" line then the subordniate lines
+                // As in _if(), process the "if" line then the subordinate lines,
+                // but do not call _if() because that would reset "thens"
+                int begin_margin = g_left_margin;
                 p_buf = stpcpy(p_buf, _if_internal(expand_macros(stmt)));
                 next_types = va_arg(*thens, char *);
                 p_buf = _process_ifelse_subordinates(p_buf, next_types, thens);
+                g_left_margin = begin_margin;
                 break;
             case 'R':
                 p_buf = stpcpy(p_buf, _ret_internal(expand_macros(stmt)));
@@ -469,10 +455,9 @@ void write_function(char *first, ...) // First arg is broken out to comply with 
     int i;
     va_list lines;
     char *fmt = (char*) malloc(g_lines_in_func*2 + strlen(first)+1);
-    char *pFmt;
+    char *pFmt = stpcpy(fmt, first);
 
-    strcpy(fmt, first);
-    for(i=1, pFmt=memchr(fmt, '\0', 64); i<g_lines_in_func; i++)
+    for(i=1; i<g_lines_in_func; i++)
     {
         *pFmt++ = '%';
         *pFmt++ = 's';
@@ -496,7 +481,6 @@ void write_function(char *first, ...) // First arg is broken out to comply with 
 }
 
 #ifdef TEST
-
 char *run_test()
 {
     char *def, *asgn, *iff, *iff2, *els, *ret;
@@ -506,8 +490,8 @@ char *run_test()
     // not become garbled when we reuse them and avoids problems that can arise
     // from the unpredictable evaluation order of function arguments 
 
+    outputF = stdout;
     init_macro_dictionaries();
-    outputF = stdout;//TODO change this, of course
 
     // Exception class
     _cls(_EXCEPT, TRUE);
