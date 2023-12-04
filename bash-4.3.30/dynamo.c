@@ -509,78 +509,65 @@ char *run_test()
         write_init_func("SV0");
 
         def = _def("__str__", "S");
-//TODO choose either-or:       ret = _ret("repr($S)");
-        write_function(def, _ret("repr($S)"));//TODO ret);
+        write_function(def, _ret("repr($S)"));
     _end_cls();
 
     // Global functions
     def = _def("D()", "NL");
-    ret = _ret("$n\\g()|$n\\$l");
-    write_function(def, ret);
+    write_function(def, _ret("$n\\g()|$n\\$l"));
 
     def = _def("b()", "NL");
     iff = _if("$n\\$l", "R", "L[$n]");
     iff2 = _if("$n\\g()", "R", "g()[$n]");
-    ret = _ret("$N");
-    write_function(def, iff, iff2, ret);
+    write_function(def, iff, iff2, _ret("$N"));
 
     def = _def("Make", "NL");
     asgn = _asgn("$r", "b($n, $l)");
     iff = _if("$r $0", "AA", "$r", "Bash2Py(0)", "g()[$n]", "$r");
-    ret = _ret(NULL);
-    write_function(def, asgn, iff, ret);
+    write_function(def, asgn, iff, _ret(NULL));
 
     def = _def("G()", "NL");
     asgn = _asgn("$b", "b($n,$l)");
     iff = _if("$b $0|$b.$u $0", "R", "''");
-    ret = _ret("$b.$u");
-    write_function(def, asgn, iff, ret);
+    write_function(def, asgn, iff, _ret("$b.$u"));
 
     def = _def("S()", "NVL");
     asgn = _asgn("$b", "b($n,$l)");
     iff = _if("$b $0", "A", "g()[$n]","Bash2Py($v)");
     els = _else("A", "$b.$u", "$v");
-    ret = _ret("$v");
-    write_function(def, asgn, iff, els, ret);
+    write_function(def, asgn, iff, els, _ret("$v"));
 
     def = _def("Str", "V");
     iff = _if("i($v, list)", "R", "\" \".j($v)");
     iff2 = _if("i($v, basestring)", "R", "$v");
-    ret = _ret("str($v)");
-    write_function(def, iff, iff2, ret);
+    write_function(def, iff, iff2, _ret("str($v)"));
 
     def = _def("Array", "V");
     iff = _if("i($v, list)", "R", "$v");
     iff2 = _if("i($v, basestring)", "R", "$v.strip().split(' ')");
-    ret = _ret("[ $v ]");
-    write_function(def, iff, iff2, ret);
+    write_function(def, iff, iff2, _ret("[ $v ]"));
 
     def = _def("$G", "V");
     asgn = _asgn("$r", "$g.$g($v)");
     iff = _if("l($r) < 1", "A", "$r", "[ $v ]");
-    ret = _ret(NULL);
-    write_function(def, asgn, iff, ret);
+    write_function(def, asgn, iff, _ret(NULL));
 
     // Expand class
     _cls("Expand", FALSE);
         def = _def0("at");
         iff = _if("l($a) < 2", "R", "[]");
-        ret = _ret("s[1:]");
-        write_function(def, iff, ret);
+        write_function(def, iff, _ret("s[1:]"));
 
         def = _def("$t", "Q");
         iff = _if("in_quotes", "IR", /*I:*/ "l($a) < 2", "R", "\"\"",
                                      /*R:*/ "\" \".j(s[1:])");
-        ret = _ret("Expand.at()");
-        write_function(def, iff, ret);
+        write_function(def, iff, _ret("Expand.at()"));
 
         def = _def0("hash");
-        ret = _ret("l($a)-1");
-        write_function(def, ret);
+        write_function(def, _ret("l($a)-1"));
 
         def = _def0("dollar");
-        ret = _ret("os.getpid()");
-        write_function(def, ret);
+        write_function(def, _ret("os.getpid()"));
 
         write_unsupported_func0("exclamation", "$!");
         write_unsupported_func0("underbar", "$_");
@@ -588,49 +575,41 @@ char *run_test()
 
         def = _def("$m", "NV\'");
         iff = _if("D($n)", "R", "G($n)");
-        ret = _ret("$v");
-        write_function(def, iff, ret);
+        write_function(def, iff, _ret("$v"));
 
         def = _def("eq", "NV\'");
         iff = _if("~D($n)", "LR", "S($n, $v)", "$v");
-        ret = _ret("G($n)");
-        write_function(def, iff, ret);
+        write_function(def, iff, _ret("G($n)"));
 
         def = _def("qmark", "NV0");
         iff = _if("~D($n)", "Ir", /*I:*/ "$v $0|$v == \'\'", "A", "$v", "$Z", 
                                    /*r:*/ "$v");
-        ret = _ret("G($n)");
-        write_function(def, iff, ret);
+        write_function(def, iff, _ret("G($n)"));
 
         def = _def("$p", "NV\'");
         iff = _if("~D($n)", "R", "''");
-        ret = _ret("$v");
-        write_function(def, iff, ret);
+        write_function(def, iff, _ret("$v"));
 
         def = _def("$c$M", "NV\'");
         asgn = _asgn("$r", "G($n)");
         iff = _if("$r $0|$r $q", "A", "$r", "$v");
-        ret = _ret("$r");
-        write_function(def, asgn, iff, ret);
+        write_function(def, asgn, iff, _ret("$r"));
 
         def = _def("$cEq", "NV\'");
         asgn = _asgn("$r", "G($n)");
         iff = _if("$r $0|$r $q", "LA", /*L:*/ "S($n, $v)", /*A:*/ "$r", "$v");
-        ret = _ret("$r");
-        write_function(def, asgn, iff, ret);
+        write_function(def, asgn, iff, _ret("$r"));
 
         def = _def("$cQmark", "NV0");
         asgn = _asgn("$r", "G($n)");
         iff = _if("$r $0|$r $q", "I", "$v $0|$v $q", "Ar",
                        /*A:*/ "$v", "$Z", /*r:*/ "$v");
-        ret = _ret("$r");
-        write_function(def, asgn, iff, ret);
+        write_function(def, asgn, iff, _ret("$r"));
 
         def = _def("$c$P", "NV\'");
         asgn = _asgn("$r", "G($n)");
         iff = _if("$r $0|$r $q", "R", "''");
-        ret = _ret("$v");
-        write_function(def, asgn, iff, ret);
+        write_function(def, asgn, iff, _ret("$v"));
 
         write_unsupported_func("$f$T", TRUE, "${!$f*}");
         write_unsupported_func("$fAt", TRUE, "${!$f@}");
@@ -642,26 +621,22 @@ char *run_test()
     _cls("Bash2Py", FALSE);
         _set_static(FALSE);
 
-        asgn = _asgn("__slots__", "[\"$u\"]");
-        write_function(asgn);  // kludge
+        write_function(_asgn("__slots__", "[\"$u\"]"));  // kludge
         write_init_func("SV\'");
 
         def = _def("S()", "SV0");
         asgn = _asgn("$L", "$v");
-        ret = _ret("$v");
-        write_function(def, asgn, ret);
+        write_function(def, _ret("$v"));
 
         write_increment_func("preinc", "+");
         write_increment_func("postinc", "++");
 
         def = _def("isNull", "S");
-        ret = _ret("$L $0");
-        write_function(def, ret);
+        write_function(def, _ret("$L $0"));
 
         def = _def("notNullElse", "SV");
         iff = _if("$s.isNull()", "R", "$v");
-        ret = _ret("$L");
-        write_function(def, iff, ret);
+        write_function(def, iff, _ret("$L"));
 
         write_assignment_func("$p", "+");
         write_assignment_func("$m", "-");
