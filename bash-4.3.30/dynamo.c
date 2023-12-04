@@ -36,8 +36,6 @@ char *strdup(const char *s) {
 }
 #endif
 
-#define LEFT_MARGIN "%-*.0d"
-
 unsigned char g_left_margin = 0, g_return_count = 0, g_if_count = 0, g_asgn_count = 0;
 unsigned char g_lines_in_func = 0, g_conditional_nesting = 0;
 _BOOL g_inside_class = FALSE, g_is_static = FALSE;
@@ -46,6 +44,18 @@ char _EXCEPT[] = "Bash2PyException";
 char **g_text_expansions, **g_func_expansions;
 
 void write_function(char *first, ...);
+
+void _write_line(char *dest, const char *fmt, ...) {
+    char *format = malloc(32 * sizeof(char));
+    memset(format, ' ', g_left_margin);
+    strcpy(format+g_left_margin, fmt);
+
+    va_list args;
+    va_start(args, fmt);
+    vsprintf(dest, format, args);
+    va_end(args);
+    free(format);
+}
 
 void init_macro_dictionaries(void)
 {
@@ -187,7 +197,7 @@ void dispose_macro_dictionaries(void)
 
 char *_static() {
     static char sm[32];
-    sprintf(sm, LEFT_MARGIN "@staticmethod\n", g_left_margin, 0);
+    _write_line(sm, "@staticmethod\n");
     return sm;
 }
 
@@ -197,7 +207,7 @@ char *_add_to_list(char *l, const char *s) { return stpcpy(stpcpy(l, s), ", "); 
 char *_def(char *name, char *sig)
 {
     static char py_buf[80];
-    char value_buf[16], signature[8];
+    char value_buf[16];
     char *p = py_buf;
     int len;
 
@@ -207,7 +217,7 @@ char *_def(char *name, char *sig)
 
     // Indent and begin
     if (g_is_static) p = stpcpy(p, _static());
-    sprintf(p, LEFT_MARGIN "def %s(", g_left_margin, 0, _expand_macros_internal(name, TRUE));
+    _write_line(p, "def %s(", _expand_macros_internal(name, TRUE));
     p = memchr(p, '\0', sizeof(py_buf));
 
     // Build the argument list
@@ -244,7 +254,7 @@ char *_ret_internal(char *return_what) {
     char *ret = rets[g_return_count++];
     assert(g_return_count <= 3);
 
-    sprintf(ret, LEFT_MARGIN "return %s\n", g_left_margin, 0, return_what ? return_what : "ret");
+    _write_line(ret, "return %s\n", return_what ? return_what : "ret");
     g_left_margin -= 2;
     if (g_conditional_nesting == 0) g_lines_in_func++;
     return ret;
@@ -255,7 +265,7 @@ char *_raise_internal(char *desc, _BOOL need_quotes) {
     static char _raised[64];
     char quote[2];
     strcpy(quote, need_quotes ? "\"" : "");
-    sprintf(_raised, LEFT_MARGIN "raise %s(%s%s%s)\n", g_left_margin, 0, _EXCEPT, quote, desc, quote);
+    _write_line(_raised, "raise %s(%s%s%s)\n", _EXCEPT, quote, desc, quote);
     if (g_conditional_nesting == 0) g_lines_in_func++;
     return _raised;
 }
@@ -270,7 +280,7 @@ char *_if_internal(char *cond) {
     char *if_stmt = if_stmts[g_if_count++];
     assert(g_if_count <= 3);
 
-    sprintf(if_stmt, LEFT_MARGIN "%s%s:\n", g_left_margin, 0, cond?"if ":"else", cond?cond:"");
+    _write_line(if_stmt, "%s%s:\n", cond?"if ":"else", cond?cond:"");
     g_left_margin += 2;
     if (g_conditional_nesting == 0) g_lines_in_func++;
     return if_stmt;
@@ -283,7 +293,7 @@ char *_asgn_internal(char *l_name, char *operator, char *r_name) {
 
     if (g_inside_class && g_left_margin == 0)
         g_left_margin = 2;
-    sprintf(assignment, LEFT_MARGIN "%s %s= %s\n", g_left_margin, 0, l_name, operator?operator:"", r_name);
+    _write_line(assignment, "%s %s= %s\n", l_name, operator?operator:"", r_name);
     if (g_conditional_nesting == 0) g_lines_in_func++;
     return assignment;
 }
@@ -445,7 +455,7 @@ void _end_cls(void)
     g_left_margin = 0;
     g_inside_class = FALSE;
     g_is_static = FALSE;
-    fprintf(outputF, "\n");
+    fprintf(outputF, "\n\n");
 }
 
 
@@ -468,7 +478,7 @@ void write_function(char *first, ...) // First arg is broken out to comply with 
 
     if (g_inside_class)
         fprintf(outputF, "        #\n");
-    va_start(lines, fmt);
+    va_start(lines, first);
     vfprintf(outputF, fmt, lines);
     va_end(lines);
     g_lines_in_func = 0;
