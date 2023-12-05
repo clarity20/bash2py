@@ -44,9 +44,11 @@
 #include "shell.h"
 #include "flags.h"
 #include <y.tab.h>	/* use <...> so we pick it up from the build directory */
+#include "translate.h"
 
 #include "shmbutil.h"
 #include "burp.h"
+#include "dynamo.h"
 
 #include "builtins/common.h"
 #include "fix_string.h"
@@ -88,7 +90,7 @@ static int g_started           = 0;
 //MIW var declarations begin
 
 extern _BOOL   g_translate_html;
-static FILE* outputF = NULL;
+FILE* outputF = NULL;
 
 static burpT g_case_var = {0,0,0,0,0,0};
 //MIW var declarations end
@@ -225,6 +227,7 @@ static void print_redirection (REDIRECT *redirect)
 
 	switch (redirect->instruction)
 	{
+	case r_input_direction:
 		if (is_varassign) {
 			burp(&g_output, "{%s}", redir_word->word);
 		} else if (not_stdin) {
@@ -3070,6 +3073,7 @@ void initialize_translator(const char *shell_scriptP)
 
 	log_init();
     log_activate();
+    init_macro_dictionaries();
 
     strcpy(file_suffix, g_translate_html ? "html" : "py");
 
@@ -3246,6 +3250,9 @@ static void neededExceptions(void)
 
 static void emitExceptions(void)
 {
+	// Building blocks for code generation dynamo:
+	char *def, *ret;
+
 	if (!g_translate.m_exception) {
 		return;
 	}
@@ -3254,14 +3261,14 @@ static void emitExceptions(void)
 		fprintf(outputF, "<tr><td></td><td><pre>");
 	}
 
-	fprintf(outputF, 
-		"class Bash2PyException(Exception):\n"
-		"  def __init__(self, value=None):\n"
-		"    self.value = value\n"
-		"  def __str__(self):\n"
-		"    return repr(self.value)\n"
-		"\n"
-	);
+	// Write the Bash2PyException class
+	cls(_EXCEPT, TRUE);
+		set_static(FALSE);
+		write_init_func("SV0");
+
+		def = def_("__str__", "S");
+		write_function(def, ret_("repr($S)"));
+	end_cls();
 
 	if (g_translate_html) {
 		fprintf(outputF, "</pre></td></tr>");
@@ -3309,6 +3316,9 @@ static void neededFunctions(void)
 static void emitFunctions(void)
 {
 	struct functionS *functionP = &(g_translate.m_function);
+ 
+	// Building blocks for code generation dynamo:
+	char *def, *asgn, *iff, *iff2, *els, *ret;
 
 	if (allzero(functionP, sizeof(g_translate.m_function))) {
 		return;
@@ -3317,99 +3327,65 @@ static void emitFunctions(void)
 	if (g_translate_html) {
 		fprintf(outputF, "<tr><td></td><td><pre>");
 	}
+
+    // Global functions
 	if (functionP->m_is_defined) {
-		fprintf(outputF,
-			"def IsDefined(name, local=locals()):\n"
-			"  return name in globals() or name in local\n"
-			"\n"
-		);
+		def = def_("D()", "NL");
+		write_function(def, ret_("$n\\g()|$n\\$l"));
 	}
 	
 	if (functionP->m_get_variable) {
-		fprintf(outputF,
-			"def GetVariable(name, local=locals()):\n"
-			"  if name in local:\n"
-			"    return local[name]\n"
-			"  if name in globals():\n"
-			"    return globals()[name]\n"
-			"  return None\n"
-			"\n"
-		);
+		def = def_("b()", "NL");
+		iff = if_("$n\\$l", "R", "L[$n]");
+		iff2 = if_("$n\\g()", "R", "g()[$n]");
+		write_function(def, iff, iff2, ret_("$N"));
 	}
 	
 	if (functionP->m_make) {
-		fprintf(outputF,
-			"def Make(name, local=locals()):\n"
-			"  ret = GetVariable(name, local)\n"
-			"  if ret is None:\n"
-			"    ret = Bash2Py(0)\n"
-			"    globals()[name] = ret\n"
-			"  return ret\n"
-			"\n"
-		);
+		def = def_("Make", "NL");
+		asgn = asgn_("$r", "b($n, $l)");
+		iff = if_("$r $0", "AA", "$r", "Bash2Py(0)", "g()[$n]", "$r");
+		write_function(def, asgn, iff, ret_(NULL));
 	}
 	
 	if (functionP->m_get_value) {
-		fprintf(outputF,
-			"def GetValue(name, local=locals()):\n"
-			"  variable = GetVariable(name,local)\n"
-			"  if variable is None or variable.val is None:\n"
-			"    return ''\n"
-			"  return variable.val\n"
-			"\n"
-		);
+		def = def_("G()", "NL");
+		asgn = asgn_("$b", "b($n,$l)");
+		iff = if_("$b $0|$b.$u $0", "R", "''");
+		write_function(def, asgn, iff, ret_("$b.$u"));
 	}
 	
 	if (functionP->m_set_value) {
-		fprintf(outputF,
-			"def SetValue(name, value, local=locals()):\n"
-			"  variable = GetVariable(name,local)\n"
-			"  if variable is None:\n"
-			"    globals()[name] = Bash2Py(value)\n"
-			"  else:\n"
-			"    variable.val = value\n"
-			"  return value\n"
-			"\n"
-		);
+		def = def_("S()", "NVL");
+		asgn = asgn_("$b", "b($n,$l)");
+		iff = if_("$b $0", "A", "g()[$n]","Bash2Py($v)");
+		els = else_("A", "$b.$u", "$v");
+		write_function(def, asgn, iff, els, ret_("$v"));
 	}
 	
 	if (functionP->m_str) {
-		fprintf(outputF,
-			"def Str(value):\n"
-			"  if isinstance(value, list):\n"
-			"    return \" \".join(value)\n"
-			"  if isinstance(value, basestring):\n"
-			"    return value\n"
-			"  return str(value)\n"
-			"\n"
-		);
+		def = def_("Str", "V");
+		iff = if_("i($v, list)", "R", "\" \".j($v)");
+		iff2 = if_("i($v, basestring)", "R", "$v");
+		write_function(def, iff, iff2, ret_("str($v)"));
 	}
 
 	if (functionP->m_array) {
-		fprintf(outputF,
-			"def Array(value):\n"
-			"  if isinstance(value, list):\n"
-			"    return value\n"
-			"  if isinstance(value, basestring):\n"
-			"    return value.strip().split(' ')\n"
-			"  return [ value ]\n"
-			"\n"
-		);
+		def = def_("Array", "V");
+		iff = if_("i($v, list)", "R", "$v");
+		iff2 = if_("i($v, basestring)", "R", "$v.strip().split(' ')");
+		write_function(def, iff, iff2, ret_("[ $v ]"));
 	}
 	
 	if (functionP->m_glob) {
-		fprintf(outputF,
-			"def Glob(value):\n"
-			"  ret = glob.glob(value)\n"
-			"  if (len(ret) < 1):\n"
-			"    ret = [ value ]\n"
-			"  return ret\n"
-			"\n"
-		);
+		def = def_("$G", "V");
+		asgn = asgn_("$r", "$g.$g($v)");
+		iff = if_("l($r) < 1", "A", "$r", "[ $v ]");
+		write_function(def, asgn, iff, ret_(NULL));
 	}
 	
 	if (g_translate_html) {
-		fprintf(outputF, "</pre></td></tr>");
+ 		fprintf(outputF, "</pre></td></tr>");
 	}
 }
 	
@@ -3424,6 +3400,9 @@ static void emitExpandClass(void)
 {
 	struct expandS *expandP = &(g_translate.m_expand);
 
+	// Building blocks for code generation dynamo:
+	char *def, *asgn, *iff, *iff2, *els, *ret;
+
 	if (allzero(expandP, sizeof(g_translate.m_expand))) {
 		return;
 	}
@@ -3431,203 +3410,116 @@ static void emitExpandClass(void)
 	if (g_translate_html) {
 		fprintf(outputF, "<tr><td></td><td><pre>");
 	}
-	fprintf(outputF,
-		"class Expand(object):\n"
-	);
 
-	/* Returns an array */
+	cls("Expand", FALSE);
 
-	if (expandP->m_at) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def at():\n"
-			"    if (len(sys.argv) < 2):\n"
-			"      return []\n"
-			"    return  sys.argv[1:]\n"
-		);
+	if (expandP->m_at) { /* Returns an array */
+		def = def0_("at");
+		iff = if_("l($a) < 2", "R", "[]");
+		write_function(def, iff, ret_("s[1:]"));
 	}
 
-	/* If in_quotes should return concatenation of values separated by ' '
-	 * Otherwise should return an array
-	 */
 	if (expandP->m_star) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def star(in_quotes):\n"
-			"    if (in_quotes):\n"
-			"      if (len(sys.argv) < 2):\n"
-			"        return \"\"\n"
-			"      return \" \".join(sys.argv[1:])\n"
-			"    return Expand.at()\n"
-		);
+		/* If in_quotes should return concatenation of values separated by ' '
+		 * Otherwise should return an array */
+		def = def_("$t", "Q");
+		iff = if_("in_quotes", "IR", /*I:*/ "l($a) < 2", "R", "\"\"",
+									 /*R:*/ "\" \".j(s[1:])");
+		write_function(def, iff, ret_("Expand.at()"));
 	}
 
 	if (expandP->m_hash) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def hash():\n"
-			"    return  len(sys.argv)-1\n"
-		);
+		def = def0_("hash");
+		write_function(def, ret_("l($a)-1"));
 	}
 
 	if (expandP->m_dollar) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def dollar():\n"
-			"    return  os.getpid()\n"
-		);
+		def = def0_("dollar");
+		write_function(def, ret_("os.getpid()"));
 	}
 
 	if (expandP->m_exclamation) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def exclamation():\n"
-			"    raise Bash2PyException(\"$! unsupported\")\n"
-		);
+		write_unsupported_func0("exclamation", "$!");
 	}
 
 	if (expandP->m_underbar) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def underbar():\n"
-			"    raise Bash2PyException(\"$_ unsupported\")\n"
-		);
+		write_unsupported_func0("underbar", "$_");
 	}
 
 	if (expandP->m_hyphen) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def hyphen():\n"
-			"    raise Bash2PyException(\"$- unsupported\")\n"
-		);
+		write_unsupported_func0("hyphen", "$-");
 	}
 
 	if (expandP->m_minus) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def minus(name, value=''):\n"
-			"    if (IsDefined(name)):\n"
-			"      return GetValue(name)\n"
-			"    return value\n"
-		);
+		def = def_("$m", "NV\'");
+		iff = if_("D($n)", "R", "G($n)");
+		write_function(def, iff, ret_("$v"));
 	}
 
 	if (expandP->m_eq) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def eq(name, value=''):\n"
-			"    if (not IsDefined(name)):\n"
-			"      SetValue(name, value)\n"
-			"      return value\n"
-			"    return GetValue(name)\n"
-		);
+		def = def_("eq", "NV\'");
+		iff = if_("~D($n)", "LR", "S($n, $v)", "$v");
+		write_function(def, iff, ret_("G($n)"));
 	}
 
 	if (expandP->m_qmark) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def qmark(name, value=None):\n"
-			"    if (not IsDefined(name)):\n"
-			"      if (value is None or value == ''):\n"
-			"        value = \"Bash variable \" + name + \" is not defined\"\n"
-			"      raise Bash2PyException(value)\n"
-			"    return GetValue(name)\n"
-		);
+		def = def_("qmark", "NV0");
+		iff = if_("~D($n)", "Ir", /*I:*/ "$v $0|$v == \'\'", "A", "$v", "$Z",
+								   /*r:*/ "$v");
+		write_function(def, iff, ret_("G($n)"));
 	}
 
 	if (expandP->m_plus) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def plus(name, value=''):\n"
-			"    if (not IsDefined(name)):\n"
-			"      return ''\n"
-			"    return value\n"
-		);
+		def = def_("$p", "NV\'");
+		iff = if_("~D($n)", "R", "''");
+		write_function(def, iff, ret_("$v"));
 	}
 
 	if (expandP->m_colon_minus) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def colonMinus(name, value=''):\n"
-			"    ret = GetValue(name)\n"
-			"    if (ret is None or ret == ''):\n"
-			"		ret = value\n"
-			"    return ret\n"
-		);
+		def = def_("$c$M", "NV\'");
+		asgn = asgn_("$r", "G($n)");
+		iff = if_("$r $0|$r $q", "A", "$r", "$v");
+		write_function(def, asgn, iff, ret_("$r"));
 	}
 
 	if (expandP->m_colon_eq) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def colonEq(name, value=''):\n"
-			"    ret = GetValue(name)\n"
-			"    if (ret is None or ret == ''):\n"
-			"      SetValue(name, value)\n"
-			"      ret = value\n"
-			"    return ret\n"
-		);
+		def = def_("$cEq", "NV\'");
+		asgn = asgn_("$r", "G($n)");
+		iff = if_("$r $0|$r $q", "LA", /*L:*/ "S($n, $v)", /*A:*/ "$r", "$v");
+		write_function(def, asgn, iff, ret_("$r"));
 	}
 
 	if (expandP->m_colon_qmark) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def colonQmark(name, value=None):\n"
-			"    ret = GetValue(name)\n"
-			"    if (ret is None or ret == ''):\n"
-			"      if (value is None || value == ''):\n"
-			"        value = \"Bash variable \" + name + \" is undefined or none\"\n"
-			"        raise Bash2PyException(value)\n"
-			"    return ret\n"
-		);
+		def = def_("$cQmark", "NV0");
+		asgn = asgn_("$r", "G($n)");
+		iff = if_("$r $0|$r $q", "I", "$v $0|$v $q", "Ar",
+					   /*A:*/ "$v", "$Z", /*r:*/ "$v");
+		write_function(def, asgn, iff, ret_("$r"));
 	}
 
 	if (expandP->m_colon_plus) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def colonPlus(name, value=''):\n"
-			"    ret = GetValue(name)\n"
-			"    if (ret is None or ret == ''):\n"
-			"      return ''\n"
-			"    return value\n"
-		);
+		def = def_("$c$P", "NV\'");
+		asgn = asgn_("$r", "G($n)");
+		iff = if_("$r $0|$r $q", "R", "''");
+		write_function(def, asgn, iff, ret_("$v"));
 	}
 
 	if (expandP->m_prefixStar) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def prefixStar(name):\n"
-			"    raise Bash2PyException(\"${!prefix*}  unsupported\")\n"
-			"    return ''\n"
-		);
+		write_unsupported_func("$f$T", TRUE, "${!$f*}");
 	}
 
 	if (expandP->m_prefixAt) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def prefixAt(name):\n"
-			"    raise Bash2PyException(\"${!prefix@}  unsupported\")\n"
-			"    return ''\n"
-		);
+		write_unsupported_func("$fAt", TRUE, "${!$f@}");
 	}
 	if (expandP->m_indicesStar) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def indicesStar(name):\n"
-			"    raise Bash2PyException(\"${!name[*]}  unsupported\")\n"
-			"    return ''\n"
-		);
+		write_unsupported_func("indices$T", TRUE, "${!$n[*]}");
 	}
 
 	if (expandP->m_indicesAt) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def indicesAt(name):\n"
-			"    raise Bash2PyException(\"${!name[@]}  unsupported\")\n"
-			"    return ''\n"
-		);
+		write_unsupported_func("indicesAt", TRUE, "${!$n[*]}");
 	}
 
-	fprintf(outputF, "\n");
+	end_cls();
 
 	if (g_translate_html) {
 		fprintf(outputF, "</pre></td></tr>");
@@ -3650,6 +3542,9 @@ static void emitBash2PyClass(void)
 {
 	struct valueS *valueP = &(g_translate.m_value);
 
+	// Building blocks for code generation dynamo:
+	char *def, *asgn, *iff, *iff2, *els, *ret;
+
 	if (allzero(valueP, sizeof(g_translate.m_value))) {
 		return;
 	}
@@ -3658,135 +3553,77 @@ static void emitBash2PyClass(void)
 		fprintf(outputF, "<tr><td></td><td><pre>");
 	}
 	
-	fprintf(outputF,
-		"class Bash2Py(object):\n"
-		"  __slots__ = [\"val\"]\n"
-		"  def __init__(self, value=''):\n"
-		"    self.val = value\n"
-	);
+	cls("Bash2Py", FALSE);
+		set_static(FALSE);
+		write_function(asgn_("__slots__", "[\"$u\"]"));  // kludge
+		write_init_func("SV\'");
 
 	if (valueP->m_set_value) {
-		fprintf(outputF,
-			"  def setValue(self, value=None):\n"
-			"    self.val = value\n"
-			"    return value\n"
-		);
+		def = def_("S()", "SV0");
+		asgn = asgn_("$L", "$v");
+		write_function(def, ret_("$v"));
 	}
 
 	if (valueP->m_preincrement) {
-		fprintf(outputF,
-			"  def preinc(self,inc=1):\n"
-			"    self.val += inc\n"
-			"    return self.val\n"
-		);
+		write_increment_func("preinc", "+");
 	}
 
 	if (valueP->m_postincrement) {
-		fprintf(outputF,
-			"  def postinc(self,inc=1):\n"
-			"    tmp = self.val\n"
-			"    self.val += inc\n"
-			"    return tmp\n"
-		);
+		write_increment_func("postinc", "++");
 	}
 
 	if (valueP->m_is_null) {
-		fprintf(outputF,
-			"  def isNull():\n"
-			"    return value is None\n"
-		);
+		def = def_("isNull", "S");
+		write_function(def, ret_("$L $0"));
 	}
 
 	if (valueP->m_not_null_else) {
-		fprintf(outputF,
-			"  def notNullElse(value):\n"
-			"    if self.isNull():\n"
-			"      return value\n"
-			"    return self.val\n"
-		);
+		def = def_("notNullElse", "SV");
+		iff = if_("$s.isNull()", "R", "$v");
+		write_function(def, iff, ret_("$L"));
 	}
 
 	if (valueP->m_plus) {
-		fprintf(outputF,
-			"  def plus(value):\n"
-			"    self.val += value\n"
-			"    return self.val\n"
-		);
+		write_assignment_func("$p", "+");
 	}
 
 	if (valueP->m_minus) {
-		fprintf(outputF,
-			"  def minus(value):\n"
-			"    self.val -= value\n"
-			"    return self.val\n"
-		);
+		write_assignment_func("$m", "-");
 	}
 
 	if (valueP->m_multiply) {
-		fprintf(outputF,
-			"  def multiply(value):\n"
-			"    self.val *= value\n"
-			"    return self.val\n"
-		);
+		write_assignment_func("multiply", "*");
 	}
 
 	if (valueP->m_idivide) {
-		fprintf(outputF,
-			"  def idivide(value):\n"
-			"    self.val //= value\n"
-			"    return self.val\n"
-		);
+		write_assignment_func("idivide", "//");
 	}
 
 	if (valueP->m_mod) {
-		fprintf(outputF,
-			"  def mod(value):\n"
-			"    self.val %%= value\n"
-			"    return self.val\n"
-		);
+		write_assignment_func("mod", "%%");
 	}
 
 	if (valueP->m_lsh) {
-		fprintf(outputF,
-			"  def lsh(value):\n"
-			"    self.val <<= value\n"
-			"    return self.val\n"
-		);
+		write_assignment_func("lsh", "<<");
 	}
 
 	if (valueP->m_rsh) {
-		fprintf(outputF,
-			"  def rsh(value):\n"
-			"    self.val >>= value\n"
-			"    return self.val\n"
-		);
+		write_assignment_func("rsh", ">>");
 	}
 
 	if (valueP->m_band) {
-		fprintf(outputF,
-			"  def band(value):\n"
-			"    self.val &= value\n"
-			"    return self.val\n"
-		);
+		write_assignment_func("band", "&");
 	}
 
 	if (valueP->m_bor) {
-		fprintf(outputF,
-			"  def bor(value):\n"
-			"    self.val |= value\n"
-			"    return self.val\n"
-		);
+		write_assignment_func("bor", "|");
 	}
 
 	if (valueP->m_bxor) {
-		fprintf(outputF,
-			"  def bxor(value):\n"
-			"    self.val ^= value\n"
-			"    return self.val\n"
-		);
+		write_assignment_func("bxor", "^");
 	}
 
-	fprintf(outputF, "\n");
+	end_cls();
 
 	if (g_translate_html) {
 		fprintf(outputF, "</pre></td></tr>");
@@ -3819,6 +3656,7 @@ void close_translator()
 	fclose(outputF);
 
 	dispose_all_function_names();
+    dispose_macro_dictionaries();
 
 	log_close();
 }

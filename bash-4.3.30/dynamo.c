@@ -13,12 +13,12 @@
 #  include <varargs.h>
 #endif
 
-#include "burp.h"
+#include "translate.h"
+#include "dynamo.h"
 
-#ifndef TEST
-extern
-#endif
+#ifdef TEST
 FILE *outputF;
+#endif
 
 #if !HAVE_STPCPY
 char *stpcpy(char *s1, const char *s2) {
@@ -201,10 +201,10 @@ char *_static() {
     return sm;
 }
 
-void _set_static(_BOOL is_static) { g_is_static = is_static; };
+void set_static(_BOOL is_static) { g_is_static = is_static; };
 char *_add_to_list(char *l, const char *s) { return stpcpy(stpcpy(l, s), ", "); }
 
-char *_def(char *name, char *sig)
+char *def_(char *name, char *sig)
 {
     static char py_buf[80];
     char value_buf[16];
@@ -247,7 +247,7 @@ char *_def(char *name, char *sig)
     return py_buf;
 }
 
-char *_def0(char *name) { return _def(name, NULL); }
+char *def0_(char *name) { return def_(name, NULL); }
 
 char *_ret_internal(char *return_what) {
     static char rets[3][48];
@@ -259,7 +259,7 @@ char *_ret_internal(char *return_what) {
     if (g_conditional_nesting == 0) g_lines_in_func++;
     return ret;
 }
-char *_ret(char *return_what) { return _ret_internal(expand_macros(return_what)); }
+char *ret_(char *return_what) { return _ret_internal(expand_macros(return_what)); }
 
 char *_raise_internal(char *desc, _BOOL need_quotes) {
     static char _raised[64];
@@ -269,11 +269,11 @@ char *_raise_internal(char *desc, _BOOL need_quotes) {
     if (g_conditional_nesting == 0) g_lines_in_func++;
     return _raised;
 }
-char *_raise(char *desc) { return _raise_internal(expand_macros(desc), FALSE); }
+char *raise_(char *desc) { return _raise_internal(expand_macros(desc), FALSE); }
 
 // "if" and "else" clauses. For the latter, set the argument to NULL.
-char *_if(char *_if, char *types, ...);
-char *_else(char *types, ...);
+char *if_(char *if_, char *types, ...);
+char *else_(char *types, ...);
 
 char *_if_internal(char *cond) {
     static char if_stmts[3][256];
@@ -297,7 +297,7 @@ char *_asgn_internal(char *l_name, char *operator, char *r_name) {
     if (g_conditional_nesting == 0) g_lines_in_func++;
     return assignment;
 }
-char *_asgn(char *l_name, char *r_name) { 
+char *asgn_(char *l_name, char *r_name) {
     char *expanded_lname = strdup(expand_macros(l_name));
     char *result = _asgn_internal(expanded_lname, NULL, expand_macros(r_name));
     free(expanded_lname);
@@ -312,16 +312,16 @@ void _assignment_func_internal(char *name, char *type_signature, char *oper)
     if (p) *p = '\0';
 
     g_left_margin = (g_inside_class ? 2 : 0);
-    def = _def(name, type_signature);
+    def = def_(name, type_signature);
     if (has_tmp_line)
-        tmp_asgn = _asgn("tmp", is_initializer ? "$S" : "$L");
+        tmp_asgn = asgn_("tmp", is_initializer ? "$S" : "$L");
     asgn = _asgn_internal("self.val", oper, (strchr(type_signature, 'I') ? "inc" : "value"));
     if (is_initializer)
         write_function(def, asgn);
     else if (has_tmp_line)
-        write_function(def, tmp_asgn, asgn, _ret("tmp"));
+        write_function(def, tmp_asgn, asgn, ret_("tmp"));
     else
-        write_function(def, asgn, _ret("$L"));
+        write_function(def, asgn, ret_("$L"));
 }
 
 void write_assignment_func(char *name, char *oper) { 
@@ -348,7 +348,7 @@ void write_unsupported_func(char *name, _BOOL has_name_arg, char *bash_expr) {
     char *def, *raise;
 
     g_left_margin = 2;
-    def = _def(name, has_name_arg?"N":NULL);
+    def = def_(name, has_name_arg?"N":NULL);
     sprintf(exc_desc, "%s unsupported", bash_expr);
     raise = _raise_internal(expand_macros(exc_desc), TRUE);
     write_function(def, raise);
@@ -378,8 +378,8 @@ char *_process_ifelse_subordinates(char *buf, char *types, va_list *thens)
                 free(expanded_stmt);
                 break;
             case 'I': 
-                // As in _if(), process the "if" line then the subordinate lines,
-                // but do not call _if() because that would reset "thens"
+                // As in if_(), process the "if" line then the subordinate lines,
+                // but do not call if_() because that would reset "thens"
                 int begin_margin = g_left_margin;
                 p_buf = stpcpy(p_buf, _if_internal(expand_macros(stmt)));
                 next_types = va_arg(*thens, char *);
@@ -408,7 +408,7 @@ char *_process_ifelse_subordinates(char *buf, char *types, va_list *thens)
 }
 
 
-char *_else(char *types, ...)
+char *else_(char *types, ...)
 {
     // Process the else clause before its subordinate stmts
     int begin_margin = g_left_margin;
@@ -423,11 +423,11 @@ char *_else(char *types, ...)
     return buf;
 }
 
-char *_if(char *_if, char *types, ...)
+char *if_(char *if_, char *types, ...)
 {
     // Process the if clause before its subordinate stmts
     int begin_margin = g_left_margin;
-    char *buf = _if_internal(expand_macros(_if));
+    char *buf = _if_internal(expand_macros(if_));
 
     va_list thens;
     va_start(thens, types);
@@ -438,7 +438,7 @@ char *_if(char *_if, char *types, ...)
     return buf;
 }
 
-void _cls(char *name, _BOOL is_exception)
+void cls(char *name, _BOOL is_exception)
 {
     char type[10];
     g_left_margin = 0;
@@ -450,7 +450,7 @@ void _cls(char *name, _BOOL is_exception)
     return;
 }
 
-void _end_cls(void)
+void end_cls(void)
 {
     g_left_margin = 0;
     g_inside_class = FALSE;
@@ -504,139 +504,139 @@ char *run_test()
     init_macro_dictionaries();
 
     // Exception class
-    _cls(_EXCEPT, TRUE);
-        _set_static(FALSE);
+    cls(_EXCEPT, TRUE);
+        set_static(FALSE);
         write_init_func("SV0");
 
-        def = _def("__str__", "S");
-        write_function(def, _ret("repr($S)"));
-    _end_cls();
+        def = def_("__str__", "S");
+        write_function(def, ret_("repr($S)"));
+    end_cls();
 
     // Global functions
-    def = _def("D()", "NL");
-    write_function(def, _ret("$n\\g()|$n\\$l"));
+    def = def_("D()", "NL");
+    write_function(def, ret_("$n\\g()|$n\\$l"));
 
-    def = _def("b()", "NL");
-    iff = _if("$n\\$l", "R", "L[$n]");
-    iff2 = _if("$n\\g()", "R", "g()[$n]");
-    write_function(def, iff, iff2, _ret("$N"));
+    def = def_("b()", "NL");
+    iff = if_("$n\\$l", "R", "L[$n]");
+    iff2 = if_("$n\\g()", "R", "g()[$n]");
+    write_function(def, iff, iff2, ret_("$N"));
 
-    def = _def("Make", "NL");
-    asgn = _asgn("$r", "b($n, $l)");
-    iff = _if("$r $0", "AA", "$r", "Bash2Py(0)", "g()[$n]", "$r");
-    write_function(def, asgn, iff, _ret(NULL));
+    def = def_("Make", "NL");
+    asgn = asgn_("$r", "b($n, $l)");
+    iff = if_("$r $0", "AA", "$r", "Bash2Py(0)", "g()[$n]", "$r");
+    write_function(def, asgn, iff, ret_(NULL));
 
-    def = _def("G()", "NL");
-    asgn = _asgn("$b", "b($n,$l)");
-    iff = _if("$b $0|$b.$u $0", "R", "''");
-    write_function(def, asgn, iff, _ret("$b.$u"));
+    def = def_("G()", "NL");
+    asgn = asgn_("$b", "b($n,$l)");
+    iff = if_("$b $0|$b.$u $0", "R", "''");
+    write_function(def, asgn, iff, ret_("$b.$u"));
 
-    def = _def("S()", "NVL");
-    asgn = _asgn("$b", "b($n,$l)");
-    iff = _if("$b $0", "A", "g()[$n]","Bash2Py($v)");
-    els = _else("A", "$b.$u", "$v");
-    write_function(def, asgn, iff, els, _ret("$v"));
+    def = def_("S()", "NVL");
+    asgn = asgn_("$b", "b($n,$l)");
+    iff = if_("$b $0", "A", "g()[$n]","Bash2Py($v)");
+    els = else_("A", "$b.$u", "$v");
+    write_function(def, asgn, iff, els, ret_("$v"));
 
-    def = _def("Str", "V");
-    iff = _if("i($v, list)", "R", "\" \".j($v)");
-    iff2 = _if("i($v, basestring)", "R", "$v");
-    write_function(def, iff, iff2, _ret("str($v)"));
+    def = def_("Str", "V");
+    iff = if_("i($v, list)", "R", "\" \".j($v)");
+    iff2 = if_("i($v, basestring)", "R", "$v");
+    write_function(def, iff, iff2, ret_("str($v)"));
 
-    def = _def("Array", "V");
-    iff = _if("i($v, list)", "R", "$v");
-    iff2 = _if("i($v, basestring)", "R", "$v.strip().split(' ')");
-    write_function(def, iff, iff2, _ret("[ $v ]"));
+    def = def_("Array", "V");
+    iff = if_("i($v, list)", "R", "$v");
+    iff2 = if_("i($v, basestring)", "R", "$v.strip().split(' ')");
+    write_function(def, iff, iff2, ret_("[ $v ]"));
 
-    def = _def("$G", "V");
-    asgn = _asgn("$r", "$g.$g($v)");
-    iff = _if("l($r) < 1", "A", "$r", "[ $v ]");
-    write_function(def, asgn, iff, _ret(NULL));
+    def = def_("$G", "V");
+    asgn = asgn_("$r", "$g.$g($v)");
+    iff = if_("l($r) < 1", "A", "$r", "[ $v ]");
+    write_function(def, asgn, iff, ret_(NULL));
 
     // Expand class
-    _cls("Expand", FALSE);
-        def = _def0("at");
-        iff = _if("l($a) < 2", "R", "[]");
-        write_function(def, iff, _ret("s[1:]"));
+    cls("Expand", FALSE);
+        def = def0_("at");
+        iff = if_("l($a) < 2", "R", "[]");
+        write_function(def, iff, ret_("s[1:]"));
 
-        def = _def("$t", "Q");
-        iff = _if("in_quotes", "IR", /*I:*/ "l($a) < 2", "R", "\"\"",
+        def = def_("$t", "Q");
+        iff = if_("in_quotes", "IR", /*I:*/ "l($a) < 2", "R", "\"\"",
                                      /*R:*/ "\" \".j(s[1:])");
-        write_function(def, iff, _ret("Expand.at()"));
+        write_function(def, iff, ret_("Expand.at()"));
 
-        def = _def0("hash");
-        write_function(def, _ret("l($a)-1"));
+        def = def0_("hash");
+        write_function(def, ret_("l($a)-1"));
 
-        def = _def0("dollar");
-        write_function(def, _ret("os.getpid()"));
+        def = def0_("dollar");
+        write_function(def, ret_("os.getpid()"));
 
         write_unsupported_func0("exclamation", "$!");
         write_unsupported_func0("underbar", "$_");
         write_unsupported_func0("hyphen", "$-");
 
-        def = _def("$m", "NV\'");
-        iff = _if("D($n)", "R", "G($n)");
-        write_function(def, iff, _ret("$v"));
+        def = def_("$m", "NV\'");
+        iff = if_("D($n)", "R", "G($n)");
+        write_function(def, iff, ret_("$v"));
 
-        def = _def("eq", "NV\'");
-        iff = _if("~D($n)", "LR", "S($n, $v)", "$v");
-        write_function(def, iff, _ret("G($n)"));
+        def = def_("eq", "NV\'");
+        iff = if_("~D($n)", "LR", "S($n, $v)", "$v");
+        write_function(def, iff, ret_("G($n)"));
 
-        def = _def("qmark", "NV0");
-        iff = _if("~D($n)", "Ir", /*I:*/ "$v $0|$v == \'\'", "A", "$v", "$Z", 
+        def = def_("qmark", "NV0");
+        iff = if_("~D($n)", "Ir", /*I:*/ "$v $0|$v == \'\'", "A", "$v", "$Z", 
                                    /*r:*/ "$v");
-        write_function(def, iff, _ret("G($n)"));
+        write_function(def, iff, ret_("G($n)"));
 
-        def = _def("$p", "NV\'");
-        iff = _if("~D($n)", "R", "''");
-        write_function(def, iff, _ret("$v"));
+        def = def_("$p", "NV\'");
+        iff = if_("~D($n)", "R", "''");
+        write_function(def, iff, ret_("$v"));
 
-        def = _def("$c$M", "NV\'");
-        asgn = _asgn("$r", "G($n)");
-        iff = _if("$r $0|$r $q", "A", "$r", "$v");
-        write_function(def, asgn, iff, _ret("$r"));
+        def = def_("$c$M", "NV\'");
+        asgn = asgn_("$r", "G($n)");
+        iff = if_("$r $0|$r $q", "A", "$r", "$v");
+        write_function(def, asgn, iff, ret_("$r"));
 
-        def = _def("$cEq", "NV\'");
-        asgn = _asgn("$r", "G($n)");
-        iff = _if("$r $0|$r $q", "LA", /*L:*/ "S($n, $v)", /*A:*/ "$r", "$v");
-        write_function(def, asgn, iff, _ret("$r"));
+        def = def_("$cEq", "NV\'");
+        asgn = asgn_("$r", "G($n)");
+        iff = if_("$r $0|$r $q", "LA", /*L:*/ "S($n, $v)", /*A:*/ "$r", "$v");
+        write_function(def, asgn, iff, ret_("$r"));
 
-        def = _def("$cQmark", "NV0");
-        asgn = _asgn("$r", "G($n)");
-        iff = _if("$r $0|$r $q", "I", "$v $0|$v $q", "Ar",
+        def = def_("$cQmark", "NV0");
+        asgn = asgn_("$r", "G($n)");
+        iff = if_("$r $0|$r $q", "I", "$v $0|$v $q", "Ar",
                        /*A:*/ "$v", "$Z", /*r:*/ "$v");
-        write_function(def, asgn, iff, _ret("$r"));
+        write_function(def, asgn, iff, ret_("$r"));
 
-        def = _def("$c$P", "NV\'");
-        asgn = _asgn("$r", "G($n)");
-        iff = _if("$r $0|$r $q", "R", "''");
-        write_function(def, asgn, iff, _ret("$v"));
+        def = def_("$c$P", "NV\'");
+        asgn = asgn_("$r", "G($n)");
+        iff = if_("$r $0|$r $q", "R", "''");
+        write_function(def, asgn, iff, ret_("$v"));
 
         write_unsupported_func("$f$T", TRUE, "${!$f*}");
         write_unsupported_func("$fAt", TRUE, "${!$f@}");
         write_unsupported_func("indices$T", TRUE, "${!$n[*]}");
         write_unsupported_func("indicesAt", TRUE, "${!$n[*]}");
 
-    _end_cls();
+    end_cls();
 
-    _cls("Bash2Py", FALSE);
-        _set_static(FALSE);
+    cls("Bash2Py", FALSE);
+        set_static(FALSE);
 
-        write_function(_asgn("__slots__", "[\"$u\"]"));  // kludge
+        write_function(asgn_("__slots__", "[\"$u\"]"));  // kludge
         write_init_func("SV\'");
 
-        def = _def("S()", "SV0");
-        asgn = _asgn("$L", "$v");
-        write_function(def, _ret("$v"));
+        def = def_("S()", "SV0");
+        asgn = asgn_("$L", "$v");
+        write_function(def, ret_("$v"));
 
         write_increment_func("preinc", "+");
         write_increment_func("postinc", "++");
 
-        def = _def("isNull", "S");
-        write_function(def, _ret("$L $0"));
+        def = def_("isNull", "S");
+        write_function(def, ret_("$L $0"));
 
-        def = _def("notNullElse", "SV");
-        iff = _if("$s.isNull()", "R", "$v");
-        write_function(def, iff, _ret("$L"));
+        def = def_("notNullElse", "SV");
+        iff = if_("$s.isNull()", "R", "$v");
+        write_function(def, iff, ret_("$L"));
 
         write_assignment_func("$p", "+");
         write_assignment_func("$m", "-");
@@ -649,7 +649,7 @@ char *run_test()
         write_assignment_func("bor", "|");
         write_assignment_func("bxor", "^");
 
-    _end_cls();
+    end_cls();
 
     dispose_macro_dictionaries();
 }
