@@ -22,7 +22,8 @@ typedef struct {
 } burpT;
 
 void burp_reset(burpT *burpP);
-char *burp_extend(burpT *burpP, int offset, int need);
+char *burp_extend(burpT *burpP, char *text);
+char *burp_insert(burpT *burpP, int offset, char *text);
 void burp(burpT *burpP, const char *fmtP, ...);
 void burpc(burpT *burpP, const char c);
 void burp_ungetc(burpT *burpP);

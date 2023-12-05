@@ -35,10 +35,9 @@ char **g_current_function;
 FILE *g_log_stream;
 _BOOL g_log_is_on;
 
-_BOOL g_translate_html = 0;
+_BOOL g_translate_html = FALSE;
 
-void
-burp_reset(burpT *burpP)
+void burp_reset(burpT *burpP)
 {
 	memset(burpP->m_P, '\0', burpP->m_max);
 
@@ -48,8 +47,7 @@ burp_reset(burpT *burpP)
 	burpP->m_ungetc = 0;
 }
 
-static void
-increase_burp(burpT *burpP)
+static void increase_burp(burpT *burpP)
 {
 	int	max;
 
@@ -82,27 +80,31 @@ increase_burp(burpT *burpP)
 	burpP->m_max = max - 8;
 }
 
-char *
-burp_extend(burpT *burpP, int offset, int need)
+char * burp_extend(burpT *burpP, char *text)
 {
-	int		lth;
+	return burp_insert(burpP, burpP->m_lth, text);
+}
+
+char * burp_insert(burpT *burpP, int offset, char *text)
+{
+	int		lth = burpP->m_lth;
+	int		need = strlen(text);
 	char	*P;
-	
-	lth = burpP->m_lth;
+
 	assert(0 <= offset && offset <= lth);
-	while ((burpP->m_max - lth) < need) {
+	while ((burpP->m_max - lth) <= need) {
 		increase_burp(burpP);
 	}
 	P = burpP->m_P + offset;
 	memmove(P+need, P, lth - offset);
-	lth          += need;
-	burpP->m_lth  = lth;
+	memcpy(P, text, need);
+	lth += need;
+	burpP->m_lth = lth;
 	burpP->m_P[lth] = '\0';
 	return P;
 }
-	
-void
-burpc1(burpT *burpP, const char c)
+
+void burpc1(burpT *burpP, const char c)
 {
 	char	*P;
 
@@ -116,8 +118,7 @@ burpc1(burpT *burpP, const char c)
 	return;
 }
 
-static void
-indentation(burpT *burpP)
+static void indentation(burpT *burpP)
 {
 	int i;
 
@@ -128,8 +129,7 @@ indentation(burpT *burpP)
 				burpc1(burpP, ' ');
 }	}	}	}
 
-void
-burpc(burpT *burpP, const char c)
+void burpc(burpT *burpP, const char c)
 {
 	if (g_translate_html) {
 		burpP->m_ungetc = burpP->m_lth;
@@ -155,15 +155,13 @@ burpc(burpT *burpP, const char c)
 	assert(burpP->m_lth < burpP->m_max);
 }
 
-void
-burp_ungetc(burpT *burpP)
+void burp_ungetc(burpT *burpP)
 {
 	assert(burpP->m_ungetc < burpP->m_lth);
 	burpP->m_lth = burpP->m_ungetc;
 }
 
-void 
-burp(burpT *burpP, const char *fmtP, ...)	/* proc */
+void burp(burpT *burpP, const char *fmtP, ...)
 {
 	static burpT	burp_temp = {0,0,0,0,0,0};
 
@@ -200,8 +198,7 @@ burp(burpT *burpP, const char *fmtP, ...)	/* proc */
  	return;
 }
 
-void
-burpn(burpT *burpP, const char *stringP, int lth)
+void burpn(burpT *burpP, const char *stringP, int lth)
 {
 	int	i;
 
@@ -214,14 +211,12 @@ burpn(burpT *burpP, const char *stringP, int lth)
 	return;
 }
 
-void
-burps(burpT *burpP, const char *stringP)
+void burps(burpT *burpP, const char *stringP)
 {
 	burpn(burpP, stringP, strlen(stringP));
 }
 
-void
-burp_esc_quote(burpT *burpP, int offset, int quote)
+void burp_esc_quote(burpT *burpP, int offset, int quote)
 {
 	char	*P, *P1, *startP;
 	int		cnt, need, c;
@@ -254,8 +249,7 @@ burp_esc_quote(burpT *burpP, int offset, int quote)
 	}
 }
 
-void
-burp_rtrim(burpT *burpP)
+void burp_rtrim(burpT *burpP)
 {
 	int lth;
 	
@@ -263,8 +257,7 @@ burp_rtrim(burpT *burpP)
 	burpP->m_lth = lth;
 }
 
-void
-burps_html(burpT *burpP, const char *stringP)
+void burps_html(burpT *burpP, const char *stringP)
 {
 	int save = g_translate_html;
 
@@ -300,8 +293,8 @@ void log_deactivate()
 	g_log_is_on = FALSE;
 }
 
-// convert_format_specifiers(): Implements any printf-like specifiers
-// that we choose to invent by rewriting them in terms of standard specifiers
+// convert_format_specifiers(): Rewrites any of our custom,
+// printf-like codes in terms of the standard format specifiers
 static char * convert_format_specifiers(char *msg)
 {
 	const int EXTRA_SPACE = 32;
@@ -449,8 +442,7 @@ void log_return_msg(char *msg_template, ...)
 	g_log_indent -= FULL_INDENT;
 }
 
-// String conversion utility for better logging.
-// THE CALLER NEEDS TO MANAGE THIS MEMORY CAREFULLY!
+// String conversion utilities for better logging
 char *bool_to_text(_BOOL value)
 {
 	static char text[6];
@@ -458,7 +450,6 @@ char *bool_to_text(_BOOL value)
 	return text;
 }
 
-// See bool_to_text() function header
 char *type_to_text(fix_typeE value)
 {
 	static char text[11];

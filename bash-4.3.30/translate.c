@@ -44,9 +44,11 @@
 #include "shell.h"
 #include "flags.h"
 #include <y.tab.h>	/* use <...> so we pick it up from the build directory */
+#include "translate.h"
 
 #include "shmbutil.h"
 #include "burp.h"
+#include "dynamo.h"
 
 #include "builtins/common.h"
 #include "fix_string.h"
@@ -73,28 +75,24 @@ static void fprintf(outputF, );
 
 #define PRINT_DEFERRED_HEREDOCS(x) \
 		do { \
-			if (deferred_heredocs) \
+			if (g_deferred_heredocs) \
 			print_deferred_heredocs (x); \
 		} while (0)
 
 /* Non-zero means the stuff being printed is inside of a function def. */
-static _BOOL was_heredoc         = FALSE;
-static int printing_connection = 0;
-static int stdout_connection   = 0;
-static REDIRECT *deferred_heredocs = NULL;
+static _BOOL g_was_heredoc         = FALSE;
+static int g_printing_connection = 0;
+static int g_stdout_connection   = 0;
+static REDIRECT *g_deferred_heredocs = NULL;
 static int g_embedded          = 0;
 static int g_started           = 0;
-
-/* A buffer to indicate the indirection level (PS4) when set -x is enabled. */
-static char indirection_string[100];
 
 //MIW var declarations begin
 
 extern _BOOL   g_translate_html;
-static FILE* outputF = NULL;
+FILE* outputF = NULL;
 
-static burpT case_var = {0,0,0,0,0,0};
-static burpT temp_burp = {0, 0, 0, 0, 0, 0};
+static burpT g_case_var = {0,0,0,0,0,0};
 //MIW var declarations end
 
 burpT	g_output  = {0, 0, 0, 0, 0, 0};
@@ -217,6 +215,9 @@ static void print_redirection (REDIRECT *redirect)
 {
 	int redirector, redir_fd;
 	WORD_DESC *redirectee, *redir_word;
+	int is_varassign = redirect->rflags & REDIR_VARASSIGN;
+    _BOOL not_stdin = redirector != BASH2PY_STDIN;
+    _BOOL not_stdout = redirector != BASH2PY_STDOUT;
 
 	redirectee = redirect->redirectee.filename;
 	redir_fd = redirect->redirectee.dest;
@@ -227,18 +228,18 @@ static void print_redirection (REDIRECT *redirect)
 	switch (redirect->instruction)
 	{
 	case r_input_direction:
-		if (redirect->rflags & REDIR_VARASSIGN) {
+		if (is_varassign) {
 			burp(&g_output, "{%s}", redir_word->word);
-		} else if (redirector != BASH2PY_STDIN) {
+		} else if (not_stdin) {
 			burp(&g_output, "%d", redirector);
 		}
 		burp(&g_output, "< %s", redirectee->word);
 		break;
 
 	case r_output_direction:
-		if (redirect->rflags & REDIR_VARASSIGN) {
+		if (is_varassign) {
 			burp(&g_output, "{%s}", redir_word->word);
-		} else if (redirector != BASH2PY_STDOUT) {
+		} else if (not_stdout) {
 			burp(&g_output, "%d", redirector);
 		}
 		burp(&g_output, "> %s", redirectee->word);
@@ -249,27 +250,27 @@ static void print_redirection (REDIRECT *redirect)
 		break;
 
 	case r_output_force:
-		if (redirect->rflags & REDIR_VARASSIGN) {
+		if (is_varassign) {
 			burp(&g_output, "{%s}", redir_word->word);
-		} else if (redirector != BASH2PY_STDOUT) {
+		} else if (not_stdout) {
 			burp(&g_output, "%d", redirector);
 		}
 		burp(&g_output, ">|%s", redirectee->word);
 		break;
 
 	case r_appending_to:
-		if (redirect->rflags & REDIR_VARASSIGN) {
+		if (is_varassign) {
 			burp(&g_output, "{%s}", redir_word->word);
-		} else if (redirector != BASH2PY_STDOUT) {
+		} else if (not_stdout) {
 			burp(&g_output, "%d", redirector);
 		}
 		burp(&g_output, ">> %s", redirectee->word);
 		break;
 
 	case r_input_output:
-		if (redirect->rflags & REDIR_VARASSIGN) {
+		if (is_varassign) {
 			burp(&g_output, "{%s}", redir_word->word);
-		} else if (redirector != BASH2PY_STDOUT) {
+		} else if (not_stdout) {
 			burp(&g_output, "%d", redirector);
 		}
 		burp(&g_output, "<> %s", redirectee->word);
@@ -283,16 +284,16 @@ static void print_redirection (REDIRECT *redirect)
 		break;
 
 	case r_reading_string:
-		if (redirect->rflags & REDIR_VARASSIGN) {
+		if (is_varassign) {
 			burp(&g_output, "{%s}", redir_word->word);
-		} else if (redirector != BASH2PY_STDIN) {
+		} else if (not_stdin) {
 			burp(&g_output, "%d", redirector);
 		}
 		burp(&g_output, "<<< %s", redirect->redirectee.filename->word);
 		break;
 
 	case r_duplicating_input:
-		if (redirect->rflags & REDIR_VARASSIGN) {
+		if (is_varassign) {
 			burp(&g_output, "{%s}<&%d", redir_word->word, redir_fd);
 		} else {
 			burp(&g_output, "%d<&%d", redirector, redir_fd);
@@ -300,7 +301,7 @@ static void print_redirection (REDIRECT *redirect)
 		break;
 
 	case r_duplicating_output:
-		if (redirect->rflags & REDIR_VARASSIGN) {
+		if (is_varassign) {
 			burp(&g_output, "{%s}>&%d", redir_word->word, redir_fd);
 		} else {
 			burp(&g_output, "%d>&%d", redirector, redir_fd);
@@ -308,7 +309,7 @@ static void print_redirection (REDIRECT *redirect)
 		break;
 
 	case r_duplicating_input_word:
-		if (redirect->rflags & REDIR_VARASSIGN) {
+		if (is_varassign) {
 			burp(&g_output, "{%s}<&%s", redir_word->word, redirectee->word);
 		} else {
 			burp(&g_output, "%d<&%s", redirector, redirectee->word);
@@ -316,7 +317,7 @@ static void print_redirection (REDIRECT *redirect)
 		break;
 
 	case r_duplicating_output_word:
-		if (redirect->rflags & REDIR_VARASSIGN) {
+		if (is_varassign) {
 			burp(&g_output, "{%s}>&%s", redir_word->word, redirectee->word);
 		} else {
 			burp(&g_output, "%d>&%s", redirector, redirectee->word);
@@ -324,7 +325,7 @@ static void print_redirection (REDIRECT *redirect)
 		break;
 
 	case r_move_input:
-		if (redirect->rflags & REDIR_VARASSIGN) {
+		if (is_varassign) {
 			burp(&g_output, "{%s}<&%d-", redir_word->word, redir_fd);
 		} else {
 			burp(&g_output, "%d<&%d-", redirector, redir_fd);
@@ -332,7 +333,7 @@ static void print_redirection (REDIRECT *redirect)
 		break;
 
 	case r_move_output:
-		if (redirect->rflags & REDIR_VARASSIGN) {
+		if (is_varassign) {
 			burp(&g_output, "{%s}>&%d-", redir_word->word, redir_fd);
 		} else {
 			burp(&g_output, "%d>&%d-", redirector, redir_fd);
@@ -340,7 +341,7 @@ static void print_redirection (REDIRECT *redirect)
 		break;
 
 	case r_move_input_word:
-		if (redirect->rflags & REDIR_VARASSIGN) {
+		if (is_varassign) {
 			burp(&g_output, "{%s}<&%s-", redir_word->word, redirectee->word);
 		} else {
 			burp(&g_output, "%d<&%s-", redirector, redirectee->word);
@@ -348,7 +349,7 @@ static void print_redirection (REDIRECT *redirect)
 		break;
 
 	case r_move_output_word:
-		if (redirect->rflags & REDIR_VARASSIGN) {
+		if (is_varassign) {
 			burp(&g_output, "{%s}>&%s-", redir_word->word, redirectee->word);
 		} else {
 			burp(&g_output, "%d>&%s-", redirector, redirectee->word);
@@ -356,7 +357,7 @@ static void print_redirection (REDIRECT *redirect)
 		break;
 
 	case r_close_this:
-		if (redirect->rflags & REDIR_VARASSIGN) {
+		if (is_varassign) {
 			burp(&g_output, "{%s}>&-", redir_word->word);
 		} else {
 			burp(&g_output, "%d>&-", redirector);
@@ -383,7 +384,7 @@ static void print_heredocs (REDIRECT *heredocs)
 		print_redirection (hdtail);
 		burpc(&g_output, '\n');
 	}
-	was_heredoc = TRUE;
+	g_was_heredoc = TRUE;
 }
 
 static void print_redirection_list (REDIRECT *redirects)
@@ -393,7 +394,7 @@ static void print_redirection_list (REDIRECT *redirects)
 	heredocs = (REDIRECT *)NULL;
 	hdtail = heredocs;
 
-	was_heredoc = FALSE;
+	g_was_heredoc = FALSE;
 	while (redirects)
 	{
 		/* Defer printing the here documents until we've printed the
@@ -428,27 +429,29 @@ static void print_redirection_list (REDIRECT *redirects)
 
 	/* Now that we've printed all the other redirections (on one line),
 	 print the here documents. */
-	if (heredocs && printing_connection) {
-		deferred_heredocs = heredocs;
+	if (heredocs && g_printing_connection) {
+		g_deferred_heredocs = heredocs;
 	} else if (heredocs) {
 		print_heredocs (heredocs);
 		dispose_redirects (heredocs);
 	}
 }
 
-static void
-handle_redirection_list (REDIRECT **redirectsPP)
+static void handle_redirection_list (REDIRECT **redirectsPP)
 {
 	REDIRECT **redirectPP, *redirectP, *heredocs, *hdtail, *newredir;
-	int redirector, redir_fd;
+	int redirector, redir_fd, is_varassign;
 	WORD_DESC *redirectee, *redir_word;
 
-	for (redirectPP = redirectsPP; redirectP = *redirectPP; ){
+	for (redirectPP = redirectsPP; redirectP = *redirectPP; /* increment nothing */){
 
+		is_varassign = redirectP->rflags & REDIR_VARASSIGN;
 		redirectee = redirectP->redirectee.filename;
 		redir_fd   = redirectP->redirectee.dest;
 		redir_word = redirectP->redirector.filename;
 		redirector = redirectP->redirector.dest;
+		_BOOL not_stdin = redirector != BASH2PY_STDIN;
+		_BOOL not_stdout = redirector != BASH2PY_STDOUT;
 
 		switch(redirectP->instruction) {
 		case r_reading_until:
@@ -461,17 +464,17 @@ handle_redirection_list (REDIRECT **redirectsPP)
 			burp(&g_output, "os.dup2(2, %d)\n", redirectP->redirector.dest);
 			break;
 		case r_input_direction:
-			if (redirectP->rflags & REDIR_VARASSIGN) {
+			if (is_varassign) {
 				burp(&g_output, "{%s}", redir_word->word);
-			} else if (redirector != BASH2PY_STDIN) {
+			} else if (not_stdin) {
 				burp(&g_output, "%d", redirector);
 			}
 			burp(&g_output, "< %s", redirectee->word);
 			break;
 		case r_output_direction:
-			if (redirectP->rflags & REDIR_VARASSIGN) {
+			if (is_varassign) {
 				burp(&g_output, "{%s}", redir_word->word);
-			} else if (redirector != BASH2PY_STDOUT) {
+			} else if (not_stdout) {
 				burp(&g_output, "%d", redirector);
 			}
 			burp(&g_output, "> %s", redirectee->word);
@@ -480,43 +483,43 @@ handle_redirection_list (REDIRECT **redirectsPP)
 			burpc(&g_output, '&');
 			break;
 		case r_output_force:
-			if (redirectP->rflags & REDIR_VARASSIGN) {
+			if (is_varassign) {
 				burp(&g_output, "{%s}", redir_word->word);
-			} else if (redirector != BASH2PY_STDOUT) {
+			} else if (not_stdout) {
 				burp(&g_output, "%d", redirector);
 			}
 			burp(&g_output, ">|%s", redirectee->word);
 			break;
 	
 		case r_appending_to:
-			if (redirectP->rflags & REDIR_VARASSIGN) {
+			if (is_varassign) {
 				burp(&g_output, "{%s}", redir_word->word);
-			} else if (redirector != BASH2PY_STDOUT) {
+			} else if (not_stdout) {
 				burp(&g_output, "%d", redirector);
 			}
 			burp(&g_output, ">> %s", redirectee->word);
 			break;
 	
 		case r_input_output:
-			if (redirectP->rflags & REDIR_VARASSIGN) {
+			if (is_varassign) {
 				burp(&g_output, "{%s}", redir_word->word);
-			} else if (redirector != BASH2PY_STDOUT) {
+			} else if (not_stdout) {
 				burp(&g_output, "%d", redirector);
 			}
 			burp(&g_output, "<> %s", redirectee->word);
 			break;
 	
 		case r_reading_string:
-			if (redirectP->rflags & REDIR_VARASSIGN) {
+			if (is_varassign) {
 				burp(&g_output, "{%s}", redir_word->word);
-			} else if (redirector != BASH2PY_STDIN) {
+			} else if (not_stdin) {
 				burp(&g_output, "%d", redirector);
 			}
 			burp(&g_output, "<<< %s", redirectP->redirectee.filename->word);
 			break;
 	
 		case r_duplicating_input:
-			if (redirectP->rflags & REDIR_VARASSIGN) {
+			if (is_varassign) {
 				burp(&g_output, "{%s}<&%d", redir_word->word, redir_fd);
 			} else {
 				burp(&g_output, "%d<&%d", redirector, redir_fd);
@@ -524,7 +527,7 @@ handle_redirection_list (REDIRECT **redirectsPP)
 			break;
 	
 		case r_duplicating_output:
-			if (redirectP->rflags & REDIR_VARASSIGN) {
+			if (is_varassign) {
 				burp(&g_output, "{%s}>&%d", redir_word->word, redir_fd);
 			} else {
 				burp(&g_output, "%d>&%d", redirector, redir_fd);
@@ -532,7 +535,7 @@ handle_redirection_list (REDIRECT **redirectsPP)
 			break;
 	
 		case r_duplicating_input_word:
-			if (redirectP->rflags & REDIR_VARASSIGN) {
+			if (is_varassign) {
 				burp(&g_output, "{%s}<&%s", redir_word->word, redirectee->word);
 			} else {
 				burp(&g_output, "%d<&%s", redirector, redirectee->word);
@@ -540,7 +543,7 @@ handle_redirection_list (REDIRECT **redirectsPP)
 			break;
 	
 		case r_move_input:
-			if (redirectP->rflags & REDIR_VARASSIGN) {
+			if (is_varassign) {
 				burp(&g_output, "{%s}<&%d-", redir_word->word, redir_fd);
 			} else {
 				burp(&g_output, "%d<&%d-", redirector, redir_fd);
@@ -548,7 +551,7 @@ handle_redirection_list (REDIRECT **redirectsPP)
 			break;
 	
 		case r_move_output:
-			if (redirectP->rflags & REDIR_VARASSIGN) {
+			if (is_varassign) {
 				burp(&g_output, "{%s}>&%d-", redir_word->word, redir_fd);
 			} else {
 				burp(&g_output, "%d>&%d-", redirector, redir_fd);
@@ -556,7 +559,7 @@ handle_redirection_list (REDIRECT **redirectsPP)
 			break;
 	
 		case r_move_input_word:
-			if (redirectP->rflags & REDIR_VARASSIGN) {
+			if (is_varassign) {
 				burp(&g_output, "{%s}<&%s-", redir_word->word, redirectee->word);
 			} else {
 				burp(&g_output, "%d<&%s-", redirector, redirectee->word);
@@ -564,7 +567,7 @@ handle_redirection_list (REDIRECT **redirectsPP)
 			break;
 	
 		case r_move_output_word:
-			if (redirectP->rflags & REDIR_VARASSIGN) {
+			if (is_varassign) {
 				burp(&g_output, "{%s}>&%s-", redir_word->word, redirectee->word);
 			} else {
 				burp(&g_output, "%d>&%s-", redirector, redirectee->word);
@@ -572,7 +575,7 @@ handle_redirection_list (REDIRECT **redirectsPP)
 			break;
 	
 		case r_close_this:
-			if (redirectP->rflags & REDIR_VARASSIGN) {
+			if (is_varassign) {
 				burp(&g_output, "{%s}>&-", redir_word->word);
 			} else {
 				burp(&g_output, "%d>&-", redirector);
@@ -642,10 +645,10 @@ static void print_popen_flags(REDIRECT *redirects, _BOOL printing)
 			break;
 		case r_duplicating_output:
 			burps(&g_output, ",stderr=");
-			if (!stdout_connection) {
+			if (!g_stdout_connection) {
 				burps(&g_output, "subprocess.STDOUT");
 			} else {
-				burp(&g_output, "_rcw%d", stdout_connection);
+				burp(&g_output, "_rcw%d", g_stdout_connection);
 			}
 			break;
 		case r_err_and_out:
@@ -780,28 +783,28 @@ static void print_deferred_heredocs (const char *cstring)
 {
 	REDIRECT *hdtail;
 
-	for (hdtail = deferred_heredocs; hdtail; hdtail = hdtail->next) {
+	for (hdtail = g_deferred_heredocs; hdtail; hdtail = hdtail->next) {
 		burpc(&g_output, ' ');
 		print_heredoc_header (hdtail);
 	}
 	if (cstring[0] && (cstring[0] != ';' || cstring[1])) {
 		burps(&g_output, cstring);
 	}
-	if (deferred_heredocs) {
+	if (g_deferred_heredocs) {
 		burpc(&g_output, '\n');
 	}
-	for (hdtail = deferred_heredocs; hdtail; hdtail = hdtail->next) {
+	for (hdtail = g_deferred_heredocs; hdtail; hdtail = hdtail->next) {
 		print_heredoc_body (hdtail);
 		burpc(&g_output, '\n');
 	}
-	if (deferred_heredocs) {
+	if (g_deferred_heredocs) {
 		if (cstring && cstring[0] && (cstring[0] != ';' || cstring[1])) {
 			burpc(&g_output, ' ');	/* make sure there's at least one space */
 		}
-		dispose_redirects (deferred_heredocs);
-		was_heredoc = TRUE;
+		dispose_redirects (g_deferred_heredocs);
+		g_was_heredoc = TRUE;
 	}
-	deferred_heredocs = (REDIRECT *)NULL;
+	g_deferred_heredocs = (REDIRECT *)NULL;
 }
 
 static void newline (char *string)
@@ -852,6 +855,8 @@ static void translate_unary_operation(char *operatorP, int complex1, char *term1
 	char		*leftP, *file_typeP;
 	fix_typeE	got;
 
+	struct usesS *usesP = &(g_translate.m_uses);
+
 	if (!*operatorP) {
 		operatorP = "-n";
 	}
@@ -880,7 +885,7 @@ static void translate_unary_operation(char *operatorP, int complex1, char *term1
 				-a x   .. test if file x exists
 				x -a x .. x and x
 		 */
-		g_translate.m_uses.m_os = TRUE;
+		usesP->m_os = TRUE;
 		burp(&g_output, "os.path.exists(%s)", leftP);
 		break;
 	case 'b':	// File exists and block special file
@@ -890,11 +895,11 @@ static void translate_unary_operation(char *operatorP, int complex1, char *term1
 		file_typeP = "S_ISCHR";
 		goto check_file;
 	case 'd': 	// File exists and is a directory 
-		g_translate.m_uses.m_os = TRUE;
+		usesP->m_os = TRUE;
 		burp(&g_output, "os.path.isdir(%s)", leftP);
 		break;
 	case 'f': 	// File exists and a regular file 
-		g_translate.m_uses.m_os = TRUE;
+		usesP->m_os = TRUE;
 		burp(&g_output, "os.path.isfile(%s)", leftP);
 		break;
 	case 'g':	// True if file exists and its set-group-id bit is set
@@ -902,7 +907,7 @@ static void translate_unary_operation(char *operatorP, int complex1, char *term1
 		goto check_mode;
 	case 'h': 	// True if file exists and is a symbolic link
 	case 'L':	// True if file exists and is a symbolic link
-		g_translate.m_uses.m_os = TRUE;
+		usesP->m_os = TRUE;
 		burp(&g_output, "os.path.islink(%s)", leftP);
 		break;
 	case 'k':	// True if file exists and sticky bit is set
@@ -915,12 +920,12 @@ static void translate_unary_operation(char *operatorP, int complex1, char *term1
 		file_typeP = "S_ISFIFO";
 		goto check_file;
 	case 'r':	// True if file is readable
-		g_translate.m_uses.m_os = TRUE;
+		usesP->m_os = TRUE;
 		burp(&g_output, "os.access\x03(%s,R_OK)", leftP);
 		break;
 	case 's':	// True if file exists and has size > 0
-		g_translate.m_uses.m_os   = TRUE;
-		g_translate.m_uses.m_stat = TRUE;
+		usesP->m_os   = TRUE;
+		usesP->m_stat = TRUE;
 		burp(&g_output, "(os.path.exists(%s) and os.stat(%s).st_size > 0)", leftP, leftP);
 		break;
 	case 'u':	// True if file exists and its set-user-id bit is set.
@@ -932,31 +937,31 @@ check_mode:
 		burp(&g_output, "dir().count(%s) != 0", leftP);
 		break;
 	case 'w':	// True if file is writable
-		g_translate.m_uses.m_os = TRUE;
+		usesP->m_os = TRUE;
 		burp(&g_output, "os.access(%s,W_OK)", leftP);
 		break;
 	case 'x':	// True if file is executable
-		g_translate.m_uses.m_os = TRUE;
+		usesP->m_os = TRUE;
 		burp(&g_output, "os.access(%s,X_OK)", leftP);
 		break;
 	case 'z':	// True if length of string zero
 		burp(&g_output, "%s == ''", leftP);
 		break;
 	case 'G':	// True if file exists and is owned by effective group id
-		g_translate.m_uses.m_os   = TRUE;
-		g_translate.m_uses.m_stat = TRUE;
+		usesP->m_os   = TRUE;
+		usesP->m_stat = TRUE;
 		burp(&g_output, "(os.path.exists(%s) and os.stat(%s).st_uid == os.getegid())", leftP, leftP);
 		break;
 	case 'N':	// True if file exists and has been modified since read
-		g_translate.m_uses.m_os   = TRUE;
-		g_translate.m_uses.m_stat = TRUE;
+		usesP->m_os   = TRUE;
+		usesP->m_stat = TRUE;
 		burp(&g_output, "(os.path.exists(%s) and os.stat(%s).st_mtime > os.stat(%s).st_atime)", leftP, leftP, leftP);
 		break;
 	case 'S':	// True if file exists and is a socket
 		file_typeP = "S_ISSOCK";
 check_file:
-		g_translate.m_uses.m_os   = TRUE;
-		g_translate.m_uses.m_stat = TRUE;
+		usesP->m_os   = TRUE;
+		usesP->m_stat = TRUE;
 		burp(&g_output, "(os.path.exists(%s) and %s(os.stat(%s).st_mode)", leftP, file_typeP, leftP);
 		if (mode >= 0) {
 			burp(&g_output, " & 0%o", mode);
@@ -964,8 +969,8 @@ check_file:
 		burpc(&g_output, ')');
 		break;
 	case 'O':	// True if file exists and is owned by effective user id
-		g_translate.m_uses.m_os   = TRUE;
-		g_translate.m_uses.m_stat = TRUE;
+		usesP->m_os   = TRUE;
+		usesP->m_stat = TRUE;
 		burp(&g_output, "(os.path_exists(%s) and os.stat(%s).st_uid == os.geteuid())", leftP, leftP);
 		break;
 	case 'o':
@@ -1006,6 +1011,7 @@ static void translate_binary_operation(char *operatorP, int lcomplex, char *term
 	char		*leftP, *rightP;
 	fix_typeE	left, right, got;
 	int			toffset, loffset, i;
+	struct usesS *usesP = &(g_translate.m_uses);
 
 	toffset = g_temp.m_lth;
 	for (i = 0; compareP = operatorsPP[i]; ++i) {
@@ -1085,22 +1091,22 @@ is_var:
 
 	switch (i) {
 	case 6:	// -ef
-		g_translate.m_uses.m_os   = TRUE;
-		g_translate.m_uses.m_stat = TRUE;
+		usesP->m_os   = TRUE;
+		usesP->m_stat = TRUE;
 		burp(&g_output, "(os.path.exists(%s) and os.path.exists(%s) and os.stat(%s).st_dev == os.stat(%s).st_dev and os.stat(%s).st_ino == os.stat(%s).st_ino)", leftP, rightP, leftP, rightP, leftP, rightP);
 		return;
 	case 7: // -nt
-		g_translate.m_uses.m_os   = TRUE;
-		g_translate.m_uses.m_stat = TRUE;
+		usesP->m_os   = TRUE;
+		usesP->m_stat = TRUE;
 		burp(&g_output, "(os.path.exists(%s) and (not os.path.exists(%s) or os.stat(%s).st_mtime > os.stat(%s).st_mtime))", leftP, rightP, leftP, rightP);
 		return;
 	case 8:	// -ot
-		g_translate.m_uses.m_os   = TRUE;
-		g_translate.m_uses.m_stat = TRUE;
+		usesP->m_os   = TRUE;
+		usesP->m_stat = TRUE;
 		burp(&g_output, "(os.path.exists(%s) and (not os.path.exists(%s) or os.stat(%s).st_mtime > os.stat(%s).st_mtime))", rightP, leftP, rightP, leftP);
 		return;
 	case 14: // [[ x =~ y ]]
-		g_translate.m_uses.m_re = TRUE;
+		usesP->m_re = TRUE;
 		burp(&g_output, "re.search(r%s,%s)", rightP, leftP);
 		break;
 	default:
@@ -1367,7 +1373,7 @@ static _BOOL isAssignment(char *startP, _BOOL local)
 
 	// Left side must be an identifier
 	if ((c = *P) != '_' && !isalpha(c)) {
-		log_return();
+		log_return_msg("%q is NOT an assignment.", startP);
 		return FALSE;
 	}
 	for (++P; (c = *P) == '_' || isalnum(c); ++P);
@@ -1389,10 +1395,10 @@ static _BOOL isAssignment(char *startP, _BOOL local)
 	if (*P == '=') {
 //TODO: Move print_assignment() out to the caller(s)
 		print_assignment_command(startP, end_nameP, end_arrayP, P, local);
-		log_return();
+		log_return_msg("%q IS an assignment.", startP);
 		return TRUE;
 	}
-	log_return();
+    log_return_msg("%q is NOT an assignment.", startP);
 	return FALSE;
 }
 
@@ -2217,9 +2223,9 @@ void print_case_command_head (CASE_COM *case_command)
 	char 		*P;
 	fix_typeE	got;
 
-	case_var.m_lth = 0;
+	g_case_var.m_lth = 0;
 	P = fix_string(case_command->word->word, FIX_STRING, &got);
-	burps(&case_var, P);
+	burps(&g_case_var, P);
 }
 
 static void print_case_ors(WORD_LIST* patterns){
@@ -2230,7 +2236,7 @@ static void print_case_ors(WORD_LIST* patterns){
 		if (!strcmp(w->word->word, "*")){
 			continue;
 		}
-		burp(&g_output, " or %s == '", case_var.m_P);
+		burp(&g_output, " or %s == '", g_case_var.m_P);
 		P = translate_dequote(w->word->word);
 		burp(&g_output, "%s'", P);
 	}
@@ -2248,10 +2254,10 @@ static void print_case_clauses (PATTERN_LIST *clauses)
 			burps(&g_output, "else:");
 		} else {
 			if (first_if_clause) {
-				burp(&g_output, "if ( %s == ", case_var.m_P);
+				burp(&g_output, "if ( %s == ", g_case_var.m_P);
 				first_if_clause = FALSE;
 			} else{
-				burp(&g_output, "elif ( %s == ", case_var.m_P);
+				burp(&g_output, "elif ( %s == ", g_case_var.m_P);
 			}
 			burpc(&g_output, '\'');
 
@@ -2517,30 +2523,30 @@ void print_cond_command (COND_COM *cond)
 
 static void print_pipe_command(CONNECTION *connection)
 {
-	int old_stdout_connection;
+	int old_g_stdout_connection;
 
-	if (deferred_heredocs) {
+	if (g_deferred_heredocs) {
 		fprintf(stderr, "### Can't handle heredocs with | connector\n");
-		deferred_heredocs = NULL;
+		g_deferred_heredocs = NULL;
 	}
 	g_translate.m_uses.m_os  = TRUE;
 	g_translate.m_uses.m_sys = TRUE;
-	burp(&g_output, "_rcr%d, _rcw%d = os.pipe()\n", printing_connection, printing_connection);
+	burp(&g_output, "_rcr%d, _rcw%d = os.pipe()\n", g_printing_connection, g_printing_connection);
 	burps(&g_output, "if os.fork():\n");
 	INDENT(g_output);
-	burp(&g_output, "os.close(_rcw%d)\n", printing_connection);
-	burp(&g_output, "os.dup2(_rcr%d, 0)\n", printing_connection);
+	burp(&g_output, "os.close(_rcw%d)\n", g_printing_connection);
+	burp(&g_output, "os.dup2(_rcr%d, 0)\n", g_printing_connection);
 	emit_command (connection->second);
 	newline("");
    	OUTDENT(g_output);
 	burps(&g_output, "else:\n");
 	INDENT(g_output);
-	burp(&g_output, "os.close(_rcr%d)\n", printing_connection);
-	burp(&g_output, "os.dup2(_rcw%d, 1)\n", printing_connection);
-	old_stdout_connection = stdout_connection;
-	stdout_connection     = printing_connection;
+	burp(&g_output, "os.close(_rcr%d)\n", g_printing_connection);
+	burp(&g_output, "os.dup2(_rcw%d, 1)\n", g_printing_connection);
+	old_g_stdout_connection = g_stdout_connection;
+	g_stdout_connection     = g_printing_connection;
 	emit_command (connection->first);
-	stdout_connection     = old_stdout_connection;
+	g_stdout_connection     = old_g_stdout_connection;
 	newline("");
 	burps(&g_output, "sys.exit(0)\n");
 	OUTDENT(g_output);
@@ -2561,9 +2567,9 @@ static void print_async_command(COMMAND *command)
 	}	}
 
 	thread  = ++g_translate.m_uses.m_threading;
-	if (deferred_heredocs) {
+	if (g_deferred_heredocs) {
 		fprintf(stderr, "### Can't handle heredocs with & connector\n");
-		deferred_heredocs = NULL;
+		g_deferred_heredocs = NULL;
 	}
 	burp(&g_output, "def thread%d():\n", thread);
 	INDENT(g_output);
@@ -2575,7 +2581,7 @@ static void print_async_command(COMMAND *command)
 
 static void print_connection_command(CONNECTION *connection)
 {
-	printing_connection++;
+	g_printing_connection++;
 
 	switch (connection->connector) {
 	case '|':
@@ -2606,11 +2612,11 @@ static void print_connection_command(CONNECTION *connection)
 			burp(&g_output, "_rc%d = ", g_rc_identifier);
 		}
 		emit_command (connection->first);
-		if (deferred_heredocs == 0) {
-			if (was_heredoc == FALSE) {
+		if (g_deferred_heredocs == 0) {
+			if (g_was_heredoc == FALSE) {
 				burpc(&g_output, '\n');
 			} else {
-				was_heredoc = FALSE;
+				g_was_heredoc = FALSE;
 			}
 		} else {
 			print_deferred_heredocs (g_is_inside_function ? "" : ";");
@@ -2626,9 +2632,9 @@ static void print_connection_command(CONNECTION *connection)
 		are very different from -a and -o in being viewed as connectors
 	 */
 	case AND_AND:
-		if (deferred_heredocs) {
+		if (g_deferred_heredocs) {
 			fprintf(stderr, "### Can't handle deferred heredocs with && connector\n");
-			deferred_heredocs = NULL;
+			g_deferred_heredocs = NULL;
 		}
 		burps(&g_output, "if ");
 		emit_command (connection->first);
@@ -2639,9 +2645,9 @@ static void print_connection_command(CONNECTION *connection)
 		OUTDENT(g_output);
 		break;
 	case OR_OR:
-		if (deferred_heredocs) {
+		if (g_deferred_heredocs) {
 			fprintf(stderr, "### Can't handle deferred heredocs with || connector\n");
-			deferred_heredocs = NULL;
+			g_deferred_heredocs = NULL;
 		}
 		burps(&g_output, "if not ");
 		emit_command (connection->first);
@@ -2658,16 +2664,16 @@ static void print_connection_command(CONNECTION *connection)
 		exit(TRUE);
 	}
 
-	printing_connection--;
+	g_printing_connection--;
 }
 
 static void reset_locals ()
 {
 	g_is_inside_function   = FALSE;
 	g_output.m_indent   = 0;
-	printing_connection = 0;
-	stdout_connection   = 0;
-	deferred_heredocs   = NULL;
+	g_printing_connection = 0;
+	g_stdout_connection   = 0;
+	g_deferred_heredocs   = NULL;
 }
 
 static void print_function_def (FUNCTION_DEF *func)
@@ -3002,8 +3008,8 @@ static void emit_command (COMMAND *command)
 
 char * make_command_string (COMMAND *command)
 {
-	was_heredoc = FALSE;
-	deferred_heredocs = NULL;
+	g_was_heredoc = FALSE;
+	g_deferred_heredocs = NULL;
 	g_embedded = 0;
 	g_started  = 0;
 	emit_command (command);
@@ -3067,6 +3073,7 @@ void initialize_translator(const char *shell_scriptP)
 
 	log_init();
     log_activate();
+    init_macro_dictionaries();
 
     strcpy(file_suffix, g_translate_html ? "html" : "py");
 
@@ -3130,26 +3137,30 @@ static int allzero(void *startP, int size)
 
 static void neededUses(void)
 {
-	if (g_translate.m_expand.m_star ||
-		g_translate.m_expand.m_at   || 
-		g_translate.m_expand.m_hash) {
-		g_translate.m_uses.m_sys = TRUE;
+	struct expandS *expandP = &(g_translate.m_expand);
+	struct usesS *usesP = &(g_translate.m_uses);
+
+	if (expandP->m_star ||
+		expandP->m_at   || 
+		expandP->m_hash) {
+		usesP->m_sys = TRUE;
 	}
 
-	if (g_translate.m_expand.m_dollar) {
-		g_translate.m_uses.m_os = TRUE;
+	if (expandP->m_dollar) {
+		usesP->m_os = TRUE;
 	}
 
 	if (g_translate.m_function.m_glob) {
-		g_translate.m_uses.m_glob = TRUE;
+		usesP->m_glob = TRUE;
 	}
 }
 
 static void emitUses(void)
 {
 	int	separator = ' ';
+	struct usesS *usesP = &(g_translate.m_uses);
 
-	if (g_translate.m_uses.m_print) {
+	if (usesP->m_print) {
 		if (g_translate_html) {
 			fprintf(outputF, "<tr><td></td><td>");
 		}
@@ -3160,43 +3171,43 @@ static void emitUses(void)
 		fprintf(outputF, "\n");
 	}
 
-	if (g_translate.m_uses.m_sys ||
-		g_translate.m_uses.m_os  ||
-		g_translate.m_uses.m_subprocess  ||
-		g_translate.m_uses.m_signal      ||
-		g_translate.m_uses.m_threading   ||
-		g_translate.m_uses.m_glob        ||
-		g_translate.m_uses.m_re) {
+	if (usesP->m_sys ||
+		usesP->m_os  ||
+		usesP->m_subprocess  ||
+		usesP->m_signal      ||
+		usesP->m_threading   ||
+		usesP->m_glob        ||
+		usesP->m_re) {
 
 		if (g_translate_html) {
 			fprintf(outputF, "<tr><td></td><td>");
 		}
 		fprintf(outputF, "import");
-		if (g_translate.m_uses.m_sys) {
+		if (usesP->m_sys) {
 			fprintf(outputF, " sys");
 			separator = ',';
 		}
-		if (g_translate.m_uses.m_os) {
+		if (usesP->m_os) {
 			fprintf(outputF, "%cos", separator);
 			separator = ',';
 		}
-		if (g_translate.m_uses.m_subprocess) {
+		if (usesP->m_subprocess) {
 			fprintf(outputF, "%csubprocess", separator);
 			separator = ',';
 		}
-		if (g_translate.m_uses.m_signal) {
+		if (usesP->m_signal) {
 			fprintf(outputF, "%csignal", separator);
 			separator = ',';
 		}
-		if (g_translate.m_uses.m_threading) {
+		if (usesP->m_threading) {
 			fprintf(outputF, "%cthreading", separator);
 			separator = ',';
 		}
-		if (g_translate.m_uses.m_glob) {
+		if (usesP->m_glob) {
 			fprintf(outputF, "%cglob", separator);
 			separator = ',';
 		}
-		if (g_translate.m_uses.m_re) {
+		if (usesP->m_re) {
 			fprintf(outputF, "%cre", separator);
 			separator = ',';
 		}
@@ -3207,7 +3218,7 @@ static void emitUses(void)
 		fprintf(outputF, "\n");
 	}
 	
-	if (g_translate.m_uses.m_stat) {
+	if (usesP->m_stat) {
 		if (g_translate_html) {
 			fprintf(outputF, "<tr><td></td><td>");
 		}
@@ -3221,15 +3232,17 @@ static void emitUses(void)
 	
 static void neededExceptions(void)
 {
-	if (g_translate.m_expand.m_exclamation ||
-		g_translate.m_expand.m_underbar ||
-		g_translate.m_expand.m_hyphen ||
-		g_translate.m_expand.m_qmark ||
-		g_translate.m_expand.m_colon_qmark ||
-		g_translate.m_expand.m_prefixStar ||
-		g_translate.m_expand.m_prefixAt ||
-		g_translate.m_expand.m_indicesStar ||
-		g_translate.m_expand.m_indicesAt
+	struct expandS *expandP = &(g_translate.m_expand);
+
+	if (expandP->m_exclamation ||
+		expandP->m_underbar ||
+		expandP->m_hyphen ||
+		expandP->m_qmark ||
+		expandP->m_colon_qmark ||
+		expandP->m_prefixStar ||
+		expandP->m_prefixAt ||
+		expandP->m_indicesStar ||
+		expandP->m_indicesAt
 		) {
 		g_translate.m_exception = TRUE;
 	}
@@ -3237,6 +3250,9 @@ static void neededExceptions(void)
 
 static void emitExceptions(void)
 {
+	// Building blocks for code generation dynamo:
+	char *def, *ret;
+
 	if (!g_translate.m_exception) {
 		return;
 	}
@@ -3245,14 +3261,14 @@ static void emitExceptions(void)
 		fprintf(outputF, "<tr><td></td><td><pre>");
 	}
 
-	fprintf(outputF, 
-		"class Bash2PyException(Exception):\n"
-		"  def __init__(self, value=None):\n"
-		"    self.value = value\n"
-		"  def __str__(self):\n"
-		"    return repr(self.value)\n"
-		"\n"
-	);
+	// Write the Bash2PyException class
+	cls(_EXCEPT, TRUE);
+		set_static(FALSE);
+		write_init_func("SV0");
+
+		def = def_("__str__", "S");
+		write_function(def, ret_("repr($S)"));
+	end_cls();
 
 	if (g_translate_html) {
 		fprintf(outputF, "</pre></td></tr>");
@@ -3261,141 +3277,115 @@ static void emitExceptions(void)
 	
 static void neededFunctions(void)
 {
-	if (g_translate.m_expand.m_eq ||
-		g_translate.m_expand.m_colon_eq
+	struct expandS *expandP = &(g_translate.m_expand);
+	struct functionS *functionP = &(g_translate.m_function);
+
+	if (expandP->m_eq ||
+		expandP->m_colon_eq
 		) {
-		g_translate.m_function.m_set_value = TRUE;
+		functionP->m_set_value = TRUE;
 	}
 
-	if (g_translate.m_function.m_set_value ||
-		g_translate.m_expand.m_minus ||
-		g_translate.m_expand.m_eq ||
-		g_translate.m_expand.m_colon_minus ||
-		g_translate.m_expand.m_colon_eq ||
-		g_translate.m_expand.m_colon_qmark ||
-		g_translate.m_expand.m_colon_plus
+	if (functionP->m_set_value ||
+		expandP->m_minus ||
+		expandP->m_eq ||
+		expandP->m_colon_minus ||
+		expandP->m_colon_eq ||
+		expandP->m_colon_qmark ||
+		expandP->m_colon_plus
 		) {
-		g_translate.m_function.m_get_value = TRUE;
+		functionP->m_get_value = TRUE;
 	}
 
-	if (g_translate.m_function.m_make ||
-		g_translate.m_function.m_get_value
+	if (functionP->m_make ||
+		functionP->m_get_value
 		) {
-		g_translate.m_function.m_get_variable = TRUE;
+		functionP->m_get_variable = TRUE;
 	}
 
-	if (g_translate.m_expand.m_minus ||
-		g_translate.m_expand.m_eq ||
-		g_translate.m_expand.m_qmark ||
-		g_translate.m_expand.m_plus
+	if (expandP->m_minus ||
+		expandP->m_eq ||
+		expandP->m_qmark ||
+		expandP->m_plus
 		) {
-		g_translate.m_function.m_is_defined = TRUE;
+		functionP->m_is_defined = TRUE;
 	}
 
 }
 
 static void emitFunctions(void)
 {
-	if (allzero(&g_translate.m_function, sizeof(g_translate.m_function))) {
+	struct functionS *functionP = &(g_translate.m_function);
+ 
+	// Building blocks for code generation dynamo:
+	char *def, *asgn, *iff, *iff2, *els, *ret;
+
+	if (allzero(functionP, sizeof(g_translate.m_function))) {
 		return;
 	}
 
 	if (g_translate_html) {
 		fprintf(outputF, "<tr><td></td><td><pre>");
 	}
-	if (g_translate.m_function.m_is_defined) {
-		fprintf(outputF,
-			"def IsDefined(name, local=locals()):\n"
-			"  return name in globals() or name in local\n"
-			"\n"
-		);
+
+    // Global functions
+	if (functionP->m_is_defined) {
+		def = def_("D()", "NL");
+		write_function(def, ret_("$n\\g()|$n\\$l"));
 	}
 	
-	if (g_translate.m_function.m_get_variable) {
-		fprintf(outputF,
-			"def GetVariable(name, local=locals()):\n"
-			"  if name in local:\n"
-			"    return local[name]\n"
-			"  if name in globals():\n"
-			"    return globals()[name]\n"
-			"  return None\n"
-			"\n"
-		);
+	if (functionP->m_get_variable) {
+		def = def_("b()", "NL");
+		iff = if_("$n\\$l", "R", "L[$n]");
+		iff2 = if_("$n\\g()", "R", "g()[$n]");
+		write_function(def, iff, iff2, ret_("$N"));
 	}
 	
-	if (g_translate.m_function.m_make) {
-		fprintf(outputF,
-			"def Make(name, local=locals()):\n"
-			"  ret = GetVariable(name, local)\n"
-			"  if ret is None:\n"
-			"    ret = Bash2Py(0)\n"
-			"    globals()[name] = ret\n"
-			"  return ret\n"
-			"\n"
-		);
+	if (functionP->m_make) {
+		def = def_("Make", "NL");
+		asgn = asgn_("$r", "b($n, $l)");
+		iff = if_("$r $0", "AA", "$r", "Bash2Py(0)", "g()[$n]", "$r");
+		write_function(def, asgn, iff, ret_(NULL));
 	}
 	
-	if (g_translate.m_function.m_get_value) {
-		fprintf(outputF,
-			"def GetValue(name, local=locals()):\n"
-			"  variable = GetVariable(name,local)\n"
-			"  if variable is None or variable.val is None:\n"
-			"    return ''\n"
-			"  return variable.val\n"
-			"\n"
-		);
+	if (functionP->m_get_value) {
+		def = def_("G()", "NL");
+		asgn = asgn_("$b", "b($n,$l)");
+		iff = if_("$b $0|$b.$u $0", "R", "''");
+		write_function(def, asgn, iff, ret_("$b.$u"));
 	}
 	
-	if (g_translate.m_function.m_set_value) {
-		fprintf(outputF,
-			"def SetValue(name, value, local=locals()):\n"
-			"  variable = GetVariable(name,local)\n"
-			"  if variable is None:\n"
-			"    globals()[name] = Bash2Py(value)\n"
-			"  else:\n"
-			"    variable.val = value\n"
-			"  return value\n"
-			"\n"
-		);
+	if (functionP->m_set_value) {
+		def = def_("S()", "NVL");
+		asgn = asgn_("$b", "b($n,$l)");
+		iff = if_("$b $0", "A", "g()[$n]","Bash2Py($v)");
+		els = else_("A", "$b.$u", "$v");
+		write_function(def, asgn, iff, els, ret_("$v"));
 	}
 	
-	if (g_translate.m_function.m_str) {
-		fprintf(outputF,
-			"def Str(value):\n"
-			"  if isinstance(value, list):\n"
-			"    return \" \".join(value)\n"
-			"  if isinstance(value, basestring):\n"
-			"    return value\n"
-			"  return str(value)\n"
-			"\n"
-		);
+	if (functionP->m_str) {
+		def = def_("Str", "V");
+		iff = if_("i($v, list)", "R", "\" \".j($v)");
+		iff2 = if_("i($v, basestring)", "R", "$v");
+		write_function(def, iff, iff2, ret_("str($v)"));
 	}
 
-	if (g_translate.m_function.m_array) {
-		fprintf(outputF,
-			"def Array(value):\n"
-			"  if isinstance(value, list):\n"
-			"    return value\n"
-			"  if isinstance(value, basestring):\n"
-			"    return value.strip().split(' ')\n"
-			"  return [ value ]\n"
-			"\n"
-		);
+	if (functionP->m_array) {
+		def = def_("Array", "V");
+		iff = if_("i($v, list)", "R", "$v");
+		iff2 = if_("i($v, basestring)", "R", "$v.strip().split(' ')");
+		write_function(def, iff, iff2, ret_("[ $v ]"));
 	}
 	
-	if (g_translate.m_function.m_glob) {
-		fprintf(outputF,
-			"def Glob(value):\n"
-			"  ret = glob.glob(value)\n"
-			"  if (len(ret) < 1):\n"
-			"    ret = [ value ]\n"
-			"  return ret\n"
-			"\n"
-		);
+	if (functionP->m_glob) {
+		def = def_("$G", "V");
+		asgn = asgn_("$r", "$g.$g($v)");
+		iff = if_("l($r) < 1", "A", "$r", "[ $v ]");
+		write_function(def, asgn, iff, ret_(NULL));
 	}
 	
 	if (g_translate_html) {
-		fprintf(outputF, "</pre></td></tr>");
+ 		fprintf(outputF, "</pre></td></tr>");
 	}
 }
 	
@@ -3408,210 +3398,128 @@ static void neededExpands(void)
 
 static void emitExpandClass(void)
 {
-	if (allzero(&g_translate.m_expand, sizeof(g_translate.m_expand))) {
+	struct expandS *expandP = &(g_translate.m_expand);
+
+	// Building blocks for code generation dynamo:
+	char *def, *asgn, *iff, *iff2, *els, *ret;
+
+	if (allzero(expandP, sizeof(g_translate.m_expand))) {
 		return;
 	}
 
 	if (g_translate_html) {
 		fprintf(outputF, "<tr><td></td><td><pre>");
 	}
-	fprintf(outputF,
-		"class Expand(object):\n"
-	);
 
-	/* Returns an array */
+	cls("Expand", FALSE);
 
-	if (g_translate.m_expand.m_at) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def at():\n"
-			"    if (len(sys.argv) < 2):\n"
-			"      return []\n"
-			"    return  sys.argv[1:]\n"
-		);
+	if (expandP->m_at) { /* Returns an array */
+		def = def0_("at");
+		iff = if_("l($a) < 2", "R", "[]");
+		write_function(def, iff, ret_("s[1:]"));
 	}
 
-	/* If in_quotes should return concatenation of values separated by ' '
-	 * Otherwise should return an array
-	 */
-	if (g_translate.m_expand.m_star) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def star(in_quotes):\n"
-			"    if (in_quotes):\n"
-			"      if (len(sys.argv) < 2):\n"
-			"        return \"\"\n"
-			"      return \" \".join(sys.argv[1:])\n"
-			"    return Expand.at()\n"
-		);
+	if (expandP->m_star) {
+		/* If in_quotes should return concatenation of values separated by ' '
+		 * Otherwise should return an array */
+		def = def_("$t", "Q");
+		iff = if_("in_quotes", "IR", /*I:*/ "l($a) < 2", "R", "\"\"",
+									 /*R:*/ "\" \".j(s[1:])");
+		write_function(def, iff, ret_("Expand.at()"));
 	}
 
-	if (g_translate.m_expand.m_hash) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def hash():\n"
-			"    return  len(sys.argv)-1\n"
-		);
+	if (expandP->m_hash) {
+		def = def0_("hash");
+		write_function(def, ret_("l($a)-1"));
 	}
 
-	if (g_translate.m_expand.m_dollar) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def dollar():\n"
-			"    return  os.getpid()\n"
-		);
+	if (expandP->m_dollar) {
+		def = def0_("dollar");
+		write_function(def, ret_("os.getpid()"));
 	}
 
-	if (g_translate.m_expand.m_exclamation) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def exclamation():\n"
-			"    raise Bash2PyException(\"$! unsupported\")\n"
-		);
+	if (expandP->m_exclamation) {
+		write_unsupported_func0("exclamation", "$!");
 	}
 
-	if (g_translate.m_expand.m_underbar) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def underbar():\n"
-			"    raise Bash2PyException(\"$_ unsupported\")\n"
-		);
+	if (expandP->m_underbar) {
+		write_unsupported_func0("underbar", "$_");
 	}
 
-	if (g_translate.m_expand.m_hyphen) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def hyphen():\n"
-			"    raise Bash2PyException(\"$- unsupported\")\n"
-		);
+	if (expandP->m_hyphen) {
+		write_unsupported_func0("hyphen", "$-");
 	}
 
-	if (g_translate.m_expand.m_minus) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def minus(name, value=''):\n"
-			"    if (IsDefined(name)):\n"
-			"      return GetValue(name)\n"
-			"    return value\n"
-		);
+	if (expandP->m_minus) {
+		def = def_("$m", "NV\'");
+		iff = if_("D($n)", "R", "G($n)");
+		write_function(def, iff, ret_("$v"));
 	}
 
-	if (g_translate.m_expand.m_eq) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def eq(name, value=''):\n"
-			"    if (not IsDefined(name)):\n"
-			"      SetValue(name, value)\n"
-			"      return value\n"
-			"    return GetValue(name)\n"
-		);
+	if (expandP->m_eq) {
+		def = def_("eq", "NV\'");
+		iff = if_("~D($n)", "LR", "S($n, $v)", "$v");
+		write_function(def, iff, ret_("G($n)"));
 	}
 
-	if (g_translate.m_expand.m_qmark) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def qmark(name, value=None):\n"
-			"    if (not IsDefined(name)):\n"
-			"      if (value is None or value == ''):\n"
-			"        value = \"Bash variable \" + name + \" is not defined\"\n"
-			"      raise Bash2PyException(value)\n"
-			"    return GetValue(name)\n"
-		);
+	if (expandP->m_qmark) {
+		def = def_("qmark", "NV0");
+		iff = if_("~D($n)", "Ir", /*I:*/ "$v $0|$v == \'\'", "A", "$v", "$Z",
+								   /*r:*/ "$v");
+		write_function(def, iff, ret_("G($n)"));
 	}
 
-	if (g_translate.m_expand.m_plus) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def plus(name, value=''):\n"
-			"    if (not IsDefined(name)):\n"
-			"      return ''\n"
-			"    return value\n"
-		);
+	if (expandP->m_plus) {
+		def = def_("$p", "NV\'");
+		iff = if_("~D($n)", "R", "''");
+		write_function(def, iff, ret_("$v"));
 	}
 
-	if (g_translate.m_expand.m_colon_minus) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def colonMinus(name, value=''):\n"
-			"    ret = GetValue(name)\n"
-			"    if (ret is None or ret == ''):\n"
-			"		ret = value\n"
-			"    return ret\n"
-		);
+	if (expandP->m_colon_minus) {
+		def = def_("$c$M", "NV\'");
+		asgn = asgn_("$r", "G($n)");
+		iff = if_("$r $0|$r $q", "A", "$r", "$v");
+		write_function(def, asgn, iff, ret_("$r"));
 	}
 
-	if (g_translate.m_expand.m_colon_eq) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def colonEq(name, value=''):\n"
-			"    ret = GetValue(name)\n"
-			"    if (ret is None or ret == ''):\n"
-			"      SetValue(name, value)\n"
-			"      ret = value\n"
-			"    return ret\n"
-		);
+	if (expandP->m_colon_eq) {
+		def = def_("$cEq", "NV\'");
+		asgn = asgn_("$r", "G($n)");
+		iff = if_("$r $0|$r $q", "LA", /*L:*/ "S($n, $v)", /*A:*/ "$r", "$v");
+		write_function(def, asgn, iff, ret_("$r"));
 	}
 
-	if (g_translate.m_expand.m_colon_qmark) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def colonQmark(name, value=None):\n"
-			"    ret = GetValue(name)\n"
-			"    if (ret is None or ret == ''):\n"
-			"      if (value is None || value == ''):\n"
-			"        value = \"Bash variable \" + name + \" is undefined or none\"\n"
-			"        raise Bash2PyException(value)\n"
-			"    return ret\n"
-		);
+	if (expandP->m_colon_qmark) {
+		def = def_("$cQmark", "NV0");
+		asgn = asgn_("$r", "G($n)");
+		iff = if_("$r $0|$r $q", "I", "$v $0|$v $q", "Ar",
+					   /*A:*/ "$v", "$Z", /*r:*/ "$v");
+		write_function(def, asgn, iff, ret_("$r"));
 	}
 
-	if (g_translate.m_expand.m_colon_plus) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def colonPlus(name, value=''):\n"
-			"    ret = GetValue(name)\n"
-			"    if (ret is None or ret == ''):\n"
-			"      return ''\n"
-			"    return value\n"
-		);
+	if (expandP->m_colon_plus) {
+		def = def_("$c$P", "NV\'");
+		asgn = asgn_("$r", "G($n)");
+		iff = if_("$r $0|$r $q", "R", "''");
+		write_function(def, asgn, iff, ret_("$v"));
 	}
 
-	if (g_translate.m_expand.m_prefixStar) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def prefixStar(name):\n"
-			"    raise Bash2PyException(\"${!prefix*}  unsupported\")\n"
-			"    return ''\n"
-		);
+	if (expandP->m_prefixStar) {
+		write_unsupported_func("$f$T", TRUE, "${!$f*}");
 	}
 
-	if (g_translate.m_expand.m_prefixAt) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def prefixAt(name):\n"
-			"    raise Bash2PyException(\"${!prefix@}  unsupported\")\n"
-			"    return ''\n"
-		);
+	if (expandP->m_prefixAt) {
+		write_unsupported_func("$fAt", TRUE, "${!$f@}");
 	}
-	if (g_translate.m_expand.m_indicesStar) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def indicesStar(name):\n"
-			"    raise Bash2PyException(\"${!name[*]}  unsupported\")\n"
-			"    return ''\n"
-		);
+	if (expandP->m_indicesStar) {
+		write_unsupported_func("indices$T", TRUE, "${!$n[*]}");
 	}
 
-	if (g_translate.m_expand.m_indicesAt) {
-		fprintf(outputF,
-			"  @staticmethod\n"
-			"  def indicesAt(name):\n"
-			"    raise Bash2PyException(\"${!name[@]}  unsupported\")\n"
-			"    return ''\n"
-		);
+	if (expandP->m_indicesAt) {
+		write_unsupported_func("indicesAt", TRUE, "${!$n[*]}");
 	}
 
-	fprintf(outputF, "\n");
+	end_cls();
 
 	if (g_translate_html) {
 		fprintf(outputF, "</pre></td></tr>");
@@ -3620,17 +3528,24 @@ static void emitExpandClass(void)
 
 static void neededBash2Py(void)
 {
-	if (g_translate.m_value.m_not_null_else) {
-		g_translate.m_value.m_is_null = TRUE;
+	struct valueS *valueP = &(g_translate.m_value);
+
+	if (valueP->m_not_null_else) {
+		valueP->m_is_null = TRUE;
 	}
 	if (g_translate.m_function.m_make) {
-		g_translate.m_value.m_uses = TRUE;
+		valueP->m_uses = TRUE;
 	}
 }
 
 static void emitBash2PyClass(void)
 {
-	if (allzero(&g_translate.m_value, sizeof(g_translate.m_value))) {
+	struct valueS *valueP = &(g_translate.m_value);
+
+	// Building blocks for code generation dynamo:
+	char *def, *asgn, *iff, *iff2, *els, *ret;
+
+	if (allzero(valueP, sizeof(g_translate.m_value))) {
 		return;
 	}
 
@@ -3638,135 +3553,77 @@ static void emitBash2PyClass(void)
 		fprintf(outputF, "<tr><td></td><td><pre>");
 	}
 	
-	fprintf(outputF,
-		"class Bash2Py(object):\n"
-		"  __slots__ = [\"val\"]\n"
-		"  def __init__(self, value=''):\n"
-		"    self.val = value\n"
-	);
+	cls("Bash2Py", FALSE);
+		set_static(FALSE);
+		write_function(asgn_("__slots__", "[\"$u\"]"));  // kludge
+		write_init_func("SV\'");
 
-	if (g_translate.m_value.m_set_value) {
-		fprintf(outputF,
-			"  def setValue(self, value=None):\n"
-			"    self.val = value\n"
-			"    return value\n"
-		);
+	if (valueP->m_set_value) {
+		def = def_("S()", "SV0");
+		asgn = asgn_("$L", "$v");
+		write_function(def, ret_("$v"));
 	}
 
-	if (g_translate.m_value.m_preincrement) {
-		fprintf(outputF,
-			"  def preinc(self,inc=1):\n"
-			"    self.val += inc\n"
-			"    return self.val\n"
-		);
+	if (valueP->m_preincrement) {
+		write_increment_func("preinc", "+");
 	}
 
-	if (g_translate.m_value.m_postincrement) {
-		fprintf(outputF,
-			"  def postinc(self,inc=1):\n"
-			"    tmp = self.val\n"
-			"    self.val += inc\n"
-			"    return tmp\n"
-		);
+	if (valueP->m_postincrement) {
+		write_increment_func("postinc", "++");
 	}
 
-	if (g_translate.m_value.m_is_null) {
-		fprintf(outputF,
-			"  def isNull():\n"
-			"    return value is None\n"
-		);
+	if (valueP->m_is_null) {
+		def = def_("isNull", "S");
+		write_function(def, ret_("$L $0"));
 	}
 
-	if (g_translate.m_value.m_not_null_else) {
-		fprintf(outputF,
-			"  def notNullElse(value):\n"
-			"    if self.isNull():\n"
-			"      return value\n"
-			"    return self.val\n"
-		);
+	if (valueP->m_not_null_else) {
+		def = def_("notNullElse", "SV");
+		iff = if_("$s.isNull()", "R", "$v");
+		write_function(def, iff, ret_("$L"));
 	}
 
-	if (g_translate.m_value.m_plus) {
-		fprintf(outputF,
-			"  def plus(value):\n"
-			"    self.val += value\n"
-			"    return self.val\n"
-		);
+	if (valueP->m_plus) {
+		write_assignment_func("$p", "+");
 	}
 
-	if (g_translate.m_value.m_minus) {
-		fprintf(outputF,
-			"  def minus(value):\n"
-			"    self.val -= value\n"
-			"    return self.val\n"
-		);
+	if (valueP->m_minus) {
+		write_assignment_func("$m", "-");
 	}
 
-	if (g_translate.m_value.m_multiply) {
-		fprintf(outputF,
-			"  def multiply(value):\n"
-			"    self.val *= value\n"
-			"    return self.val\n"
-		);
+	if (valueP->m_multiply) {
+		write_assignment_func("multiply", "*");
 	}
 
-	if (g_translate.m_value.m_idivide) {
-		fprintf(outputF,
-			"  def idivide(value):\n"
-			"    self.val //= value\n"
-			"    return self.val\n"
-		);
+	if (valueP->m_idivide) {
+		write_assignment_func("idivide", "//");
 	}
 
-	if (g_translate.m_value.m_mod) {
-		fprintf(outputF,
-			"  def mod(value):\n"
-			"    self.val %%= value\n"
-			"    return self.val\n"
-		);
+	if (valueP->m_mod) {
+		write_assignment_func("mod", "%%");
 	}
 
-	if (g_translate.m_value.m_lsh) {
-		fprintf(outputF,
-			"  def lsh(value):\n"
-			"    self.val <<= value\n"
-			"    return self.val\n"
-		);
+	if (valueP->m_lsh) {
+		write_assignment_func("lsh", "<<");
 	}
 
-	if (g_translate.m_value.m_rsh) {
-		fprintf(outputF,
-			"  def rsh(value):\n"
-			"    self.val >>= value\n"
-			"    return self.val\n"
-		);
+	if (valueP->m_rsh) {
+		write_assignment_func("rsh", ">>");
 	}
 
-	if (g_translate.m_value.m_band) {
-		fprintf(outputF,
-			"  def band(value):\n"
-			"    self.val &= value\n"
-			"    return self.val\n"
-		);
+	if (valueP->m_band) {
+		write_assignment_func("band", "&");
 	}
 
-	if (g_translate.m_value.m_bor) {
-		fprintf(outputF,
-			"  def bor(value):\n"
-			"    self.val |= value\n"
-			"    return self.val\n"
-		);
+	if (valueP->m_bor) {
+		write_assignment_func("bor", "|");
 	}
 
-	if (g_translate.m_value.m_bxor) {
-		fprintf(outputF,
-			"  def bxor(value):\n"
-			"    self.val ^= value\n"
-			"    return self.val\n"
-		);
+	if (valueP->m_bxor) {
+		write_assignment_func("bxor", "^");
 	}
 
-	fprintf(outputF, "\n");
+	end_cls();
 
 	if (g_translate_html) {
 		fprintf(outputF, "</pre></td></tr>");
@@ -3799,6 +3656,7 @@ void close_translator()
 	fclose(outputF);
 
 	dispose_all_function_names();
+    dispose_macro_dictionaries();
 
 	log_close();
 }
