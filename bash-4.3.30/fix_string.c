@@ -490,6 +490,7 @@ static void replaceSingleQuotes(void)
 	exchange_burp_buffers(&g_buffer, &g_new);
 }
 
+// emitQuoted(): Quotes the supplied string
 static void emitQuotedString(char *startP)
 {
 	char *P;
@@ -632,27 +633,27 @@ static char * emitSimpleVariable(char *startP, int in_quotes, fix_typeE want, fi
 	return P;
 }
 	
-static char * emitString(char *startP, const char *terminatorsP, int under_quotes)
+static char * emitString(char *startP, const char *terminatorsP, int in_quotes)
 {
 	char 		*P, *endP;
-	int			c, offset, in_quotes;
+	int			c, offset, is_inside_quotes;
 	fix_typeE	got;
 
-	log_enter("emitString (startP=%q, terminatorsP=%q, under_quotes=%d)",
-			  startP, terminatorsP, under_quotes);
-	in_quotes = FALSE;
+	log_enter("emitString (startP=%q, terminatorsP=%q, in_quotes=%d)",
+			  startP, terminatorsP, in_quotes);
+	is_inside_quotes = FALSE;
 	for (P = startP; ; ++P) {
 		c = *P;
 		offset = g_new.m_lth;
-		if (in_quotes) {
+		if (is_inside_quotes) {
 			burpc(&g_new, '"');
 		}
 		if (P != startP) {
 			burpc(&g_new, '+');	
 		}
-		endP = emitSpecial1(P, under_quotes, FIX_STRING, &got);
+		endP = emitSpecial1(P, in_quotes, FIX_STRING, &got);
 		if (endP) {
-			in_quotes = FALSE;
+			is_inside_quotes = FALSE;
 			P = endP - 1;
 			continue;
 		}
@@ -664,12 +665,12 @@ static char * emitString(char *startP, const char *terminatorsP, int under_quote
 		if (strchr(terminatorsP, c)) {
 			goto done;
 		}
-		if (!in_quotes) {
+		if (!is_inside_quotes) {
 			if (P != startP) {
 				burpc(&g_new, '+');
 			}
 			burpc(&g_new, '"');
-			in_quotes = TRUE;
+			is_inside_quotes = TRUE;
 		}
 		switch(c) {
 		case '"':
@@ -685,20 +686,20 @@ static char * emitString(char *startP, const char *terminatorsP, int under_quote
 		burpc(&g_new, c);
 	}
 done:
-	if (in_quotes) {
+	if (is_inside_quotes) {
 		burpc(&g_new, '"');
 	}
 	log_return();
 	return P;
 }
 
-static char * emitFunction(char *nameP, char *parm1P, char *parm2P, _BOOL indirect, int under_quotes)
+static char * emitFunction(char *nameP, char *parm1P, char *parm2P, _BOOL indirect, int in_quotes)
 {
 	char 		*endP;
 	int	 		offset;
 
-	log_enter("emitFunction (nameP=%q, parm1P=%q, parm2P=%q, indirect=%d, under_quotes=%d)",
-			nameP, parm1P, parm2P, bool_to_text(indirect), under_quotes);
+	log_enter("emitFunction (nameP=%q, parm1P=%q, parm2P=%q, indirect=%d, in_quotes=%d)",
+			nameP, parm1P, parm2P, bool_to_text(indirect), in_quotes);
 
 	burp(&g_new, "%s(", nameP);
 	if (indirect) {
@@ -710,7 +711,7 @@ static char * emitFunction(char *nameP, char *parm1P, char *parm2P, _BOOL indire
 	if (parm2P) {
 		offset = g_new.m_lth;
 		burpc(&g_new, ',');
-		endP = emitString(parm2P, "[}", under_quotes);
+		endP = emitString(parm2P, "[}", in_quotes);
 		if (!endP) {
 			return NULL;
 		}
@@ -897,7 +898,7 @@ finish:
 	return endP;
 }
 
-/* $(( ... )) */
+/* Process the $((...)) construct */
 
 static char *
 emitDollarExpression(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
@@ -989,7 +990,7 @@ done:
 /* When the old-style backquote form of substitution is used, backslash retains its literal meaning except when followed by ‘$’, ‘`’, or ‘\’. The first backquote not preceded by a backslash terminates the command substitution. When using the $(command) form, all characters between the parentheses make up the command; none are treated specially. 
 */
 
-static char * emitCommand(char *startP, int new_style, int under_quotes, fix_typeE want, fix_typeE *gotP)
+static char * emitCommand(char *startP, int new_style, int in_quotes, fix_typeE want, fix_typeE *gotP)
 {
 	int			old_dollar_expr_nesting_level;
 	char 		*endP;
@@ -1000,9 +1001,9 @@ static char * emitCommand(char *startP, int new_style, int under_quotes, fix_typ
 	burps(&g_new, "os.popen(");
 
 	if (new_style) {
-		endP = emitString(startP+2, ")", under_quotes);
+		endP = emitString(startP+2, ")", in_quotes);
 	} else {
-		endP = emitString(startP+1, "`", under_quotes);
+		endP = emitString(startP+1, "`", in_quotes);
 	}
 	if (endP) {
 		++endP;
@@ -1153,6 +1154,7 @@ static char * emitSpecial1(char *startP, int in_quotes, fix_typeE want, fix_type
 	return endP;
 }
 
+// emitSpecial(): Just a wrapper for emitSpecial1()
 // Returns 0 if not a special
 
 static char * emitSpecial(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
@@ -1269,15 +1271,12 @@ static fix_typeE substitute(fix_typeE want)
 	fix_typeE	got;	// What I had
 	fix_typeE	got1;	// What I'm now seeing
 	fix_typeE	want1;
-	int 		i,  in_quotes, quoted, c, c1, c2, offset, quote_removal;
+	int 		i,  in_quotes, quoted, c, c1, c2, offset;
 	char		**arrayPP, *P, *P1, *P2;
-	int			fileExpansion;
+	_BOOL      	is_file_expansion, quote_removal;
 	_BOOL		is_outside_quotes;
 
 	log_enter("substitute (want=%s)", type_to_text(want));
-	/* Return an array of strings; the brace expansion of TEXT.
-	 * Documentation says this is done before anything else
-	 */
 
 	switch (want) {
 	case FIX_INT:
@@ -1289,7 +1288,7 @@ static fix_typeE substitute(fix_typeE want)
 	}
 
 	is_outside_quotes = TRUE;
-	fileExpansion    = 0;
+	is_file_expansion = TRUE;
 	offset           = g_new.m_lth;
 
 	for (P = g_buffer.m_P; c = *P ; ++P) {
@@ -1298,7 +1297,7 @@ static fix_typeE substitute(fix_typeE want)
 		case '*':
 		case '?':
 		case '[':
-			fileExpansion |= is_outside_quotes;
+			is_file_expansion |= is_outside_quotes;
 			break;
 		case '~':
 		case '$':
@@ -1324,12 +1323,20 @@ static fix_typeE substitute(fix_typeE want)
 
 	got              = FIX_NONE;
 	in_quotes        = -1;
-	quote_removal    = 0;
-	want1            = (fileExpansion ? FIX_STRING : want);
+	quote_removal    = FALSE;
+	want1            = (is_file_expansion ? FIX_STRING : want);
 
 	for (P = g_buffer.m_P; ; ++P) {
 
-		switch (c = *P) {
+		c = *P;
+
+		if (c == '"') {
+			// Quote removal
+			quote_removal = TRUE;
+			continue;
+		}
+
+		switch (c) {
 		case '\0':
 		case '~':
 		case '$':
@@ -1346,7 +1353,7 @@ static fix_typeE substitute(fix_typeE want)
 			if (!c) {
 				goto done;
 			}
-			quote_removal = 0;
+			quote_removal = FALSE;
 			offset = g_new.m_lth;
 			P1 = emitSpecial(P, quoted, want1, &got1);
 			if (P1 && P1 != P) {
@@ -1359,12 +1366,7 @@ static fix_typeE substitute(fix_typeE want)
 			g_new.m_P[offset] = '\0';
 		}
 
-		if (c == '"') {
-			// Quote removal
-			quote_removal = 1;
-			continue;
-		}
-		quote_removal = 0;
+		quote_removal = FALSE;
 
 		// Saw some normal character
 		if (in_quotes < 0) {
@@ -1380,7 +1382,7 @@ static fix_typeE substitute(fix_typeE want)
 	}
 done:
 
-	if (fileExpansion) {
+	if (is_file_expansion) {
 		g_translate.m_uses.m_glob = TRUE;
 		burp_insert(&g_new, 0, "Glob(");
 		g_translate.m_function.m_glob = TRUE;
@@ -1416,8 +1418,8 @@ done:
 	return got;
 }
 
-// Can't do any translation because we will later be calling
-// translate_expression
+// Alternative to substitute() when we can't do any translation
+// because we will later be calling translate_expression
 
 static void only_expand(void)
 {
@@ -1653,6 +1655,8 @@ static void unescapeDollar(void)
 	 " indicating we are embedding the contents of this string inside popen
  */
 
+// fix_string1(): Topmost filter function after fixBraced() has peeled off any
+// brace expressions, that is,  "{1..10}"  and  "foo{a,bbb,cc}bar"  stuff
 static char * fix_string1(fix_typeE want, fix_typeE *gotP)
 {
 	fix_typeE	got;
@@ -1668,8 +1672,7 @@ static char * fix_string1(fix_typeE want, fix_typeE *gotP)
 	replaceSingleQuotes();	// Replace all usage of '..' by ".."
 
 	// Nothing yet written to g_new
-	g_new.m_lth  = 0;
-	g_new.m_P[0] = '\0';
+	burp_reset(&g_new);
 
 	if (want != FIX_EXPRESSION) {
 		is_expression           = FALSE;
@@ -1711,14 +1714,14 @@ done:
 	return g_buffer.m_P;
 }
 
-/* A correctly-formed brace expansion must contain unquoted opening and
-   closing braces, and at least one unquoted comma or a valid sequence
-   expression. Any incorrectly formed brace expansion is left unchanged. 
- */
+
+// fixBracedString(): The topmost filtering function under fix_string().
+// Processes brace expressions like {1..10} and foo{a,bbb,cc}bar but NOT
+// dollar-brace expressions like ${x}. The key is to find '.' or ',' inside {}.
 
 static char * fixBracedString(const char *startP, fix_typeE want, fix_typeE *gotP)
 {
-	extern char **brace_expand(char *textP);
+	extern char **brace_expand(char *textP);   // from braces.c in the bash API
 
 	const char *P;
 
@@ -1730,7 +1733,7 @@ static char * fixBracedString(const char *startP, fix_typeE want, fix_typeE *got
 log_deactivate();
 
 	if (want == FIX_EXPRESSION) {
-		goto dont_fire;
+		goto pass_through;
 	}
 	in_quotes = 0;
 	state     = 0;
@@ -1764,6 +1767,7 @@ log_deactivate();
 			continue;
 		case '$':
 			if (P[1] == '{') {
+				// Skip dollar-brace constructs
 				++P;
 			}
 			continue;
@@ -1782,32 +1786,35 @@ log_deactivate();
 			continue;
 		case '}':
 			if (state == 2) {
-				goto fire;
+				// End of brace expr
+				goto expand_brace_expr;
 			}
 			state = 0;
 		}
 	}
-	goto dont_fire;
-fire:
+	goto pass_through;
+
+expand_brace_expr:
 	resultP = NULL;
-	arrayPP = brace_expand((char *) startP);
+	arrayPP = brace_expand((char *) startP);   // calling bash API here
 	if (arrayPP) {
 		if (arrayPP[0]) {
-			fix_typeE	want1;
-			int			i, want_array;
+			fix_typeE	single_want_type;
+			int			i;
+			_BOOL		want_array;
 	
 			want_array = (want == FIX_ARRAY);
 			g_braced.m_lth = 0;
 			if (want_array) {
-				want1     = FIX_VAR;
+				single_want_type = FIX_VAR;
 				burpc(&g_braced, '[');
 			} else {
-				want1     = want;
+				single_want_type = want;
 			}
 	
 			for (i = 0; P = arrayPP[i]; ) {
 				string_to_buffer(arrayPP[i]);
-				P = fix_string1(want1, gotP);
+				P = fix_string1(single_want_type, gotP);
 				burps(&g_braced, P);
 				++i;
 				if (arrayPP[i]) {
@@ -1822,19 +1829,21 @@ fire:
 		xfree(arrayPP);
 		if (resultP) {
 log_activate();
-		    log_return_msg("\'fire\' section");
+		    log_return_msg("brace expression processed");
 			return resultP;
 	}	}
-dont_fire:
 
+pass_through:
 	string_to_buffer(startP);
 	resultP = fix_string1(want, gotP);
 
 log_activate();
-	log_return_msg("\'dont fire\' section");
+	log_return_msg("Brace expr not detected, pass through to emitSpecial()");
 	return resultP;
 }
 
+// The top-level API for converting bash value expressions to python.
+// Basically wraps fixBracedString(), which wraps ...
 char * fix_string(const char *stringP, fix_typeE want, fix_typeE *gotP)
 {
 	char *P;
