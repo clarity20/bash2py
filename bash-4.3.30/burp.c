@@ -1,4 +1,3 @@
-
 #include "config.h"
 
 #ifdef BASH2PY
@@ -279,7 +278,11 @@ void log_init()
 void log_close()
 {
 	while (g_current_function >= g_function_stack)
+	{
+		fprintf(g_log_stream, "WARNING: Logger has no record of a proper return from function %s,\n", *g_current_function);
 		free(*g_current_function);
+	    g_current_function--;
+	}
 	free(g_function_stack);
 }
 
@@ -319,50 +322,119 @@ static char * convert_format_specifiers(char *msg)
 	return converted;
 }
 
+// String conversion utilities for better logging
+char *bool_to_text(_BOOL value)
+{
+	static char text[6];
+	strcpy(text, value ? "TRUE" : "FALSE");
+	return text;
+}
+
+char *type_to_text(fix_typeE value)
+{
+	static char text[11];
+	strcpy(text, value == FIX_INT    ? "_INT" : 
+				(value == FIX_STRING ? "_STRING" : 
+				(value == FIX_VAR    ? "_VAR" : 
+				(value == FIX_NONE   ? "_NONE" : 
+									   "_otherType"))));
+	return text;
+}
+
 // log_enter(): When invoking this function, invoke log_return() at all possible
 // return points in order to keep the logging consistent and avoid memory bugs.
 void log_enter(char *format, ...)
 {
 	va_list args;
 	char *pNameEnd;
+	void *junk;
 	char full_format[256];
 	int length;
+    char result[128], fmt_piece[128];
 
 	if (!g_log_stream)
 		return;
 
-	format = convert_format_specifiers(format);
-	if (!(pNameEnd = strchr(format, '(')))
+    // Convert format string and arguments
+    char *start = format, *end = strchr(format, '%');
+    char *pResult = result;
+
+    if (!end)
+    {
+        fprintf(g_log_stream, format);
+        return;
+    }
+
+	va_start(args, format);
+    while (TRUE)
+    {
+        char *pType;
+
+        end++;
+        length = end - start + 1;
+
+        memcpy(fmt_piece, start, length);
+        pType = fmt_piece +length - 1;
+        fmt_piece[length]='\0';
+
+        switch (*pType)
+        {
+            case 'q':
+                strcpy(fmt_piece+length-2, "'%s'");
+                sprintf(pResult, fmt_piece, va_arg(args, char *));
+                break;
+            case 't':
+                *pType = 's';
+                sprintf(pResult, fmt_piece, type_to_text(va_arg(args, fix_typeE)));
+                break;
+            case 'b':
+                *pType = 's';
+                sprintf(pResult, fmt_piece, bool_to_text(va_arg(args, _BOOL)));
+                break;
+            default:
+                vsprintf(pResult, fmt_piece, args);
+                // Advance by one argument
+                junk = va_arg(args, void *);
+                break;
+        }
+
+        pResult = memchr(pResult, '\0', 128);
+        start = end+1;
+        end = strchr(start, '%');
+        if (!end) {
+            strcpy(pResult, start);
+            break;
+        }
+    }
+    va_end(args);
+
+	if (!(pNameEnd = strchr(result, '(')))
 	{
 		fprintf(stderr, "Error in call to log_enter(): Required format is funcname(args)\n");
-		free(format);
 		return;
 	}
 
 	// Internal log bookkeeping
 	g_log_indent += FULL_INDENT;	// persistent full indent
-	length = (int)(pNameEnd-format);
+	length = (int)(pNameEnd-result);
 	g_current_function++;
 	*g_current_function = (char *) malloc((length+1)*sizeof(char));
-	strncpy(*g_current_function, format, length);
+	strncpy(*g_current_function, result, length);
 	(*g_current_function)[length]='\0';
 
 	// Printing
 	if (g_log_is_on)
 	{
 		int i;
-		sprintf(full_format, "%-*.0dEnter %s", g_log_indent, 0, format);
+		sprintf(full_format, "%-*.0dEnter %s", g_log_indent, 0, result);
 		if (full_format[strlen(full_format)-1] != '\n')
 			strcat(full_format, "\n");
 		for (i=FULL_INDENT-1; i<g_log_indent; i+=FULL_INDENT)
 			full_format[i]='|';
 		if (i>=FULL_INDENT) full_format[i-FULL_INDENT]='.';
 
-		va_start(args, full_format);
-		vfprintf(g_log_stream, full_format, args);
-		va_end(args);
-	}
-	free(format);
+        fprintf(g_log_stream, full_format);
+    }
 }
 
 void log_info(char *format, ...)
@@ -442,22 +514,22 @@ void log_return_msg(char *msg_template, ...)
 	g_log_indent -= FULL_INDENT;
 }
 
-// String conversion utilities for better logging
-char *bool_to_text(_BOOL value)
+#ifdef TEST
+main()
 {
-	static char text[6];
-	strcpy(text, value ? "TRUE" : "FALSE");
-	return text;
-}
+    char qstr[] = "test_str";
+    int num = 123456;
+    fix_typeE fix = FIX_VAR;
+    _BOOL fakeBool = TRUE;
 
-char *type_to_text(fix_typeE value)
-{
-	static char text[11];
-	strcpy(text, value == FIX_INT    ? "_INT" : 
-				(value == FIX_STRING ? "_STRING" : 
-				(value == FIX_VAR    ? "_VAR" : 
-				(value == FIX_NONE   ? "_NONE" : 
-									   "_otherType"))));
-	return text;
+    log_init();
+    log_activate();
+    log_enter("main (qstr=%q, num=%d, bool=%b, fix=%t)", qstr, num, fakeBool, fix);
+    log_return();
+printf("Logging finished.\n");
+    log_close();
 }
+#endif // TEST
+
 #endif // BASH2PY
+
