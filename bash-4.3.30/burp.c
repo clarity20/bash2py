@@ -281,7 +281,7 @@ void log_close()
 	{
 		fprintf(g_log_stream, "WARNING: Logger has no record of a proper return from function %s,\n", *g_current_function);
 		free(*g_current_function);
-	    g_current_function--;
+		g_current_function--;
 	}
 	free(g_function_stack);
 }
@@ -296,31 +296,6 @@ void log_deactivate()
 	g_log_is_on = FALSE;
 }
 
-// convert_format_specifiers(): Rewrites any of our custom,
-// printf-like codes in terms of the standard format specifiers
-static char * convert_format_specifiers(char *msg)
-{
-	const int EXTRA_SPACE = 32;
-	char specifier[3];
-	char *pSpecifier, *converted;
-	int len;
-
-	// Convert %q specifiers to "%s" in quote marks
-	strcpy(specifier, "%q");
-	len = strlen(msg);
-	converted = (char *) malloc(len + EXTRA_SPACE);
-	strcpy(converted, msg);
-	while (pSpecifier = strstr(converted, specifier))
-	{
-		memmove(pSpecifier+4, pSpecifier+2, (int)((converted+len)-pSpecifier)-1);
-		memcpy(pSpecifier, "\"%s\"", 4);
-		len += 2;
-	}
-
-	// All further conversions can be performed here
-
-	return converted;
-}
 
 // String conversion utilities for better logging
 char *bool_to_text(_BOOL value)
@@ -332,13 +307,80 @@ char *bool_to_text(_BOOL value)
 
 char *type_to_text(fix_typeE value)
 {
-	static char text[11];
-	strcpy(text, value == FIX_INT    ? "_INT" : 
-				(value == FIX_STRING ? "_STRING" : 
-				(value == FIX_VAR    ? "_VAR" : 
-				(value == FIX_NONE   ? "_NONE" : 
-									   "_otherType"))));
+	static char text[12];
+	strcpy(text, value == FIX_INT    ? "_INT" :
+				(value == FIX_STRING ? "_STRING" :
+				(value == FIX_VAR    ? "_VAR" :
+				(value == FIX_NONE   ? "_NONE" :
+				(value == FIX_EXPRESSION   ? "_EXPRESSION" :
+									   "_otherType")))));
 	return text;
+}
+
+
+char *_build_log_entry(char *format, va_list *pArgs)
+{
+	static char result[128];
+	char fmt_piece[128];
+	void *junk;
+	va_list args = *pArgs;
+	int length;
+
+	// Convert format string and arguments
+	char *start = format, *end = strchr(format, '%');
+	char *pResult = result;
+
+	if (!end)
+	{
+		strcpy(result, format);
+		end = memchr(result, '\0', 128);
+		if (*(end-1) != '\n') strcpy(end, "\n");
+		return format;
+	}
+
+	while (TRUE)
+	{
+		char *pType;
+
+		end++;
+		length = end - start + 1;
+
+		memcpy(fmt_piece, start, length);
+		pType = fmt_piece +length - 1;
+		fmt_piece[length]='\0';
+
+		switch (*pType)
+		{
+			case 'q':
+				strcpy(fmt_piece+length-2, "'%s'");
+				sprintf(pResult, fmt_piece, va_arg(args, char *));
+				break;
+			case 't':
+				*pType = 's';
+				sprintf(pResult, fmt_piece, type_to_text(va_arg(args, fix_typeE)));
+				break;
+			case 'b':
+				*pType = 's';
+				sprintf(pResult, fmt_piece, bool_to_text(va_arg(args, _BOOL)));
+				break;
+			default:
+				vsprintf(pResult, fmt_piece, args);
+				// Advance by one argument
+				junk = va_arg(args, void *);
+				break;
+		}
+
+		pResult = memchr(pResult, '\0', 128);
+		start = end+1;
+		end = strchr(start, '%');
+		if (!end) {
+			strcpy(pResult, start);
+			end = memchr(pResult, '\0', 128);
+			if (*(end-1) != '\n') strcpy(end, "\n");
+			break;
+		}
+	}
+	return result;
 }
 
 // log_enter(): When invoking this function, invoke log_return() at all possible
@@ -346,102 +388,51 @@ char *type_to_text(fix_typeE value)
 void log_enter(char *format, ...)
 {
 	va_list args;
-	char *pNameEnd;
-	void *junk;
-	char full_format[256];
+	char *log_text, *pNameEnd;
 	int length;
-    char result[128], fmt_piece[128];
 
 	if (!g_log_stream)
 		return;
 
-    // Convert format string and arguments
-    char *start = format, *end = strchr(format, '%');
-    char *pResult = result;
-
-    if (!end)
-    {
-        fprintf(g_log_stream, format);
-        return;
-    }
-
 	va_start(args, format);
-    while (TRUE)
-    {
-        char *pType;
+	log_text = _build_log_entry(format, &args);
+	va_end(args);
 
-        end++;
-        length = end - start + 1;
-
-        memcpy(fmt_piece, start, length);
-        pType = fmt_piece +length - 1;
-        fmt_piece[length]='\0';
-
-        switch (*pType)
-        {
-            case 'q':
-                strcpy(fmt_piece+length-2, "'%s'");
-                sprintf(pResult, fmt_piece, va_arg(args, char *));
-                break;
-            case 't':
-                *pType = 's';
-                sprintf(pResult, fmt_piece, type_to_text(va_arg(args, fix_typeE)));
-                break;
-            case 'b':
-                *pType = 's';
-                sprintf(pResult, fmt_piece, bool_to_text(va_arg(args, _BOOL)));
-                break;
-            default:
-                vsprintf(pResult, fmt_piece, args);
-                // Advance by one argument
-                junk = va_arg(args, void *);
-                break;
-        }
-
-        pResult = memchr(pResult, '\0', 128);
-        start = end+1;
-        end = strchr(start, '%');
-        if (!end) {
-            strcpy(pResult, start);
-            break;
-        }
-    }
-    va_end(args);
-
-	if (!(pNameEnd = strchr(result, '(')))
+	if (!(pNameEnd = strchr(log_text, '(')))
 	{
-		fprintf(stderr, "Error in call to log_enter(): Required format is funcname(args)\n");
+		fprintf(stderr, "Error passing format '%s' to log_enter(): Must have the form 'function_name (args...)'\n", format);
+		assert(0);
 		return;
 	}
 
-	// Internal log bookkeeping
+	// Internal log bookkeeping: adjust indentation, register current function
 	g_log_indent += FULL_INDENT;	// persistent full indent
-	length = (int)(pNameEnd-result);
+	length = (int)(pNameEnd-log_text);
 	g_current_function++;
 	*g_current_function = (char *) malloc((length+1)*sizeof(char));
-	strncpy(*g_current_function, result, length);
+	strncpy(*g_current_function, log_text, length);
 	(*g_current_function)[length]='\0';
 
 	// Printing
 	if (g_log_is_on)
 	{
+		char log_entry[256];
 		int i;
-		sprintf(full_format, "%-*.0dEnter %s", g_log_indent, 0, result);
-		if (full_format[strlen(full_format)-1] != '\n')
-			strcat(full_format, "\n");
-		for (i=FULL_INDENT-1; i<g_log_indent; i+=FULL_INDENT)
-			full_format[i]='|';
-		if (i>=FULL_INDENT) full_format[i-FULL_INDENT]='.';
 
-        fprintf(g_log_stream, full_format);
-    }
+		sprintf(log_entry, "%-*.0dEnter %s", g_log_indent, 0, log_text);
+		for (i=FULL_INDENT-1; i<g_log_indent; i+=FULL_INDENT)
+			log_entry[i]='|';
+		if (i>=FULL_INDENT) log_entry[i-FULL_INDENT]='.';
+
+		fprintf(g_log_stream, log_entry);
+	}
 }
 
 void log_info(char *format, ...)
 {
 	va_list args;
-	char full_format[256];
-
+	char log_entry[256];
+	char *log_text;
 	if (!g_log_stream)
 		return;
 
@@ -450,19 +441,17 @@ void log_info(char *format, ...)
 		return;
 
 	g_log_indent += SMALL_INDENT;	// transient small indent
-	format = convert_format_specifiers(format);
-	sprintf(full_format, "%-*.0d%s(): %s", g_log_indent, 0, *g_current_function, format);
-	if (full_format[strlen(full_format)-1] != '\n')
-		strcat(full_format, "\n");
-	for (int i=FULL_INDENT-1; i<g_log_indent; i+=FULL_INDENT)
-		full_format[i]='|';
-	g_log_indent -= SMALL_INDENT;
 
-	va_start(args, full_format);
-	vfprintf(g_log_stream, full_format, args);
+	va_start(args, format);
+	log_text = _build_log_entry(format, &args);
 	va_end(args);
 
-	free(format);
+	sprintf(log_entry, "%-*.0d%s(): %s", g_log_indent, 0, *g_current_function, log_text);
+	for (int i=FULL_INDENT-1; i<g_log_indent; i+=FULL_INDENT)
+		log_entry[i]='|';
+	g_log_indent -= SMALL_INDENT;
+
+	fprintf(g_log_stream, log_entry);
 }
 
 // log_return: Simple logging and bookkeeping for function returns
@@ -474,7 +463,7 @@ void log_return()
 // A variation of log_return() that allows an arbitrary message upon function return
 void log_return_msg(char *msg_template, ...)
 {
-	char full_entry[256];
+	char log_entry[256];
 	char *msg;
 	char entry_format[]="%-*.0dLeave %s() - %s\n";
 
@@ -492,20 +481,17 @@ void log_return_msg(char *msg_template, ...)
 		}
 		else
 		{
-			msg_template = convert_format_specifiers(msg_template);
 			va_list args;
 			va_start(args, msg_template);
-			msg = (char *) malloc(256);
-			vsprintf(msg, msg_template, args);
-			if (msg_template) free(msg_template);
+			msg = _build_log_entry(msg_template, &args);
 			va_end(args);
 		}
-		sprintf(full_entry, entry_format, g_log_indent, 0, *g_current_function, msg);
-		if (msg) free(msg);
+
+		sprintf(log_entry, entry_format, g_log_indent, 0, *g_current_function, msg);
 		for (i=FULL_INDENT-1; i<g_log_indent; i+=FULL_INDENT)
-			full_entry[i]='|';
-		if (i>=FULL_INDENT) full_entry[i-FULL_INDENT]='`';
-		fprintf(g_log_stream, full_entry);
+			log_entry[i]='|';
+		if (i>=FULL_INDENT) log_entry[i-FULL_INDENT]='`';
+		fprintf(g_log_stream, log_entry);
 	}
 
 	// Internal log bookkeeping
@@ -517,17 +503,17 @@ void log_return_msg(char *msg_template, ...)
 #ifdef TEST
 main()
 {
-    char qstr[] = "test_str";
-    int num = 123456;
-    fix_typeE fix = FIX_VAR;
-    _BOOL fakeBool = TRUE;
+	char qstr[] = "test_str";
+	int num = 123456;
+	fix_typeE fix = FIX_VAR;
+	_BOOL fakeBool = TRUE;
 
-    log_init();
-    log_activate();
-    log_enter("main (qstr=%q, num=%d, bool=%b, fix=%t)", qstr, num, fakeBool, fix);
-    log_return();
-printf("Logging finished.\n");
-    log_close();
+	log_init();
+	log_activate();
+	log_enter("main (qstr=%q, num=%d, bool=%b, fix=%t)", qstr, num, fakeBool, fix);
+	log_info("num=%d, bool=%b, fix=%t, qstr=%q", num, fakeBool, fix, qstr);
+	log_return_msg("bool=%b, fix=%t, qstr=%q, num=%d", fakeBool, fix, qstr, num);
+	log_close();
 }
 #endif // TEST
 
