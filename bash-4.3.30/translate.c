@@ -139,7 +139,7 @@ void seen_global(const char *nameP, _BOOL local)
 	char *P,*P1;
 	int	 c;
 
-	log_enter("seen_global (nameP=%q, local=%s)", nameP, bool_to_text(local));
+	log_enter("seen_global (nameP=%q, local=%b)", nameP, local);
 
 	if (!*nameP) {
 		log_return_msg("Return without processing");
@@ -1309,8 +1309,8 @@ static void print_assignment_command(char *nameP, char *end_variableP, char *end
 	int 		c;
 	fix_typeE	got;
 
-	log_enter("print_assignment_command (nameP=%q, end_var=%q, end_array=%s, end_assign=%q, local=%s)",
-			nameP, end_variableP, end_arrayP, end_assignmentP, bool_to_text(local));
+	log_enter("print_assignment_command (nameP=%q, end_var=%q, end_array=%s, end_assign=%q, local=%b)",
+			nameP, end_variableP, end_arrayP, end_assignmentP, local);
 
 	c              = *end_variableP;
 	*end_variableP = '\0';
@@ -1367,7 +1367,7 @@ static _BOOL isAssignment(char *startP, _BOOL local)
 	char	*P, *end_nameP, *end_arrayP;
 	int		c;
 
-	log_enter("isAssignment (startP=%q, local=%s)", startP, bool_to_text(local));
+	log_enter("isAssignment (startP=%q, local=%b)", startP, local);
 
 	P = startP;
 
@@ -1795,7 +1795,7 @@ static void print_expression(WORD_LIST *word_listP)
 	char 		*wordP;
 	fix_typeE	got;
 
-	log_enter("print_expression (word_list)");
+	log_enter("print_expression (word_list = %q, ...)", word_listP->word->word);
 
 	start_offset = g_output.m_lth;
 	for (atP = word_listP; atP; atP = nextP) {

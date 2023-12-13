@@ -698,8 +698,8 @@ static char * emitFunction(char *nameP, char *parm1P, char *parm2P, _BOOL indire
 	char 		*endP;
 	int	 		offset;
 
-	log_enter("emitFunction (nameP=%q, parm1P=%q, parm2P=%q, indirect=%d, in_quotes=%d)",
-			nameP, parm1P, parm2P, bool_to_text(indirect), in_quotes);
+	log_enter("emitFunction (nameP=%q, parm1P=%q, parm2P=%q, indirect=%b, in_quotes=%d)",
+			nameP, parm1P, parm2P, indirect, in_quotes);
 
 	burp(&g_new, "%s(", nameP);
 	if (indirect) {
@@ -735,8 +735,8 @@ static char * emitVariable(char *startP, _BOOL is_braced, int in_quotes, fix_typ
 	_BOOL		is_indirect;
 	fix_typeE	got;
 
-	log_enter("emitVariable (startP=%q, is_braced=%s, in_quotes=%d, want=%s)",
-			startP, bool_to_text(is_braced), in_quotes, type_to_text(want));
+	log_enter("emitVariable (startP=%q, is_braced=%b, in_quotes=%d, want=%t)",
+			startP, is_braced, in_quotes, want);
 	start2P     = 0;
 	functionP   = 0;
 
@@ -907,7 +907,7 @@ emitDollarExpression(char *startP, int in_quotes, fix_typeE want, fix_typeE *got
 	int  		start, offset, is_blank, c, paren_depth;
 	fix_typeE	got;
 
-	log_enter("emitDollarExpression (startP=%q, in_quotes=%d, want=%s)", startP, in_quotes, type_to_text(want));
+	log_enter("emitDollarExpression (startP=%q, in_quotes=%d, want=%t)", startP, in_quotes, want);
 
 	++g_dollar_expr_nesting_level;
 	*gotP    = FIX_INT;
@@ -1073,7 +1073,7 @@ static char * emitSpecial1(char *startP, int in_quotes, fix_typeE want, fix_type
 	char *endP, *P;
 	int	 c, c1, start;
 	
-	log_enter("emitSpecial1 (startP=%q, in_quotes=%d, want=%s)", startP, in_quotes, type_to_text(want));
+	log_enter("emitSpecial1 (startP=%q, in_quotes=%d, want=%t)", startP, in_quotes, want);
 
 	endP   = NULL;
 	start  = g_new.m_lth;
@@ -1173,8 +1173,8 @@ static fix_typeE combine_types(int offset, fix_typeE want_type, fix_typeE was_ty
 {
 	char	*P;
 
-	log_enter("combine_types (offset=%d, want=%s, was=%s, new=%s)",
-				offset, type_to_text(want_type), type_to_text(was_type), type_to_text(new_type));
+	log_enter("combine_types (offset=%d, want=%t, was=%t, new=%t)",
+				offset, want_type, was_type, new_type);
 
 	switch (want_type) {
 	case FIX_ARRAY:
@@ -1255,7 +1255,10 @@ static fix_typeE combine_types(int offset, fix_typeE want_type, fix_typeE was_ty
 	return FIX_STRING;
 }
 
-// substitute(): a mysterious and troubling function
+// substitute(): Opens the door to the emit...() family of string transformations
+// which can call each other in all kinds of ways to fully pythonize a bash value.
+// Compare to only_expand() which does the same but in a more restricted way
+// for FIX_EXPRESSIONs.
 
 /* Convert double quotes so that all non-escaped bracketting double quotes
  * are given clear internal codes  to simplify subsequent logic 
@@ -1276,7 +1279,7 @@ static fix_typeE substitute(fix_typeE want)
 	_BOOL      	is_file_expansion, quote_removal;
 	_BOOL		is_outside_quotes;
 
-	log_enter("substitute (want=%s)", type_to_text(want));
+	log_enter("substitute (want=%t)", want);
 
 	switch (want) {
 	case FIX_INT:
@@ -1297,11 +1300,13 @@ static fix_typeE substitute(fix_typeE want)
 		case '*':
 		case '?':
 		case '[':
+		    // We have a globbing character
 			is_file_expansion |= is_outside_quotes;
 			break;
 		case '~':
 		case '$':
 		case '`':
+		    // We have a "special" character
 			//TODO:  Very bad!!!  quoted is not initialized! Compare to other invocations.
 			P1 = emitSpecial(P, quoted, want, &got1);
 			if (P1 && P1 != P) {
@@ -1316,6 +1321,7 @@ static fix_typeE substitute(fix_typeE want)
 			is_outside_quotes = !is_outside_quotes;
 			break;
 		case '\\':
+		    // Skip/protect escaped characters
 			if (P[1]) {
 				++P;
 	}	}	}
@@ -1341,6 +1347,7 @@ static fix_typeE substitute(fix_typeE want)
 		case '~':
 		case '$':
 		case '`':
+			// We have a "special" character
 			if (in_quotes < 0) {
 				quoted = quote_removal;
 			} else {
@@ -1662,7 +1669,7 @@ static char * fix_string1(fix_typeE want, fix_typeE *gotP)
 	fix_typeE	got;
 	_BOOL		is_expression;
 
-	log_enter("fix_string1 (want=%s)", type_to_text(want));
+	log_enter("fix_string1 (want=%t)", want);
 
 	got = FIX_NONE;
 	if (!g_buffer.m_lth) {
@@ -1717,7 +1724,7 @@ done:
 
 // fixBracedString(): The topmost filtering function under fix_string().
 // Processes brace expressions like {1..10} and foo{a,bbb,cc}bar but NOT
-// dollar-brace expressions like ${x}. The key is to find '.' or ',' inside {}.
+// dollar-brace expressions like ${x}. Notice how the code looks for '.' or ',' inside {}.
 
 static char * fixBracedString(const char *startP, fix_typeE want, fix_typeE *gotP)
 {
@@ -1729,7 +1736,7 @@ static char * fixBracedString(const char *startP, fix_typeE want, fix_typeE *got
 	int		c, in_quotes, state;
 	char	*resultP;
 
-	log_enter("fixBracedString (startP=%q, want=%s)", startP, type_to_text(want));
+	log_enter("fixBracedString (startP=%q, want=%t)", startP, want);
 log_deactivate();
 
 	if (want == FIX_EXPRESSION) {
