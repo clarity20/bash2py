@@ -113,6 +113,7 @@ char *_expand_macros_internal(char *str, _BOOL define_exception)
         int offal_length;
         _BOOL do_camel_case = FALSE;
         char *substitution = NULL, *where_to = NULL;
+        char preceding, next_preceding, next;
         switch (*p)
         {
             case '(':
@@ -120,7 +121,7 @@ char *_expand_macros_internal(char *str, _BOOL define_exception)
                 // Function & subscript macros are indicated by the ( or [ symbol
                 // and the PRECEDING character if it is not part of a longer
                 // identifier. So we check the two preceding characters.
-                char preceding = *(p-1), next_preceding = *(p-2);
+                preceding = *(p-1); next_preceding = *(p-2);
                 if (p>working_str && (substitution = g_func_expansions[preceding])
                           && (&preceding==working_str /*ie nothing precedes p-1*/ || !isalnum(next_preceding))) {
                     // If indicated, allow function macros in the declaration/header
@@ -135,7 +136,7 @@ char *_expand_macros_internal(char *str, _BOOL define_exception)
                 break;
             case '$':
                 // General text macros: indicated by '$' followed by one letter/number
-                char next = *(p+1);
+                next = *(p+1);
                 if (isalnum(next)) {
                     if (substitution = g_text_expansions[next]) {
                         offal_length = 2;
@@ -368,6 +369,7 @@ char *_process_ifelse_subordinates(char *buf, char *types, va_list *thens)
     g_conditional_nesting++;
     while (*p_type)
     {
+        int begin_margin;
         stmt = va_arg(*thens, char *);
 
         switch (*p_type) {
@@ -380,7 +382,7 @@ char *_process_ifelse_subordinates(char *buf, char *types, va_list *thens)
             case 'I': 
                 // As in if_(), process the "if" line then the subordinate lines,
                 // but do not call if_() because that would reset "thens"
-                int begin_margin = g_left_margin;
+                begin_margin = g_left_margin;
                 p_buf = stpcpy(p_buf, _if_internal(expand_macros(stmt)));
                 next_types = va_arg(*thens, char *);
                 p_buf = _process_ifelse_subordinates(p_buf, next_types, thens);
@@ -626,7 +628,7 @@ char *run_test()
 
         def = def_("S()", "SV0");
         asgn = asgn_("$L", "$v");
-        write_function(def, ret_("$v"));
+        write_function(def, asgn, ret_("$v"));
 
         write_increment_func("preinc", "+");
         write_increment_func("postinc", "++");
