@@ -606,7 +606,10 @@ translate_expr: burp.o fix_string translate_expr.c
 	gcc -o translate_expr -g -DTEST -DBASH2PY burp.o fix_string.o translate_expr.c
 
 burp: burp.c
-	gcc -g -DTEST -DBASH2PY -I/(BASHINCDIR) -o burp burp.c
+	gcc -g -DTEST -DBASH2PY -I$(BASHINCDIR) -o burp burp.c
+
+dynamo: dynamo.c
+	gcc -g -DTEST -DBASH2PY -I$(BASHINCDIR) -o dynamo dynamo.c
 
 # old rules
 GRAM_H = parser-built
