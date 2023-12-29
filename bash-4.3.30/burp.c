@@ -323,7 +323,7 @@ char *_build_log_entry(char *format, va_list *pArgs)
 	static char result[128];
 	char fmt_piece[128];
 	void *junk;
-	va_list args = *pArgs;
+	va_list args;
 	int length;
 
 	// Convert format string and arguments
@@ -338,6 +338,7 @@ char *_build_log_entry(char *format, va_list *pArgs)
 		return format;
 	}
 
+	va_copy(args, *pArgs);
 	while (TRUE)
 	{
 		char *pType;
@@ -380,6 +381,7 @@ char *_build_log_entry(char *format, va_list *pArgs)
 			break;
 		}
 	}
+	va_end(args);
 	return result;
 }
 
