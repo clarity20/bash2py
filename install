@@ -1,6 +1,6 @@
 #!/bin/sh
 cd bash-4.3.30
-chmod +x configure && ./configure
+chmod +x configure && CFLAGS="-Wno-implicit-function-declaration" ./configure
 make bash2pyengine
 ls -l bash2pyengine
 cd ..
