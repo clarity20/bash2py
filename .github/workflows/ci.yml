@@ -30,7 +30,7 @@ jobs:
     - name: configure and make
       run: |
         cd bash-4.3.30
-        bash -c "./configure CFLAGS=-Wno-implicit-function-declaration"
+        bash -c './configure CFLAGS="-Wno-implicit-function-declaration -Wno-implicit-int"'
         bash -c "make bash2pyengine"
 
     - name: run-all
