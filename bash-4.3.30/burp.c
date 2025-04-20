@@ -426,7 +426,7 @@ void log_enter(char *format, ...)
 			log_entry[i]='|';
 		if (i>=FULL_INDENT) log_entry[i-FULL_INDENT]='.';
 
-		fprintf(g_log_stream, log_entry);
+		fprintf(g_log_stream, "%s", log_entry);
 	}
 }
 
@@ -453,7 +453,7 @@ void log_info(char *format, ...)
 		log_entry[i]='|';
 	g_log_indent -= SMALL_INDENT;
 
-	fprintf(g_log_stream, log_entry);
+	fprintf(g_log_stream, "%s", log_entry);
 }
 
 // log_return: Simple logging and bookkeeping for function returns
@@ -493,7 +493,7 @@ void log_return_msg(char *msg_template, ...)
 		for (i=FULL_INDENT-1; i<g_log_indent; i+=FULL_INDENT)
 			log_entry[i]='|';
 		if (i>=FULL_INDENT) log_entry[i-FULL_INDENT]='`';
-		fprintf(g_log_stream, log_entry);
+		fprintf(g_log_stream, "%s", log_entry);
 	}
 
 	// Internal log bookkeeping
