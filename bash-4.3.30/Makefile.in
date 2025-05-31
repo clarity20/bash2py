@@ -596,6 +596,7 @@ buildversion.o: version.h conftypes.h patchlevel.h $(srcdir)/version.c
 bash2pyengine: .made
 	mv bash bash2pyengine
 
+# This is missing some dependencies. Can build by pasting the whole bash.exe command & changing to fix_string.
 fix_string: burp.o translate_expr.o fix_string.c
 	gcc -o fix_string -g -DTEST -DBASH2PY burp.o translate_expr.o fix_string.c
 
