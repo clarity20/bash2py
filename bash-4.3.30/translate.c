@@ -97,7 +97,7 @@ static burpT g_case_var = {0,0,0,0,0,0};
 
 burpT	g_output  = {0, 0, 0, 0, 0, 0};
 
-static burpT	g_comment = {0, 0, 0, 0, 0, 0};
+static burpT	g_commentBuffer = {0, 0, 0, 0, 0, 0};
 static burpT	g_temp    = {0, 0, 0, 0, 0, 0};
 
 typedef struct function_nameS {
@@ -3030,6 +3030,7 @@ void print_command (COMMAND *command)
 	burpc(&g_output, '\n');
 }
 
+// This is a worrisome function that would probably break if ever (indirectly) used by print_comments()
 void seen_comment_char(int c)
 {
 	char *P;
@@ -3038,15 +3039,15 @@ void seen_comment_char(int c)
 		/* Start */
 			
 		comment_byte = position.byte;
-		g_comment.m_lth = 0;
-		// burpc(&g_comment, '\n');
+		g_commentBuffer.m_lth = 0;
+		// burpc(&g_commentBuffer, '\n');
 		c = '#';
 	}
 	if (c == '\n') {
 		commentT *commentP;
 
 		/* End */
-		P = g_comment.m_P;
+		P = g_commentBuffer.m_P;
 		if (*P != '#' || P[1] != '!') {
 			commentT *commentP;
 
@@ -3056,14 +3057,14 @@ void seen_comment_char(int c)
 			commentP->m_textP  = P;
 			*g_comment_tailPP  = commentP;
 			g_comment_tailPP   = &commentP->m_nextP;
-			g_comment.m_lth    = 0;
-			g_comment.m_max    = 0;
-			g_comment.m_P      = NULL;
+			g_commentBuffer.m_lth    = 0;
+			g_commentBuffer.m_max    = 0;
+			g_commentBuffer.m_P      = NULL;
 		}
 		return;
 	}
 	if (c) {
-		burpc(&g_comment, c);
+		burpc(&g_commentBuffer, c);
 	}
 }
 
@@ -3073,7 +3074,7 @@ void initialize_translator(const char *shell_scriptP)
 
 	log_init();
     log_activate();
-    init_macro_dictionaries();
+    init_dynamo();
 
     strcpy(file_suffix, g_translate_html ? "html" : "py");
 
@@ -3632,6 +3633,7 @@ static void emitBash2PyClass(void)
 
 void close_translator()
 {
+	//TODO This is probably here to flush any remaining comments but is likely wrong.
 	print_comments(999999999);
 
 	// What do we need
@@ -3656,7 +3658,7 @@ void close_translator()
 	fclose(outputF);
 
 	dispose_all_function_names();
-    dispose_macro_dictionaries();
+    cleanup_dynamo();
 
 	log_close();
 }
