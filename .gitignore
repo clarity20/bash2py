@@ -1,5 +1,5 @@
-# Reminder: .gitignore is for temporary/junk files that should be 100% ignored.
-# Version-controlled files with convenient hacks will still show in git status.
+# This file specifies which non-tracked files should be 100% ignored by git.
+# Version-controlled files will still show in git status even if listed here.
 *.[oa]
 *.exe
 
@@ -26,6 +26,7 @@ configure~
 lsignames.h
 y.tab.[ch]
 *[Tt]ags
+syntax.c
 signames.h
 version.h
 stamp-h
