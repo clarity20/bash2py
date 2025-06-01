@@ -36,6 +36,23 @@ _BOOL g_log_is_on;
 
 _BOOL g_translate_html = FALSE;
 
+#if !HAVE_STPCPY
+char *stpcpy(char *s1, const char *s2) {
+	char *end;
+	do {
+		*s1++ = *s2;
+	} while (*s2++);
+	return --s1;
+#endif
+
+#if !HAVE_STRDUP
+char *strdup(const char *s) {
+	char *ret = (char *) malloc(strlen(s)+1);
+	strcpy(ret, s);
+	return ret;
+}
+#endif
+
 void burp_reset(burpT *burpP)
 {
 	memset(burpP->m_P, '\0', burpP->m_max);
@@ -291,9 +308,21 @@ void log_activate()
 	g_log_is_on = TRUE;
 }
 
+void log_activate_in(char *where)
+{
+    log_activate();
+    log_info(where);
+}
+
 void log_deactivate()
 {
 	g_log_is_on = FALSE;
+}
+
+void log_deactivate_in(char *where)
+{
+    log_info(where);
+    log_deactivate();
 }
 
 
@@ -407,7 +436,7 @@ void log_enter(char *format, ...)
 		return;
 	}
 
-	// Internal log bookkeeping: adjust indentation, register current function
+	// Internal bookkeeping: adjust indentation, register current function
 	g_log_indent += FULL_INDENT;	// persistent full indent
 	length = (int)(pNameEnd-log_text);
 	g_current_function++;
@@ -415,7 +444,7 @@ void log_enter(char *format, ...)
 	strncpy(*g_current_function, log_text, length);
 	(*g_current_function)[length]='\0';
 
-	// Printing
+	// Print, rendering the left-indentation carefully
 	if (g_log_is_on)
 	{
 		char log_entry[256];
@@ -438,7 +467,6 @@ void log_info(char *format, ...)
 	if (!g_log_stream)
 		return;
 
-	// No bookkeeping to do -- the internals are transient. Just print.
 	if (!g_log_is_on)
 		return;
 
@@ -515,6 +543,7 @@ main()
 	log_enter("main (qstr=%q, num=%d, bool=%b, fix=%t)", qstr, num, fakeBool, fix);
 	log_info("num=%d, bool=%b, fix=%t, qstr=%q", num, fakeBool, fix, qstr);
 	log_return_msg("bool=%b, fix=%t, qstr=%q, num=%d", fakeBool, fix, qstr, num);
+	log_deactivate();
 	log_close();
 }
 #endif // TEST

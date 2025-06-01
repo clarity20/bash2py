@@ -2,8 +2,8 @@
 
 extern char _EXCEPT[];
 
-void init_macro_dictionaries(void);
-void dispose_macro_dictionaries(void);
+void init_dynamo(void);
+void cleanup_dynamo(void);
 void set_static(_BOOL is_static);
 void write_assignment_func(char *name, char *oper);
 void write_init_func(char *sig);

@@ -87,17 +87,14 @@ static REDIRECT *g_deferred_heredocs = NULL;
 static int g_embedded          = 0;
 static int g_started           = 0;
 
-//MIW var declarations begin
-
 extern _BOOL   g_translate_html;
 FILE* outputF = NULL;
 
 static burpT g_case_var = {0,0,0,0,0,0};
-//MIW var declarations end
 
 burpT	g_output  = {0, 0, 0, 0, 0, 0};
 
-static burpT	g_comment = {0, 0, 0, 0, 0, 0};
+static burpT	g_commentBuffer = {0, 0, 0, 0, 0, 0};
 static burpT	g_temp    = {0, 0, 0, 0, 0, 0};
 
 typedef struct function_nameS {
@@ -830,24 +827,24 @@ typedef struct commentS {
 	char			*m_textP;
 } commentT;
 
-commentT *g_comment_headP = NULL;
-commentT **g_comment_tailPP = &g_comment_headP;
+commentT *g_comment_headP = NULL, *g_comment_tailP = NULL;
 
 static void print_comments(int before_byte)
 {
-	commentT	*commentP;
+	commentT *commentP = g_comment_headP;
 
-	while ((commentP = g_comment_headP) && g_comment_headP->m_byte < before_byte) {
-		burps_html(&g_output, g_comment_headP->m_textP);
+	while (commentP && commentP->m_byte < before_byte) {
+		burps_html(&g_output, commentP->m_textP);
 		if (g_translate_html) {
 			burps_html(&g_output, "</pre></td></tr><tr><td></td><td><pre>");
 		}
 		newline("");
-		g_comment_headP = g_comment_headP->m_nextP;
-		xfree(commentP);
-		if (!g_comment_headP) {
-			g_comment_tailPP = &g_comment_headP;
-}	}	}
+		commentT* temp = commentP;
+		commentP = commentP->m_nextP;
+		free(temp);
+	}
+	g_comment_headP = NULL;
+}
 
 static void translate_unary_operation(char *operatorP, int complex1, char *term1P)
 {
@@ -3030,6 +3027,7 @@ void print_command (COMMAND *command)
 	burpc(&g_output, '\n');
 }
 
+// This is a worrisome function that would probably break if ever (indirectly) used by print_comments()
 void seen_comment_char(int c)
 {
 	char *P;
@@ -3038,32 +3036,30 @@ void seen_comment_char(int c)
 		/* Start */
 			
 		comment_byte = position.byte;
-		g_comment.m_lth = 0;
-		// burpc(&g_comment, '\n');
+		g_commentBuffer.m_lth = 0;
+		// burpc(&g_commentBuffer, '\n');
 		c = '#';
 	}
 	if (c == '\n') {
 		commentT *commentP;
 
 		/* End */
-		P = g_comment.m_P;
+		P = g_commentBuffer.m_P;
 		if (*P != '#' || P[1] != '!') {
-			commentT *commentP;
-
-			commentP = (commentT *) xmalloc(sizeof(commentT));
-			commentP->m_nextP = NULL;
+			commentT *commentP = (commentT *) malloc(sizeof(commentT));
+			commentP->m_nextP  = NULL;
 			commentP->m_byte   = comment_byte;
-			commentP->m_textP  = P;
-			*g_comment_tailPP  = commentP;
-			g_comment_tailPP   = &commentP->m_nextP;
-			g_comment.m_lth    = 0;
-			g_comment.m_max    = 0;
-			g_comment.m_P      = NULL;
+			commentP->m_textP  = P;    // So every comment points to the same place???
+			g_comment_tailP    = commentP;
+			if (!g_comment_headP) g_comment_headP = g_comment_tailP;
+			g_commentBuffer.m_lth    = 0;
+			g_commentBuffer.m_max    = 0;
+			g_commentBuffer.m_P      = NULL;
 		}
 		return;
 	}
 	if (c) {
-		burpc(&g_comment, c);
+		burpc(&g_commentBuffer, c);
 	}
 }
 
@@ -3073,7 +3069,7 @@ void initialize_translator(const char *shell_scriptP)
 
 	log_init();
     log_activate();
-    init_macro_dictionaries();
+    init_dynamo();
 
     strcpy(file_suffix, g_translate_html ? "html" : "py");
 
@@ -3632,6 +3628,7 @@ static void emitBash2PyClass(void)
 
 void close_translator()
 {
+	//TODO This is probably here to flush any remaining comments but is likely wrong.
 	print_comments(999999999);
 
 	// What do we need
@@ -3656,7 +3653,7 @@ void close_translator()
 	fclose(outputF);
 
 	dispose_all_function_names();
-    dispose_macro_dictionaries();
+    cleanup_dynamo();
 
 	log_close();
 }

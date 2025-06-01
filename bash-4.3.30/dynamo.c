@@ -41,7 +41,7 @@ unsigned char g_lines_in_func = 0, g_conditional_nesting = 0;
 _BOOL g_inside_class = FALSE, g_is_static = FALSE;
 char _EXCEPT[] = "Bash2PyException";
 
-char **g_text_expansions, **g_func_expansions;
+char **g_text_expansions = NULL, **g_func_expansions = NULL;
 
 void write_function(char *first, ...);
 
@@ -57,7 +57,7 @@ void _write_line(char *dest, const char *fmt, ...) {
     free(format);
 }
 
-void init_macro_dictionaries(void)
+void init_dynamo(void)
 {
     g_text_expansions = (char**) malloc (128 * sizeof(char *));
     memset(g_text_expansions, '\0', 128);
@@ -184,7 +184,7 @@ char *_expand_macros_internal(char *str, _BOOL define_exception)
 
 char *expand_macros(char *name) { return _expand_macros_internal(name, FALSE); }
 
-void dispose_macro_dictionaries(void)
+void cleanup_dynamo(void)
 {
     for (int i=0; i<sizeof(g_text_expansions); i++)
         if (g_text_expansions[i])
@@ -503,7 +503,7 @@ char *run_test()
     // from the unpredictable evaluation order of function arguments 
 
     outputF = stdout;
-    init_macro_dictionaries();
+    init_dynamo();
 
     // Exception class
     cls(_EXCEPT, TRUE);
@@ -653,7 +653,7 @@ char *run_test()
 
     end_cls();
 
-    dispose_macro_dictionaries();
+    cleanup_dynamo();
 }
 
 /*************************************************************/

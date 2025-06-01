@@ -21,6 +21,13 @@ typedef struct {
 	int		m_ungetc;
 } burpT;
 
+#if !HAVE_STPCPY
+char *stpcpy(char *s1, const char *s2);
+#endif
+#if !HAVE_STRDUP
+char *strdup(const char *s);
+#endif
+
 void burp_reset(burpT *burpP);
 char *burp_extend(burpT *burpP, char *text);
 char *burp_insert(burpT *burpP, int offset, char *text);
@@ -40,6 +47,8 @@ void log_init();
 void log_close();
 void log_activate();
 void log_deactivate();
+void log_activate_in(char *where);
+void log_deactivate_in(char *where);
 void log_enter(char *format, ...);
 void log_info(char *format, ...);
 void log_return();
