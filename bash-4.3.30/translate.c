@@ -87,13 +87,10 @@ static REDIRECT *g_deferred_heredocs = NULL;
 static int g_embedded          = 0;
 static int g_started           = 0;
 
-//MIW var declarations begin
-
 extern _BOOL   g_translate_html;
 FILE* outputF = NULL;
 
 static burpT g_case_var = {0,0,0,0,0,0};
-//MIW var declarations end
 
 burpT	g_output  = {0, 0, 0, 0, 0, 0};
 
@@ -830,24 +827,24 @@ typedef struct commentS {
 	char			*m_textP;
 } commentT;
 
-commentT *g_comment_headP = NULL;
-commentT **g_comment_tailPP = &g_comment_headP;
+commentT *g_comment_headP = NULL, *g_comment_tailP = NULL;
 
 static void print_comments(int before_byte)
 {
-	commentT	*commentP;
+	commentT *commentP = g_comment_headP;
 
-	while ((commentP = g_comment_headP) && g_comment_headP->m_byte < before_byte) {
-		burps_html(&g_output, g_comment_headP->m_textP);
+	while (commentP && commentP->m_byte < before_byte) {
+		burps_html(&g_output, commentP->m_textP);
 		if (g_translate_html) {
 			burps_html(&g_output, "</pre></td></tr><tr><td></td><td><pre>");
 		}
 		newline("");
-		g_comment_headP = g_comment_headP->m_nextP;
-		xfree(commentP);
-		if (!g_comment_headP) {
-			g_comment_tailPP = &g_comment_headP;
-}	}	}
+		commentT* temp = commentP;
+		commentP = commentP->m_nextP;
+		free(temp);
+	}
+	g_comment_headP = NULL;
+}
 
 static void translate_unary_operation(char *operatorP, int complex1, char *term1P)
 {
@@ -3049,14 +3046,12 @@ void seen_comment_char(int c)
 		/* End */
 		P = g_commentBuffer.m_P;
 		if (*P != '#' || P[1] != '!') {
-			commentT *commentP;
-
-			commentP = (commentT *) xmalloc(sizeof(commentT));
-			commentP->m_nextP = NULL;
+			commentT *commentP = (commentT *) malloc(sizeof(commentT));
+			commentP->m_nextP  = NULL;
 			commentP->m_byte   = comment_byte;
-			commentP->m_textP  = P;
-			*g_comment_tailPP  = commentP;
-			g_comment_tailPP   = &commentP->m_nextP;
+			commentP->m_textP  = P;    // So every comment points to the same place???
+			g_comment_tailP    = commentP;
+			if (!g_comment_headP) g_comment_headP = g_comment_tailP;
 			g_commentBuffer.m_lth    = 0;
 			g_commentBuffer.m_max    = 0;
 			g_commentBuffer.m_P      = NULL;

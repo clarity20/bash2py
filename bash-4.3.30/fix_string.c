@@ -41,7 +41,7 @@ static void exchange_burp_buffers(burpT *oldP, burpT *newP)
 	*newP  = temp;
 }
 
-// Returns pointer to end of string (or NULL)
+// Finds and returns end of a quoted string (or NULL if improperly quoted)
 char * endQuotedString(char *stringP)
 {
 	char	*P;
@@ -306,6 +306,8 @@ static void string_to_buffer(const char *stringP)
 
 static int g_little_endian = -1;
 
+// Convert any single quotes in g_buffer to escaped double quotes in g_new ???
+// Strictly alphanum strings should not be changed. What about $$ strings ???
 static void replaceSingleQuotes(void)
 {
 	int 	in_quotes;
@@ -318,16 +320,16 @@ static void replaceSingleQuotes(void)
 		switch (c) {
 		case '"':
 			if (!in_quotes) {
-				in_quotes = c;
+				in_quotes = c;   // found an opening double quote, remember it
 			} else if (in_quotes == c) {
-				in_quotes = 0;
+				in_quotes = 0;   // found a terminating double quote, toss it
 			} else {
-				burpc(&g_new, '\\');
+				burpc(&g_new, '\\');    // found a double quote inside a non-double quote
 			}
 			break;
 		case '\'':
 			if (!in_quotes) {
-				in_quotes = c;
+				in_quotes = c;    // found an opening single quote
 				c         = '"';
 			} else if (in_quotes == c || in_quotes == '$') {
 				in_quotes = 0;
@@ -1291,7 +1293,7 @@ static fix_typeE substitute(fix_typeE want)
 	}
 
 	is_outside_quotes = TRUE;
-	is_file_expansion = TRUE;
+	is_file_expansion = FALSE;
 	offset           = g_new.m_lth;
 
 	for (P = g_buffer.m_P; c = *P ; ++P) {
@@ -1300,8 +1302,8 @@ static fix_typeE substitute(fix_typeE want)
 		case '*':
 		case '?':
 		case '[':
-		    // We have a globbing character
-			is_file_expansion |= is_outside_quotes;
+		    // Any unprotected globbing character should trigger file globbing
+			if (is_outside_quotes) is_file_expansion = TRUE;
 			break;
 		case '~':
 		case '$':
@@ -1347,7 +1349,7 @@ static fix_typeE substitute(fix_typeE want)
 		case '~':
 		case '$':
 		case '`':
-			// We have a "special" character
+			// We have a "special" character or the null terminator.
 			if (in_quotes < 0) {
 				quoted = quote_removal;
 			} else {
@@ -1676,7 +1678,7 @@ static char * fix_string1(fix_typeE want, fix_typeE *gotP)
 		goto done;
 	}
 		
-	replaceSingleQuotes();	// Replace all usage of '..' by ".."
+	replaceSingleQuotes(); // change quoting inside g_buffer. Uses g_new as scratch.
 
 	// Nothing yet written to g_new
 	burp_reset(&g_new);
@@ -1833,7 +1835,7 @@ expand_brace_expr:
 			}
 			resultP = g_braced.m_P;
 		}
-		xfree(arrayPP);
+		free(arrayPP);
 		if (resultP) {
 log_activate();
 		    log_return_msg("brace expression processed");
