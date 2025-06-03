@@ -975,7 +975,8 @@ done:
 		// Otherwise we will be translating Python output instead of the Bash
 		if (g_dollar_expr_nesting_level == 1) {
 			// Do allow array
-			if (!translate_expression(g_new.m_P + start, &P1, TRUE)) {
+			P1 = translate_expression(g_new.m_P + start, TRUE);
+            if (!P1) {
 				log_return_msg("Early exit after translation");
 				return NULL;
 			}
@@ -1680,8 +1681,8 @@ static char * fix_string1(fix_typeE want, fix_typeE *gotP)
 		
 	replaceSingleQuotes(); // change quoting inside g_buffer. Uses g_new as scratch.
 
-	// Nothing yet written to g_new
-	burp_reset(&g_new);
+	// Clean up g_new before reusing it
+	burp_close(&g_new);
 
 	if (want != FIX_EXPRESSION) {
 		is_expression           = FALSE;
@@ -1706,7 +1707,7 @@ finish:
 		char 		*translationP;
 
 		// Don't allow array
-		if (translate_expression(g_buffer.m_P, &translationP, FALSE)) {
+		if (translationP = translate_expression(g_buffer.m_P, FALSE)) {
 			got         = FIX_EXPRESSION;
 			g_new.m_lth = 0;
 			burps(&g_new, translationP);

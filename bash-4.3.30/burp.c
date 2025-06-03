@@ -53,6 +53,8 @@ char *strdup(const char *s) {
 }
 #endif
 
+// Reset a burp without freeing its buffer, reducing explicit memory management.
+// When in doubt use burp_close() instead.
 void burp_reset(burpT *burpP)
 {
 	memset(burpP->m_P, '\0', burpP->m_max);
@@ -61,6 +63,14 @@ void burp_reset(burpT *burpP)
 	burpP->m_indent = 0;
 	burpP->m_disable_indent = FALSE;
 	burpP->m_ungetc = 0;
+}
+
+// Zero out a burp object and free all its claims on memory.
+void burp_close(burpT *burpP)
+{
+	if (burpP && burpP->m_P)
+		free(burpP->m_P);
+	memset(burpP, 0, sizeof(burpT));
 }
 
 static void increase_burp(burpT *burpP)
@@ -347,6 +357,10 @@ char *type_to_text(fix_typeE value)
 }
 
 
+// Construct a log line given a format string and all accompanying values,
+// Implements some specially-defined format specifiers not a part of ANSI C.
+// We return a log line ending with exactly one '\n'.
+// We leave it up to the caller to left-pad to show the function stack depth.
 char *_build_log_entry(char *format, va_list *pArgs)
 {
 	static char result[128];
@@ -359,14 +373,16 @@ char *_build_log_entry(char *format, va_list *pArgs)
 	char *start = format, *end = strchr(format, '%');
 	char *pResult = result;
 
+	// No value substitutions in format string? Ensure one '\n' at the end
 	if (!end)
 	{
 		strcpy(result, format);
 		end = memchr(result, '\0', 128);
 		if (*(end-1) != '\n') strcpy(end, "\n");
-		return format;
+		return result;
 	}
 
+	// Make value substitutions one at a time
 	va_copy(args, *pArgs);
 	while (TRUE)
 	{
@@ -375,6 +391,7 @@ char *_build_log_entry(char *format, va_list *pArgs)
 		end++;
 		length = end - start + 1;
 
+		// Pick off the next chunk of the format string, substitute, and advance
 		memcpy(fmt_piece, start, length);
 		pType = fmt_piece +length - 1;
 		fmt_piece[length]='\0';
@@ -400,6 +417,7 @@ char *_build_log_entry(char *format, va_list *pArgs)
 				break;
 		}
 
+		// All substitutions done? Make sure string ends with one '\n'
 		pResult = memchr(pResult, '\0', 128);
 		start = end+1;
 		end = strchr(start, '%');
@@ -470,12 +488,16 @@ void log_info(char *format, ...)
 	if (!g_log_is_on)
 		return;
 
-	g_log_indent += SMALL_INDENT;	// transient small indent
+	// For "informational" comments use a small indent
+	// so as not to obscure the call stack indicators
+	g_log_indent += SMALL_INDENT;
 
 	va_start(args, format);
 	log_text = _build_log_entry(format, &args);
 	va_end(args);
 
+	// No internal bookkeeping to do as the internals are transient.
+	// Just print, rendering the left-indentation carefully.
 	sprintf(log_entry, "%-*.0d%s(): %s", g_log_indent, 0, *g_current_function, log_text);
 	for (int i=FULL_INDENT-1; i<g_log_indent; i+=FULL_INDENT)
 		log_entry[i]='|';
@@ -495,7 +517,7 @@ void log_return_msg(char *msg_template, ...)
 {
 	char log_entry[256];
 	char *msg;
-	char entry_format[]="%-*.0dLeave %s() - %s\n";
+	char entry_format[]="%-*.0dLeave %s() - %s";
 
 	if (!g_log_stream)
 		return;
@@ -506,8 +528,9 @@ void log_return_msg(char *msg_template, ...)
 		int i;
 		if (!msg_template)
 		{
-			strcpy(entry_format+16, "\n");
-			msg = NULL;
+			// Chop format string after ')'
+			entry_format[16] = '\0';
+			msg = strdup("");
 		}
 		else
 		{
@@ -522,6 +545,8 @@ void log_return_msg(char *msg_template, ...)
 			log_entry[i]='|';
 		if (i>=FULL_INDENT) log_entry[i-FULL_INDENT]='`';
 		fprintf(g_log_stream, "%s", log_entry);
+		if (!msg_template)
+		    free(msg);
 	}
 
 	// Internal log bookkeeping
