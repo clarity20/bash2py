@@ -11,6 +11,10 @@
 
 #include "bash2py_alloc.h"
 
+/* This file attempts to translate bash-style arithmetic expressions to valid python equivalents.
+ * Refer to the project README and expr.c for more information.
+ */
+
 /*
 	evalexpr  := subexpr
 	subexpr   := expcomma
@@ -111,7 +115,7 @@ typedef struct nodeS {
   
 static char		*g_stringP;
 static char		*g_atP;
-static burpT	g_expression  = {0,0,0,0,0,0};
+static burpT	g_expression;
 static _BOOL	g_allow_array = FALSE;
 static nodeT	*g_headP      = 0;
 static jmp_buf  longbuf;
@@ -133,7 +137,7 @@ delete_tree(void)
 
 	for (; nodeP = g_headP; ) {
 		g_headP = nodeP->m_chainP;
-		xfree(nodeP);
+		free(nodeP);
 	}
 }
 
@@ -1173,27 +1177,24 @@ assign:
  */
 
 
-_BOOL translate_expression(char *stringP, char **translationPP, _BOOL allow_array)
+char *translate_expression(char *stringP, _BOOL allow_array)
 {
 	nodeT	*treeP;
 	int 	ret;
+
+log_activate_in("translate_expression");
+    log_enter("translate_expression (stringP=%s, allow_array=%b)", stringP, allow_array);
 
 	g_stringP = g_atP = stringP;
 	skipspace(0);
 
 	g_allow_array   = allow_array;
 
- 	ret = setjmp (longbuf);
-	if (ret) {
-		*translationPP = '\0';
-		return FALSE;
-	}
-
 	g_headP = NULL;
   	treeP   = translate_comma();
 	assert(treeP);
   
-  	g_expression.m_lth = 0;
+	memset(&g_expression, 0, sizeof(g_expression));
 	print_translation(treeP);
 
 	delete_tree();
@@ -1203,8 +1204,9 @@ _BOOL translate_expression(char *stringP, char **translationPP, _BOOL allow_arra
     	EMITC(0);
   	}
 
-  	*translationPP = g_expression.m_P;
-	return TRUE;
+    log_return_msg("g_expression = %q", g_expression.m_P);
+log_deactivate_in("translate_expression");
+  	return g_expression.m_P;
 }
 
 #ifdef TEST
@@ -1213,7 +1215,7 @@ _BOOL translate_expression(char *stringP, char **translationPP, _BOOL allow_arra
 int
 main(int argc, char **argv)
 {
-	char		*bufferP   = 0;
+	char		*bufferP   = NULL;
 	size_t		buffer_lth = 0;
 	char		*translationP;
 	int			lth;
@@ -1221,14 +1223,16 @@ main(int argc, char **argv)
 	while(0 <= getline(&bufferP, &buffer_lth, stdin)) {
 		lth = strlen(bufferP);
 		if (lth && bufferP[lth-1] == '\n') {
-			bufferP[lth-1] = 0;
+			bufferP[lth-1] = '\0';
 		}
 		printf("> %s\n", bufferP);
-		if (!translate_expression(bufferP, &translationP, TRUE)) {
+		translationP = translate_expression(bufferP, TRUE);
+		if (!translationP) {
 			printf("Can't translate\n");
 			continue;
 		}
 		printf("< %s\n", translationP);
+		free(translationP);
 	}
 	return(0);
 }

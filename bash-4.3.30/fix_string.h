@@ -91,7 +91,7 @@ char *endQuotedString(char *startP);
 char *endArray(char *startP);
 char *endExpand(char *startP);
 
-_BOOL  translate_expression(char *startP, char **translationPP, _BOOL allow_array);
+char *translate_expression(char *startP, _BOOL allow_array);
 
 char *fix_string(const char *stringP, fix_typeE type, fix_typeE *gotP);
 
