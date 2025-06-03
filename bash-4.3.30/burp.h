@@ -21,6 +21,10 @@ typedef struct {
 	int		m_ungetc;
 } burpT;
 
+extern burpT g_buffer;
+extern burpT g_new;
+extern burpT g_braced;
+
 #if !HAVE_STPCPY
 char *stpcpy(char *s1, const char *s2);
 #endif

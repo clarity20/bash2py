@@ -24,11 +24,11 @@
 #include "fix_string.h"
 #include "burp.h"
 
-#define MAX_CALL_DEPTH 64
+#define MAX_CALL_DEPTH 48
 #define FULL_INDENT 4
 #define SMALL_INDENT 2
 
-int g_log_indent=-FULL_INDENT;
+int g_log_indent;
 char **g_function_stack;
 char **g_current_function;
 FILE *g_log_stream;
@@ -189,38 +189,23 @@ void burp_ungetc(burpT *burpP)
 
 void burp(burpT *burpP, const char *fmtP, ...)
 {
-	static burpT	burp_temp = {0,0,0,0,0,0};
+	const int	MAXBUF = 2048;
+	char		*buf;
+	va_list		arg;
+	int			ret;
 
-	va_list	    arg;
-	size_t		size, left;
-	int			ret, c;
-	char		*P;
-	
-	va_start(arg, fmtP);
-		
-	if (!fmtP) {
-		fprintf(stderr, "Burp has no format string\n");
-		assert(FALSE);
-		exit(1);
-	}
-
+	buf = (char *) malloc(MAXBUF); 
+	assert(buf);
 	indentation(burpP);
-	burp_temp.m_lth = 0;
-	for (;;) {
-		left = burp_temp.m_max - burp_temp.m_lth;
-		// Caution: microsoft bug causes ret == -1 if printing any 0xFFFF character
-		if (left > 79 && (ret =  vsnprintf(burp_temp.m_P+burp_temp.m_lth, left, fmtP, arg)) < left && 0 <= ret) {
-			break;
 
-		}
-		increase_burp(&burp_temp);
-	}
-	burp_temp.m_lth += ret;
+	va_start(arg, fmtP);
+    ret = vsnprintf(buf, MAXBUF, fmtP, arg);
+    assert(ret >= 0 && ret < MAXBUF);
 	va_end(arg);
 
-	for (P = burp_temp.m_P; c = *P; ++P) {
-		burpc(burpP, c);
-	}
+    burps(burpP, buf);
+ 	free(buf);
+
  	return;
 }
 
@@ -297,6 +282,7 @@ void log_init()
 {
 	g_log_stream = stdout;
 	g_log_is_on = FALSE;
+	g_log_indent = -FULL_INDENT;
 	g_function_stack = (char **) malloc(MAX_CALL_DEPTH * sizeof(char **));
 	memset(g_function_stack, 0, MAX_CALL_DEPTH * sizeof(g_function_stack[0]));
 	g_current_function = g_function_stack-1;
@@ -311,10 +297,19 @@ void log_close()
 		g_current_function--;
 	}
 	free(g_function_stack);
+
+    g_log_stream = NULL;
+	g_log_is_on = FALSE;
+	g_log_indent = -FULL_INDENT;
+    g_function_stack = NULL;
+    g_current_function = NULL;
 }
 
 void log_activate()
 {
+	if (!g_log_stream)
+	    return;
+
 	g_log_is_on = TRUE;
 }
 

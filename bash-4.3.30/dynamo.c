@@ -36,9 +36,9 @@ char *strdup(const char *s) {
 }
 #endif
 
-unsigned char g_left_margin = 0, g_return_count = 0, g_if_count = 0, g_asgn_count = 0;
-unsigned char g_lines_in_func = 0, g_conditional_nesting = 0;
-_BOOL g_inside_class = FALSE, g_is_static = FALSE;
+unsigned char g_left_margin, g_return_count, g_if_count, g_asgn_count;
+unsigned char g_lines_in_func, g_conditional_nesting;
+_BOOL g_inside_class, g_is_static;
 char _EXCEPT[] = "Bash2PyException";
 
 char **g_text_expansions = NULL, **g_func_expansions = NULL;
@@ -59,6 +59,13 @@ void _write_line(char *dest, const char *fmt, ...) {
 
 void init_dynamo(void)
 {
+    g_left_margin = 0, g_return_count = 0, g_if_count = 0, g_asgn_count = 0;
+    g_lines_in_func = 0, g_conditional_nesting = 0;
+    g_inside_class = FALSE, g_is_static = FALSE;
+
+    if (g_text_expansions && g_func_expansions)
+        return;
+
     g_text_expansions = (char**) malloc (128 * sizeof(char *));
     memset(g_text_expansions, '\0', 128);
     g_text_expansions['n'] = strdup("name");
@@ -188,12 +195,16 @@ void cleanup_dynamo(void)
 {
     for (int i=0; i<sizeof(g_text_expansions); i++)
         if (g_text_expansions[i])
-            free(g_text_expansions[i]);
-    free(g_text_expansions);
+            { free(g_text_expansions[i]); g_text_expansions[i] = NULL; }
+    free(g_text_expansions); g_text_expansions = NULL;
     for (int i=0; i<sizeof(g_func_expansions); i++)
         if (g_func_expansions[i])
-            free(g_func_expansions[i]);
-    free(g_func_expansions);
+            { free(g_func_expansions[i]); g_func_expansions[i] = NULL; }
+    free(g_func_expansions); g_func_expansions = NULL;
+
+    g_left_margin = 0, g_return_count = 0, g_if_count = 0, g_asgn_count = 0;
+    g_lines_in_func = 0, g_conditional_nesting = 0;
+    g_inside_class = FALSE, g_is_static = FALSE;
 }
 
 char *_static() {

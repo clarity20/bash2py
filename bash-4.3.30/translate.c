@@ -96,6 +96,7 @@ burpT	g_output  = {0, 0, 0, 0, 0, 0};
 
 static burpT	g_commentBuffer = {0, 0, 0, 0, 0, 0};
 static burpT	g_temp    = {0, 0, 0, 0, 0, 0};
+static burpT	save = {0,0,0,0,0,0};
 
 typedef struct function_nameS {
 	struct function_nameS *m_nextP;
@@ -1525,8 +1526,8 @@ static void print_echo_command(WORD_LIST *word_listP, REDIRECT *redirects)
 	if (quoted_word_count > 0) {
 		burp(&g_output, "\"%s\"", quoted_word_buffer.m_P);
 		quoted_word_count = 0;
-		burp_reset(&quoted_word_buffer);
 	}
+	burp_close(&quoted_word_buffer);
 
 	if (n_flag) {
 		/* Only works with python 3 */
@@ -2675,8 +2676,6 @@ static void reset_locals ()
 
 static void print_function_def (FUNCTION_DEF *func)
 {
-	static burpT	save = {0,0,0,0,0,0};
-	
 	burpT	temp;
 	COMMAND *cmdcopy;
 	REDIRECT *func_redirects;
@@ -3101,6 +3100,13 @@ char *initialize_translator(const char *shell_scriptP)
 		fprintf(outputF, "</td></tr>\n");
 	}
 
+	// Initialize the translation state object and buffer objects
+    memset(&g_translate, 0, sizeof(g_translate));
+    memset(&g_buffer, 0, sizeof(g_buffer));
+    memset(&g_new, 0, sizeof(g_new));
+    memset(&g_braced, 0, sizeof(g_braced));
+
+    return output_fname;
 }
 
 void print_translation(COMMAND * command)
@@ -3641,6 +3647,17 @@ void close_translator(const char *output_fname)
 		fprintf(outputF, "</body>\n</html>\n");
 	}
 	fclose(outputF);
+    outputF = NULL;
+
+    burp_close(&g_case_var);
+    burp_close(&g_output);
+    burp_close(&g_commentBuffer);
+    burp_close(&g_temp);
+    burp_close(&save);
+
+    burp_close(&g_buffer);
+    burp_close(&g_new);
+    burp_close(&g_braced);
 
 	dispose_all_function_names();
     cleanup_dynamo();
