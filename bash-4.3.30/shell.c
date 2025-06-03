@@ -376,7 +376,7 @@ main (argc, argv, env)
   char **env;
 #endif /* __OPENNT */
 #ifdef BASH2PY
-  char shell_scriptP[128];
+  char input_filename[128];
   int scriptCount = 0;
 
   if (argc < 2)
@@ -775,16 +775,18 @@ main (argc, argv, env)
 #ifdef BASH2PY
   for (int script=1; script<argc; script++)
   {
-    strcpy(shell_scriptP,argv[script]);
-    if (shell_scriptP[0] == '-')
+    char *p, output_filename[32];
+    strcpy(input_filename,argv[script]);
+    if (input_filename[0] == '-')
         continue;
     scriptCount++;
-    initialize_translator(shell_scriptP);
+    p = initialize_translator(input_filename);
+    strcpy(output_filename, p);
 #endif
   reader_loop ();
 #ifdef BASH2PY
     unset_bash_input(0);
-    close_translator();
+    close_translator(output_filename);
     if (script < argc-1)
     {
       fprintf(stdout, "\n");

@@ -3041,7 +3041,6 @@ void seen_comment_char(int c)
 		c = '#';
 	}
 	if (c == '\n') {
-		commentT *commentP;
 
 		/* End */
 		P = g_commentBuffer.m_P;
@@ -3063,8 +3062,9 @@ void seen_comment_char(int c)
 	}
 }
 
-void initialize_translator(const char *shell_scriptP)
+char *initialize_translator(const char *shell_scriptP)
 {
+    static char output_fname[32];
     char file_suffix[6];
 
 	log_init();
@@ -3074,31 +3074,20 @@ void initialize_translator(const char *shell_scriptP)
     strcpy(file_suffix, g_translate_html ? "html" : "py");
 
 	if (!shell_scriptP) {
-	  char filenameP[16];
-	  sprintf(filenameP, "output.%s", file_suffix);
-	  outputF = fopen(filenameP, "w");
+	  sprintf(output_fname, "output.%s", file_suffix);
+	  outputF = fopen(output_fname, "w");
 	  if (!outputF) {
-		fprintf(stderr, "Can't open %s\n", filenameP);
+		fprintf(stderr, "Can't open default output file %s\n", output_fname);
 		exit(1);
 	  }
 	} else {
-	  char *filenameP, *extensionP;
+	  char *extensionP;
 
 	  extensionP = strrchr(shell_scriptP, '.');
-	  if (extensionP && !strcmp(extensionP,".py")) {
-		fprintf(stderr,"The bash input %s looks like it is already in python\n", shell_scriptP);
-		exit(1);
-	  }
-      else if (extensionP && !strcmp(extensionP,".html")) {
-		fprintf(stderr,"The bash input %s looks like it is already in html\n", shell_scriptP);
-		exit(1);
-	  }
-
-	  filenameP = (char *) malloc(strlen(shell_scriptP) + 6);
-	  sprintf(filenameP, "%s.%s", shell_scriptP, file_suffix);
-	  outputF = fopen(filenameP, "w");
+	  sprintf(output_fname, "%s.%s", shell_scriptP, file_suffix);
+	  outputF = fopen(output_fname, "w");
 	  if (!outputF) {
-		fprintf(stderr, "Can't open %s\n", filenameP);
+		fprintf(stderr, "Can't open output file %s\n", output_fname);
 		exit(1);
 	  }
 	}
@@ -3626,9 +3615,9 @@ static void emitBash2PyClass(void)
 	}
 }
 
-void close_translator()
+void close_translator(const char *output_fname)
 {
-	//TODO This is probably here to flush any remaining comments but is likely wrong.
+	//TODO This is probably here to flush any remaining comments but is a no-op.
 	print_comments(999999999);
 
 	// What do we need
@@ -3646,6 +3635,7 @@ void close_translator()
 
 	if (g_output.m_lth) {
 		fputs(g_output.m_P, outputF);
+		log_info("Python output written to %s. Please check.", output_fname);
 	}
 	if (g_translate_html) {
 		fprintf(outputF, "</body>\n</html>\n");
