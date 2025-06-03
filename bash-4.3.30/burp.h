@@ -29,6 +29,7 @@ char *strdup(const char *s);
 #endif
 
 void burp_reset(burpT *burpP);
+void burp_close(burpT *burpP);
 char *burp_extend(burpT *burpP, char *text);
 char *burp_insert(burpT *burpP, int offset, char *text);
 void burp(burpT *burpP, const char *fmtP, ...);

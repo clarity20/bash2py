@@ -1680,8 +1680,8 @@ static char * fix_string1(fix_typeE want, fix_typeE *gotP)
 		
 	replaceSingleQuotes(); // change quoting inside g_buffer. Uses g_new as scratch.
 
-	// Nothing yet written to g_new
-	burp_reset(&g_new);
+	// Clean up g_new before reusing it
+	burp_close(&g_new);
 
 	if (want != FIX_EXPRESSION) {
 		is_expression           = FALSE;
