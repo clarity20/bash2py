@@ -477,28 +477,31 @@ void log_info(char *format, ...)
 	va_list args;
 	char log_entry[256];
 	char *log_text;
+
 	if (!g_log_stream)
 		return;
 
 	if (!g_log_is_on)
 		return;
 
-	// For "informational" comments use a small indent
-	// so as not to obscure the call stack indicators
-	g_log_indent += SMALL_INDENT;
-
 	va_start(args, format);
 	log_text = _build_log_entry(format, &args);
 	va_end(args);
 
-	// No internal bookkeeping to do as the internals are transient.
-	// Just print, rendering the left-indentation carefully.
-	sprintf(log_entry, "%-*.0d%s(): %s", g_log_indent, 0, *g_current_function, log_text);
-	for (int i=FULL_INDENT-1; i<g_log_indent; i+=FULL_INDENT)
-		log_entry[i]='|';
-	g_log_indent -= SMALL_INDENT;
+	// Print the log line, rendering the left-indentation carefully.
+	if (g_log_indent >= 0)
+	{
+		g_log_indent += SMALL_INDENT;
 
-	fprintf(g_log_stream, "%s", log_entry);
+		sprintf(log_entry, "%-*.0d%s(): %s", g_log_indent, 0, *g_current_function, log_text);
+		for (int i=FULL_INDENT-1; i<g_log_indent; i+=FULL_INDENT)
+			log_entry[i]='|';
+		fprintf(g_log_stream, "%s", log_entry);
+
+		g_log_indent -= SMALL_INDENT;
+	}
+	else
+		fprintf(g_log_stream, "%s", log_text);
 }
 
 // log_return: Simple logging and bookkeeping for function returns
