@@ -780,8 +780,7 @@ main (argc, argv, env)
     if (input_filename[0] == '-')
         continue;
     scriptCount++;
-    p = initialize_translator(input_filename);
-    strcpy(output_filename, p);
+    strcpy(output_filename, initialize_translator(input_filename));
 #endif
   reader_loop ();
 #ifdef BASH2PY

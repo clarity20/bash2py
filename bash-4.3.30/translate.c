@@ -3061,32 +3061,33 @@ void seen_comment_char(int c)
 	}
 }
 
-char *initialize_translator(const char *shell_scriptP)
+char *initialize_translator(const char *input_filename)
 {
-    static char output_fname[32];
-    char file_suffix[6];
+    static char output_filename[32];
 
 	log_init();
     log_activate();
     init_dynamo();
 
-    strcpy(file_suffix, g_translate_html ? "html" : "py");
-
-	if (!shell_scriptP) {
-	  sprintf(output_fname, "output.%s", file_suffix);
-	  outputF = fopen(output_fname, "w");
+	if (!input_filename) {
+	  strcpy(output_filename, "output.py");
+	  outputF = fopen(output_filename, "w");
 	  if (!outputF) {
-		fprintf(stderr, "Can't open default output file %s\n", output_fname);
+		fprintf(stderr, "Can't open default output file %s\n", output_filename);
 		exit(1);
 	  }
 	} else {
 	  char *extensionP;
 
-	  extensionP = strrchr(shell_scriptP, '.');
-	  sprintf(output_fname, "%s.%s", shell_scriptP, file_suffix);
-	  outputF = fopen(output_fname, "w");
+	  strcpy(output_filename, input_filename);
+	  if (extensionP = strrchr(output_filename, '.'))
+		strcpy(extensionP, ".py");
+	  else
+		strcat(output_filename, ".py");
+
+	  outputF = fopen(output_filename, "w");
 	  if (!outputF) {
-		fprintf(stderr, "Can't open output file %s\n", output_fname);
+		fprintf(stderr, "Can't open output file %s\n", output_filename);
 		exit(1);
 	  }
 	}
@@ -3106,7 +3107,7 @@ char *initialize_translator(const char *shell_scriptP)
     memset(&g_new, 0, sizeof(g_new));
     memset(&g_braced, 0, sizeof(g_braced));
 
-    return output_fname;
+    return output_filename;
 }
 
 void print_translation(COMMAND * command)
