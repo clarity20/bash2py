@@ -15,7 +15,7 @@
 extern FILE *outputF;
 
 void print_translation(COMMAND* command);
-void initialize_translator();
-void close_translator();
+char *initialize_translator(const char *filename);
+void close_translator(const char *filename);
 
 #endif //__TRANSLATE_H__

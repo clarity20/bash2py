@@ -187,3 +187,8 @@ extern void restore_parser_state __P((sh_parser_state_t *));
 
 extern sh_input_line_state_t *save_input_line_state __P((sh_input_line_state_t *));
 extern void restore_input_line_state __P((sh_input_line_state_t *));
+
+#ifdef BASH2PY
+extern char *initialize_translator(const char *);
+extern void close_translator(const char *);
+#endif

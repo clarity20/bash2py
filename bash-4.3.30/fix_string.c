@@ -9,14 +9,11 @@
 #include "burp.h"
 #include "fix_string.h"
 
-translateT	g_translate = {0,{0,0,0,0,0,0,0,0,0},
-                            {0,0,0,0,0,0,0,0},
-                            {0,0,0,0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0},
-                            {0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0}};
+translateT	g_translate;
 
-static burpT g_buffer = {0,0,0,0,0,0};
-static burpT g_new = {0,0,0,0,0,0};
-static burpT g_braced = {0,0,0,0,0,0};
+burpT g_buffer = {0,0,0,0,0,0};
+burpT g_new = {0,0,0,0,0,0};
+burpT g_braced = {0,0,0,0,0,0};   // Only directly used in FixBraced()
 
 _BOOL g_regmatch_special_case = FALSE;
 _BOOL g_is_inside_function = FALSE;

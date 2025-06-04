@@ -367,9 +367,6 @@ main (argc, argv, env)
 {
   register int i;
   int code, old_errexit_flag;
-#ifdef BASH2PY
-  const char *shell_scriptP = 0;
-#endif
 #if defined (RESTRICTED_SHELL)
   int saverst;
 #endif
@@ -377,7 +374,20 @@ main (argc, argv, env)
   volatile int arg_index, top_level_arg_index;
 #ifdef __OPENNT
   char **env;
+#endif /* __OPENNT */
+#ifdef BASH2PY
+  char input_filename[128];
+  int scriptCount = 0;
 
+  if (argc < 2)
+  {
+      printf("USAGE: %s shellScript [...]\n", argv[0]);
+      printf("    Thank you for using the world\'s greatest bash to python transpiler!\n");
+      exit(0);
+  }
+#endif
+
+#ifdef __OPENNT
   env = environ;
 #endif /* __OPENNT */
 
@@ -713,9 +723,6 @@ main (argc, argv, env)
      default_input as appropriate. */
   if (arg_index != argc && read_from_stdin == 0)
     {
-#ifdef BASH2PY
-      shell_scriptP = argv[arg_index];
-#endif
       open_shell_script (argv[arg_index]);
       arg_index++;
     }
@@ -766,11 +773,29 @@ main (argc, argv, env)
 
   /* Read commands until exit condition. */
 #ifdef BASH2PY
-  initialize_translator(shell_scriptP);
+  for (int script=1; script<argc; script++)
+  {
+    char *p, output_filename[32];
+    strcpy(input_filename,argv[script]);
+    if (input_filename[0] == '-')
+        continue;
+    scriptCount++;
+    strcpy(output_filename, initialize_translator(input_filename));
 #endif
   reader_loop ();
 #ifdef BASH2PY
-  close_translator();
+    unset_bash_input(0);
+    close_translator(output_filename);
+    if (script < argc-1)
+    {
+      fprintf(stdout, "\n");
+      shell_reinitialize();
+      open_shell_script(argv[script+1]);
+      set_bash_input();
+      reset_parser();
+      EOF_Reached = 0;
+    }
+  }
 #endif
   exit_shell (last_command_exit_value);
 }

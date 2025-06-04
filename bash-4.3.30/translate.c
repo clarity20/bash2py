@@ -96,6 +96,7 @@ burpT	g_output  = {0, 0, 0, 0, 0, 0};
 
 static burpT	g_commentBuffer = {0, 0, 0, 0, 0, 0};
 static burpT	g_temp    = {0, 0, 0, 0, 0, 0};
+static burpT	save = {0,0,0,0,0,0};
 
 typedef struct function_nameS {
 	struct function_nameS *m_nextP;
@@ -1525,8 +1526,8 @@ static void print_echo_command(WORD_LIST *word_listP, REDIRECT *redirects)
 	if (quoted_word_count > 0) {
 		burp(&g_output, "\"%s\"", quoted_word_buffer.m_P);
 		quoted_word_count = 0;
-		burp_reset(&quoted_word_buffer);
 	}
+	burp_close(&quoted_word_buffer);
 
 	if (n_flag) {
 		/* Only works with python 3 */
@@ -2675,8 +2676,6 @@ static void reset_locals ()
 
 static void print_function_def (FUNCTION_DEF *func)
 {
-	static burpT	save = {0,0,0,0,0,0};
-	
 	burpT	temp;
 	COMMAND *cmdcopy;
 	REDIRECT *func_redirects;
@@ -3041,7 +3040,6 @@ void seen_comment_char(int c)
 		c = '#';
 	}
 	if (c == '\n') {
-		commentT *commentP;
 
 		/* End */
 		P = g_commentBuffer.m_P;
@@ -3063,42 +3061,33 @@ void seen_comment_char(int c)
 	}
 }
 
-void initialize_translator(const char *shell_scriptP)
+char *initialize_translator(const char *input_filename)
 {
-    char file_suffix[6];
+    static char output_filename[32];
 
 	log_init();
     log_activate();
     init_dynamo();
 
-    strcpy(file_suffix, g_translate_html ? "html" : "py");
-
-	if (!shell_scriptP) {
-	  char filenameP[16];
-	  sprintf(filenameP, "output.%s", file_suffix);
-	  outputF = fopen(filenameP, "w");
+	if (!input_filename) {
+	  strcpy(output_filename, "output.py");
+	  outputF = fopen(output_filename, "w");
 	  if (!outputF) {
-		fprintf(stderr, "Can't open %s\n", filenameP);
+		fprintf(stderr, "Can't open default output file %s\n", output_filename);
 		exit(1);
 	  }
 	} else {
-	  char *filenameP, *extensionP;
+	  char *extensionP;
 
-	  extensionP = strrchr(shell_scriptP, '.');
-	  if (extensionP && !strcmp(extensionP,".py")) {
-		fprintf(stderr,"The bash input %s looks like it is already in python\n", shell_scriptP);
-		exit(1);
-	  }
-      else if (extensionP && !strcmp(extensionP,".html")) {
-		fprintf(stderr,"The bash input %s looks like it is already in html\n", shell_scriptP);
-		exit(1);
-	  }
+	  strcpy(output_filename, input_filename);
+	  if (extensionP = strrchr(output_filename, '.'))
+		strcpy(extensionP, ".py");
+	  else
+		strcat(output_filename, ".py");
 
-	  filenameP = (char *) malloc(strlen(shell_scriptP) + 6);
-	  sprintf(filenameP, "%s.%s", shell_scriptP, file_suffix);
-	  outputF = fopen(filenameP, "w");
+	  outputF = fopen(output_filename, "w");
 	  if (!outputF) {
-		fprintf(stderr, "Can't open %s\n", filenameP);
+		fprintf(stderr, "Can't open output file %s\n", output_filename);
 		exit(1);
 	  }
 	}
@@ -3112,6 +3101,13 @@ void initialize_translator(const char *shell_scriptP)
 		fprintf(outputF, "</td></tr>\n");
 	}
 
+	// Initialize the translation state object and buffer objects
+    memset(&g_translate, 0, sizeof(g_translate));
+    memset(&g_buffer, 0, sizeof(g_buffer));
+    memset(&g_new, 0, sizeof(g_new));
+    memset(&g_braced, 0, sizeof(g_braced));
+
+    return output_filename;
 }
 
 void print_translation(COMMAND * command)
@@ -3626,9 +3622,9 @@ static void emitBash2PyClass(void)
 	}
 }
 
-void close_translator()
+void close_translator(const char *output_fname)
 {
-	//TODO This is probably here to flush any remaining comments but is likely wrong.
+	//TODO This is probably here to flush any remaining comments but is a no-op.
 	print_comments(999999999);
 
 	// What do we need
@@ -3646,11 +3642,23 @@ void close_translator()
 
 	if (g_output.m_lth) {
 		fputs(g_output.m_P, outputF);
+		log_info("Python output written to %s. Please check.", output_fname);
 	}
 	if (g_translate_html) {
 		fprintf(outputF, "</body>\n</html>\n");
 	}
 	fclose(outputF);
+    outputF = NULL;
+
+    burp_close(&g_case_var);
+    burp_close(&g_output);
+    burp_close(&g_commentBuffer);
+    burp_close(&g_temp);
+    burp_close(&save);
+
+    burp_close(&g_buffer);
+    burp_close(&g_new);
+    burp_close(&g_braced);
 
 	dispose_all_function_names();
     cleanup_dynamo();
