@@ -106,7 +106,7 @@ void init_dynamo(void)
     g_func_expansions['j'] = strdup("join");
 }
 
-char *_expand_macros_internal(char *str, _BOOL define_exception)
+char *_expand_macros_internal(char *str, _BOOL allow_header_macros)
 {
     static char working_str[128];
     char *p = working_str, *p_end;
@@ -118,8 +118,8 @@ char *_expand_macros_internal(char *str, _BOOL define_exception)
     // Process all the expansion flags in the string
     while (p = strpbrk(p, "([$|\\~")) {
         int offal_length;
-        _BOOL do_camel_case = FALSE;
-        char *substitution = NULL, *where_to = NULL;
+        _BOOL do_title_case = FALSE;
+        char *substitution = NULL, *where_to_sub = NULL;
         char preceding, next_preceding, next;
         switch (*p)
         {
@@ -131,14 +131,16 @@ char *_expand_macros_internal(char *str, _BOOL define_exception)
                 preceding = *(p-1); next_preceding = *(p-2);
                 if (p>working_str && (substitution = g_func_expansions[preceding])
                           && (&preceding==working_str /*ie nothing precedes p-1*/ || !isalnum(next_preceding))) {
-                    // If indicated, allow function macros in the declaration/header
+                    // If indicated, detect function macros in the declaration/header; format = "f()"
                     // but treat them differently, throwing out the parens; e.g. "f()" expands to "foo"
-                    if (define_exception && *(p+1) == ')') {
+                    if (allow_header_macros && *(p+1) == ')') {
+                        // It's a special expansion as described that will consume 3 characters
                         offal_length = 3;
                     } else {
+                        // It's a normal expansion that will consume 1 character
                         offal_length = 1;
                     }
-                    where_to = p-1;
+                    where_to_sub = p-1;
                 }
                 break;
             case '$':
@@ -146,17 +148,17 @@ char *_expand_macros_internal(char *str, _BOOL define_exception)
                 next = *(p+1);
                 if (isalnum(next)) {
                     if (substitution = g_text_expansions[next]) {
-                        offal_length = 2;
-                        where_to = p;
+                        offal_length = 2;   // We will consume '$' and "next"
+                        where_to_sub = p;
                     }
                     // Forced upper-casing: Given a capital-letter micro having no
                     // dictionary entry, we look for a lowercase micro. If found 
                     // we make the substitution and convert it to title case.
                     else if (isupper(next)) {
                         if (substitution = g_text_expansions[tolower(next)]) {
-                            do_camel_case = TRUE;
+                            do_title_case = TRUE;
                             offal_length = 2;
-                            where_to = p;
+                            where_to_sub = p;
                         }
                     }
                 }
@@ -164,24 +166,27 @@ char *_expand_macros_internal(char *str, _BOOL define_exception)
             case '|':
             case '\\':
             case '~':
+                // Special symbols in the encoded text having no "$" flag
                 if ((*p=='|') && strchr("|=", *(p+1))) {
-                    // Leave literal '|' characters alone when we need to
+                    // Leave '|' characters alone when they are
+                    // semantically meaningful in the working text
                     p++; break;
                 }
                 substitution = g_text_expansions[*p];
                 offal_length = 1;
-                where_to = p;
+                where_to_sub = p;
                 break;
         }
-        if (where_to) {
-            char *tail = where_to + offal_length;
+        if (where_to_sub) {
+            char *tail = where_to_sub + offal_length;
             int substitution_len = strlen(substitution);
-            memmove(where_to+substitution_len, tail, (int)(p_end-tail));
-            memcpy(where_to, substitution, substitution_len);
-            if (do_camel_case) *where_to = toupper(*where_to);
+            memmove(where_to_sub+substitution_len, tail, (int)(p_end-tail));
+            memcpy(where_to_sub, substitution, substitution_len);
+            if (do_title_case) *where_to_sub = toupper(*where_to_sub);
             p_end += substitution_len - offal_length;
         }
-        // Advance unless substitution reveals another substitution to be made
+        // Advance in the updated working text unless substitution reveals
+        // another substitution to be made at the current position
         if (*p != '$' || !substitution)
             p++;
     }
@@ -456,7 +461,7 @@ void cls(char *name, _BOOL is_exception)
     char type[10];
     g_left_margin = 0;
 
-    strcpy(type, is_exception ? "Exception" : "Object");
+    strcpy(type, is_exception ? "Exception" : "object");
     fprintf(outputF, "class %s(%s):\n", name, type);
     g_inside_class = TRUE;
     g_is_static = TRUE;
