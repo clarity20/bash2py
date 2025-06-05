@@ -364,6 +364,13 @@ char *_build_log_entry(char *format, va_list *pArgs)
 	va_list args;
 	int length;
 
+    if (!format)
+    {
+        assert(!pArgs);
+        strcpy(result, "\n");
+        return result;
+    }
+
 	// Convert format string and arguments
 	char *start = format, *end = strchr(format, '%');
 	char *pResult = result;
@@ -515,21 +522,23 @@ void log_return_msg(char *msg_template, ...)
 {
 	char log_entry[256];
 	char *msg;
-	char entry_format[]="%-*.0dLeave %s() - %s";
+	char entry_format[24];
+	char msg_preamble[]=" - ";
 
 	if (!g_log_stream)
 		return;
+
+	strcpy(entry_format, "%-*.0dLeave %s()");
+	if (msg_template)
+	    strcat(entry_format, msg_preamble);
+	strcat(entry_format, "%s");   // printf-style placeholder for msg
 
 	// Construct the log entry, silently ignoring the msg if it is NULL.
 	if (g_log_is_on)
 	{
 		int i;
 		if (!msg_template)
-		{
-			// Chop format string after ')'
-			entry_format[16] = '\0';
-			msg = strdup("");
-		}
+			msg = _build_log_entry(msg_template, NULL);
 		else
 		{
 			va_list args;
@@ -543,8 +552,6 @@ void log_return_msg(char *msg_template, ...)
 			log_entry[i]='|';
 		if (i>=FULL_INDENT) log_entry[i-FULL_INDENT]='`';
 		fprintf(g_log_stream, "%s", log_entry);
-		if (!msg_template)
-		    free(msg);
 	}
 
 	// Internal log bookkeeping
