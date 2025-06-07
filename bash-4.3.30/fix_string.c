@@ -1285,6 +1285,7 @@ static fix_typeE substitute(fix_typeE want)
 	case FIX_VAR:
 		if (P = isInteger(g_buffer.m_P)) {
 			burps(&g_new, P);
+			log_return_msg("%s = simple integer, nothing to substitute", P);
 			return FIX_INT;
 		}
 	}
@@ -1820,7 +1821,9 @@ expand_brace_expr:
 	
 			for (i = 0; P = arrayPP[i]; ) {
 				string_to_buffer(arrayPP[i]);
+log_activate();
 				P = fix_string1(single_want_type, gotP);
+log_deactivate();
 				burps(&g_braced, P);
 				++i;
 				if (arrayPP[i]) {
