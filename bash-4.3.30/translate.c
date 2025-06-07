@@ -1392,14 +1392,14 @@ static _BOOL isAssignment(char *startP, _BOOL local)
 			c = *++P;
 	}	}
 
-	// Assignment operator can be  +=,  -=,  or  = //TODO MMMM The point here is to distinguish end of identifier from location of = sign
+	// Assignment operator can be  +=,  -=,  or  = 
+	// N.B. We need to distinguish end of identifier from location of = sign
 	switch (c) {
 	case '+':
 	case '-':
 		++P;
 	}
 	if (*P == '=') {
-//TODO: Move print_assignment() out to the caller(s)
 		print_assignment_command(startP, after_nameP, end_arrayP, P, local);
 		log_return_msg("%q IS an assignment.", startP);
 		return TRUE;

@@ -205,6 +205,7 @@ void burp(burpT *burpP, const char *fmtP, ...)
 
     burps(burpP, buf);
  	free(buf);
+ 	buf = NULL;
 
  	return;
 }
@@ -294,6 +295,7 @@ void log_close()
 	{
 		fprintf(g_log_stream, "WARNING: Logger has no record of a proper return from function %s,\n", *g_current_function);
 		free(*g_current_function);
+		*g_current_function = NULL;
 		g_current_function--;
 	}
 	free(g_function_stack);
@@ -358,7 +360,7 @@ char *type_to_text(fix_typeE value)
 // We leave it up to the caller to left-pad to show the function stack depth.
 char *_build_log_entry(char *format, va_list *pArgs)
 {
-	static char result[128];
+	static char result[192];
 	char fmt_piece[128];
 	void *junk;
 	va_list args;
@@ -556,6 +558,7 @@ void log_return_msg(char *msg_template, ...)
 
 	// Internal log bookkeeping
 	free(*g_current_function);
+	*g_current_function = NULL;
 	g_current_function--;
 	g_log_indent -= FULL_INDENT;
 }
