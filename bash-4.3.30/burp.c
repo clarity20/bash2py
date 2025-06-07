@@ -522,7 +522,7 @@ void log_return_msg(char *msg_template, ...)
 {
 	char log_entry[256];
 	char *msg;
-	char entry_format[24];
+	char entry_format[32];
 	char msg_preamble[]=" - ";
 
 	if (!g_log_stream)

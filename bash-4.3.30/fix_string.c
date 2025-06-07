@@ -86,19 +86,18 @@ char * endQuotedString(char *stringP)
 char * endArray(char *startP)
 {
 	char	*P, *endP;
-	int		c, in_array;
+	int		nesting_level;
 	
-	c = *startP;
-	if (c != '[') {
+	if (*startP != '[') {
 		return NULL;
 	}
-	in_array = 1;
+	nesting_level = 1;
 	for (P = startP + 1; ; ++P) {
-		switch (c = *P) {
+		switch (*P) {
 		case '\0':
 			return NULL;
 		case ']':
-			if (--in_array) {
+			if (--nesting_level) {
 				continue;
 			}
 			return P;
@@ -112,7 +111,7 @@ char * endArray(char *startP)
 			P = endP;
 			continue;
 		case '[':
-			++in_array;
+			++nesting_level;
 		default:
 			continue;
 }	}	}

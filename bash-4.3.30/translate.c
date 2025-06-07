@@ -168,7 +168,7 @@ void seen_global(const char *nameP, _BOOL local)
 		last_nameP->m_nextP = var_nameP;
     else
         g_variable_namesP = var_nameP;
-	*P1 = c;
+	*P1 = c;    // Restore the operator character
 	log_return_msg("Variable added to registry");
 }
 
@@ -1311,8 +1311,10 @@ static void print_assignment_command(char *nameP, char *end_variableP, char *end
 			nameP, end_variableP, end_arrayP, end_assignmentP, local);
 
 	c              = *end_variableP;
-	*end_variableP = '\0';
+	*end_variableP = '\0';    // This looks dangerous but I think this is always one of [+-=] on the way in.
 	seen_global(nameP, local);
+
+	// Print or "Make"-print the name
 	if (g_started > 1) {
 		g_translate.m_function.m_make = TRUE;
 		burps(&g_output, "Make(\"");
@@ -1321,6 +1323,7 @@ static void print_assignment_command(char *nameP, char *end_variableP, char *end
 	if (g_started > 1) {
 		burps(&g_output, "\")");
 	}
+
 	*end_variableP = c;
 	if (c == '[') {
 		burps(&g_output, ".val[");
@@ -1360,22 +1363,27 @@ static void print_assignment_command(char *nameP, char *end_variableP, char *end
 	return;
 }
 
+
+// Check whether a string has the form "name=value" or "name[index]=value".
+// The operator can also be += or -=
 static _BOOL isAssignment(char *startP, _BOOL local)
 {
-	char	*P, *end_nameP, *end_arrayP;
+	char	*P, *after_nameP, *end_arrayP;
 	int		c;
 
 	log_enter("isAssignment (startP=%q, local=%b)", startP, local);
 
 	P = startP;
 
-	// Left side must be an identifier
+	// Check the leading identifier
 	if ((c = *P) != '_' && !isalpha(c)) {
 		log_return_msg("%q is NOT an assignment.", startP);
 		return FALSE;
 	}
 	for (++P; (c = *P) == '_' || isalnum(c); ++P);
-	end_nameP  = P;
+	after_nameP  = P;
+
+    // Check array brackets, if present
 	end_arrayP = NULL;
 	if (c == '[') {
 		end_arrayP = endArray(P);
@@ -1384,7 +1392,7 @@ static _BOOL isAssignment(char *startP, _BOOL local)
 			c = *++P;
 	}	}
 
-	// Assignment operator can be  +=,  -=,  or  =
+	// Assignment operator can be  +=,  -=,  or  = //TODO MMMM The point here is to distinguish end of identifier from location of = sign
 	switch (c) {
 	case '+':
 	case '-':
@@ -1392,7 +1400,7 @@ static _BOOL isAssignment(char *startP, _BOOL local)
 	}
 	if (*P == '=') {
 //TODO: Move print_assignment() out to the caller(s)
-		print_assignment_command(startP, end_nameP, end_arrayP, P, local);
+		print_assignment_command(startP, after_nameP, end_arrayP, P, local);
 		log_return_msg("%q IS an assignment.", startP);
 		return TRUE;
 	}
@@ -3551,9 +3559,9 @@ static void emitBash2PyClass(void)
 		write_init_func("SV\'");
 
 	if (valueP->m_set_value) {
-		def = def_("S()", "SV0");
+		def = def_("t()", "SV0");
 		asgn = asgn_("$L", "$v");
-		write_function(def, ret_("$v"));
+		write_function(def, asgn, ret_("$v"));
 	}
 
 	if (valueP->m_preincrement) {

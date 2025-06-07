@@ -67,7 +67,7 @@ void init_dynamo(void)
         return;
 
     g_text_expansions = (char**) malloc (128 * sizeof(char *));
-    memset(g_text_expansions, '\0', 128);
+    memset(g_text_expansions, '\0', 128 * sizeof(char *));
     g_text_expansions['n'] = strdup("name");
     g_text_expansions['v'] = strdup("value");
     g_text_expansions['u'] = strdup("val");
@@ -93,8 +93,9 @@ void init_dynamo(void)
     g_text_expansions['~'] = strdup("not ");
 
     g_func_expansions = (char**) malloc (128 * sizeof(char *));
-    memset(g_func_expansions, '\0', 128);
+    memset(g_func_expansions, '\0', 128 * sizeof(char *));
     g_func_expansions['S'] = strdup("Set$V");
+    g_func_expansions['t'] = strdup("set$V");  // lowercase "s"et
     g_func_expansions['G'] = strdup("Get$V");
     g_func_expansions['s'] = strdup("sys.argv");
     g_func_expansions['g'] = strdup("globals");
@@ -106,6 +107,8 @@ void init_dynamo(void)
     g_func_expansions['j'] = strdup("join");
 }
 
+// Perform possibly-recursive macro substitutions on a suitably primed
+// input string to produce a line of Python code
 char *_expand_macros_internal(char *str, _BOOL allow_header_macros)
 {
     static char working_str[128];
@@ -219,7 +222,7 @@ char *_static() {
 }
 
 void set_static(_BOOL is_static) { g_is_static = is_static; };
-char *_add_to_list(char *l, const char *s) { return stpcpy(stpcpy(l, s), ", "); }
+char *_add_to_parm_list(char *l, const char *s) { return stpcpy(stpcpy(l, s), ", "); }
 
 char *def_(char *name, char *sig)
 {
@@ -239,21 +242,21 @@ char *def_(char *name, char *sig)
 
     // Build the argument list
     if (g_inside_class && !g_is_static) {
-        p = _add_to_list(p, "self");
+        p = _add_to_parm_list(p, "self");
     }
     if (sig) {
         // Check for every possible flag in "bash2py standard" order
         char *s = sig;
-        if (strchr(sig,'N')) p = _add_to_list(p, "name");
+        if (strchr(sig,'N')) p = _add_to_parm_list(p, "name");
         if (s = strchr(sig,'V')) {
             sprintf(value_buf, "value%s", (s[1] == '0') ? "=None" :
                                           (s[1] == '\'' ? "=''" :
                                            ""));
-            p = _add_to_list(p, value_buf);
+            p = _add_to_parm_list(p, value_buf);
         }
-        if (strchr(sig,'L')) p = _add_to_list(p, "local=locals()");
-        if (strchr(sig,'I')) p = _add_to_list(p, "inc=1");
-        if (strchr(sig,'Q')) p = _add_to_list(p, "in_quotes");
+        if (strchr(sig,'L')) p = _add_to_parm_list(p, "local=locals()");
+        if (strchr(sig,'I')) p = _add_to_parm_list(p, "inc=1");
+        if (strchr(sig,'Q')) p = _add_to_parm_list(p, "in_quotes");
     }
 
     // Terminate the list of args and close the header
@@ -478,12 +481,12 @@ void end_cls(void)
 
 
 // Stream a function line-by-line
-void write_function(char *first, ...) // First arg is broken out to comply with ANSI C
+void write_function(char *first_line, ...) // first arg is broken out to comply with ANSI C
 {
     int i;
     va_list lines;
-    char *fmt = (char*) malloc(g_lines_in_func*2 + strlen(first)+1);
-    char *pFmt = stpcpy(fmt, first);
+    char *fmt = (char*) malloc(g_lines_in_func*2 + strlen(first_line)+1);
+    char *pFmt = stpcpy(fmt, first_line);
 
     for(i=1; i<g_lines_in_func; i++)
     {
@@ -496,7 +499,7 @@ void write_function(char *first, ...) // First arg is broken out to comply with 
 
     if (g_inside_class)
         fprintf(outputF, "        #\n");
-    va_start(lines, first);
+    va_start(lines, first_line);
     vfprintf(outputF, fmt, lines);
     va_end(lines);
     g_lines_in_func = 0;
@@ -639,10 +642,10 @@ char *run_test()
     cls("Bash2Py", FALSE);
         set_static(FALSE);
 
-        write_function(asgn_("__slots__", "[\"$u\"]"));  // kludge
+        write_function(asgn_("__slots__", "[\"$u\"]"));  // not ideal
         write_init_func("SV\'");
 
-        def = def_("S()", "SV0");
+        def = def_("t()", "SV0");
         asgn = asgn_("$L", "$v");
         write_function(def, asgn, ret_("$v"));
 
