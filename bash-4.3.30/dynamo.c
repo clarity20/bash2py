@@ -67,7 +67,7 @@ void init_dynamo(void)
         return;
 
     g_text_expansions = (char**) malloc (128 * sizeof(char *));
-    memset(g_text_expansions, '\0', 128);
+    memset(g_text_expansions, '\0', 128 * sizeof(char *));
     g_text_expansions['n'] = strdup("name");
     g_text_expansions['v'] = strdup("value");
     g_text_expansions['u'] = strdup("val");
@@ -93,8 +93,9 @@ void init_dynamo(void)
     g_text_expansions['~'] = strdup("not ");
 
     g_func_expansions = (char**) malloc (128 * sizeof(char *));
-    memset(g_func_expansions, '\0', 128);
+    memset(g_func_expansions, '\0', 128 * sizeof(char *));
     g_func_expansions['S'] = strdup("Set$V");
+    g_func_expansions['t'] = strdup("set$V");  // lowercase "s"et
     g_func_expansions['G'] = strdup("Get$V");
     g_func_expansions['s'] = strdup("sys.argv");
     g_func_expansions['g'] = strdup("globals");
@@ -106,7 +107,9 @@ void init_dynamo(void)
     g_func_expansions['j'] = strdup("join");
 }
 
-char *_expand_macros_internal(char *str, _BOOL define_exception)
+// Perform possibly-recursive macro substitutions on a suitably primed
+// input string to produce a line of Python code
+char *_expand_macros_internal(char *str, _BOOL allow_header_macros)
 {
     static char working_str[128];
     char *p = working_str, *p_end;
@@ -118,8 +121,8 @@ char *_expand_macros_internal(char *str, _BOOL define_exception)
     // Process all the expansion flags in the string
     while (p = strpbrk(p, "([$|\\~")) {
         int offal_length;
-        _BOOL do_camel_case = FALSE;
-        char *substitution = NULL, *where_to = NULL;
+        _BOOL do_title_case = FALSE;
+        char *substitution = NULL, *where_to_sub = NULL;
         char preceding, next_preceding, next;
         switch (*p)
         {
@@ -131,14 +134,16 @@ char *_expand_macros_internal(char *str, _BOOL define_exception)
                 preceding = *(p-1); next_preceding = *(p-2);
                 if (p>working_str && (substitution = g_func_expansions[preceding])
                           && (&preceding==working_str /*ie nothing precedes p-1*/ || !isalnum(next_preceding))) {
-                    // If indicated, allow function macros in the declaration/header
+                    // If indicated, detect function macros in the declaration/header; format = "f()"
                     // but treat them differently, throwing out the parens; e.g. "f()" expands to "foo"
-                    if (define_exception && *(p+1) == ')') {
+                    if (allow_header_macros && *(p+1) == ')') {
+                        // It's a special expansion as described that will consume 3 characters
                         offal_length = 3;
                     } else {
+                        // It's a normal expansion that will consume 1 character
                         offal_length = 1;
                     }
-                    where_to = p-1;
+                    where_to_sub = p-1;
                 }
                 break;
             case '$':
@@ -146,17 +151,17 @@ char *_expand_macros_internal(char *str, _BOOL define_exception)
                 next = *(p+1);
                 if (isalnum(next)) {
                     if (substitution = g_text_expansions[next]) {
-                        offal_length = 2;
-                        where_to = p;
+                        offal_length = 2;   // We will consume '$' and "next"
+                        where_to_sub = p;
                     }
                     // Forced upper-casing: Given a capital-letter micro having no
                     // dictionary entry, we look for a lowercase micro. If found 
                     // we make the substitution and convert it to title case.
                     else if (isupper(next)) {
                         if (substitution = g_text_expansions[tolower(next)]) {
-                            do_camel_case = TRUE;
+                            do_title_case = TRUE;
                             offal_length = 2;
-                            where_to = p;
+                            where_to_sub = p;
                         }
                     }
                 }
@@ -164,24 +169,27 @@ char *_expand_macros_internal(char *str, _BOOL define_exception)
             case '|':
             case '\\':
             case '~':
+                // Special symbols in the encoded text having no "$" flag
                 if ((*p=='|') && strchr("|=", *(p+1))) {
-                    // Leave literal '|' characters alone when we need to
+                    // Leave '|' characters alone when they are
+                    // semantically meaningful in the working text
                     p++; break;
                 }
                 substitution = g_text_expansions[*p];
                 offal_length = 1;
-                where_to = p;
+                where_to_sub = p;
                 break;
         }
-        if (where_to) {
-            char *tail = where_to + offal_length;
+        if (where_to_sub) {
+            char *tail = where_to_sub + offal_length;
             int substitution_len = strlen(substitution);
-            memmove(where_to+substitution_len, tail, (int)(p_end-tail));
-            memcpy(where_to, substitution, substitution_len);
-            if (do_camel_case) *where_to = toupper(*where_to);
+            memmove(where_to_sub+substitution_len, tail, (int)(p_end-tail));
+            memcpy(where_to_sub, substitution, substitution_len);
+            if (do_title_case) *where_to_sub = toupper(*where_to_sub);
             p_end += substitution_len - offal_length;
         }
-        // Advance unless substitution reveals another substitution to be made
+        // Advance in the updated working text unless substitution reveals
+        // another substitution to be made at the current position
         if (*p != '$' || !substitution)
             p++;
     }
@@ -214,7 +222,7 @@ char *_static() {
 }
 
 void set_static(_BOOL is_static) { g_is_static = is_static; };
-char *_add_to_list(char *l, const char *s) { return stpcpy(stpcpy(l, s), ", "); }
+char *_add_to_parm_list(char *l, const char *s) { return stpcpy(stpcpy(l, s), ", "); }
 
 char *def_(char *name, char *sig)
 {
@@ -234,21 +242,21 @@ char *def_(char *name, char *sig)
 
     // Build the argument list
     if (g_inside_class && !g_is_static) {
-        p = _add_to_list(p, "self");
+        p = _add_to_parm_list(p, "self");
     }
     if (sig) {
         // Check for every possible flag in "bash2py standard" order
         char *s = sig;
-        if (strchr(sig,'N')) p = _add_to_list(p, "name");
+        if (strchr(sig,'N')) p = _add_to_parm_list(p, "name");
         if (s = strchr(sig,'V')) {
             sprintf(value_buf, "value%s", (s[1] == '0') ? "=None" :
                                           (s[1] == '\'' ? "=''" :
                                            ""));
-            p = _add_to_list(p, value_buf);
+            p = _add_to_parm_list(p, value_buf);
         }
-        if (strchr(sig,'L')) p = _add_to_list(p, "local=locals()");
-        if (strchr(sig,'I')) p = _add_to_list(p, "inc=1");
-        if (strchr(sig,'Q')) p = _add_to_list(p, "in_quotes");
+        if (strchr(sig,'L')) p = _add_to_parm_list(p, "local=locals()");
+        if (strchr(sig,'I')) p = _add_to_parm_list(p, "inc=1");
+        if (strchr(sig,'Q')) p = _add_to_parm_list(p, "in_quotes");
     }
 
     // Terminate the list of args and close the header
@@ -456,7 +464,7 @@ void cls(char *name, _BOOL is_exception)
     char type[10];
     g_left_margin = 0;
 
-    strcpy(type, is_exception ? "Exception" : "Object");
+    strcpy(type, is_exception ? "Exception" : "object");
     fprintf(outputF, "class %s(%s):\n", name, type);
     g_inside_class = TRUE;
     g_is_static = TRUE;
@@ -473,12 +481,12 @@ void end_cls(void)
 
 
 // Stream a function line-by-line
-void write_function(char *first, ...) // First arg is broken out to comply with ANSI C
+void write_function(char *first_line, ...) // first arg is broken out to comply with ANSI C
 {
     int i;
     va_list lines;
-    char *fmt = (char*) malloc(g_lines_in_func*2 + strlen(first)+1);
-    char *pFmt = stpcpy(fmt, first);
+    char *fmt = (char*) malloc(g_lines_in_func*2 + strlen(first_line)+1);
+    char *pFmt = stpcpy(fmt, first_line);
 
     for(i=1; i<g_lines_in_func; i++)
     {
@@ -491,7 +499,7 @@ void write_function(char *first, ...) // First arg is broken out to comply with 
 
     if (g_inside_class)
         fprintf(outputF, "        #\n");
-    va_start(lines, first);
+    va_start(lines, first_line);
     vfprintf(outputF, fmt, lines);
     va_end(lines);
     g_lines_in_func = 0;
@@ -634,10 +642,10 @@ char *run_test()
     cls("Bash2Py", FALSE);
         set_static(FALSE);
 
-        write_function(asgn_("__slots__", "[\"$u\"]"));  // kludge
+        write_function(asgn_("__slots__", "[\"$u\"]"));  // not ideal
         write_init_func("SV\'");
 
-        def = def_("S()", "SV0");
+        def = def_("t()", "SV0");
         asgn = asgn_("$L", "$v");
         write_function(def, asgn, ret_("$v"));
 
