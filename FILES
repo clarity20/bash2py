@@ -1,0 +1,8 @@
+README.txt -- Installation instructions
+analyzers  -- Extra code
+bash-4.3.30-- Source code for bash / bash2py
+bash2py    -- Driver for bash2py
+bash2py.py -- Python driver invoked from bash2py
+install    -- Script to build bash2py
+tests      -- A variety of ad-hoc files used to test bash2py
+bin        -- Place to put tools needed for testing
