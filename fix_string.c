@@ -23,8 +23,6 @@ int g_rc_identifier   = 0;
 
 static int g_dollar_expr_nesting_level = 0;
 
-extern _BOOL g_translate_html;
-
 extern	void seen_global(const char *nameP, _BOOL local);
 
 char g_regmatch_var_name[] = "BASH_REMATCH";
@@ -1857,18 +1855,14 @@ char * fix_string(const char *stringP, fix_typeE want, fix_typeE *gotP)
 {
 	char *P;
 
-	int save;
 	if (want == FIX_NONE || !*stringP) {
 		return (char *) stringP;
 	}
 
-	save             = g_translate_html;
-	g_translate_html        = 0;
 	g_dollar_expr_nesting_level = 0;
 
 	P = fixBracedString(stringP, want, gotP);
 
-	g_translate_html = save;
 	g_dollar_expr_nesting_level = 0;
 
 	return P;

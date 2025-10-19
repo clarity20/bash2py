@@ -41,7 +41,6 @@ void burpc(burpT *burpP, const char c);
 void burp_ungetc(burpT *burpP);
 void burpn(burpT *burpP, const char *stringP, int lth);
 void burps(burpT *burpP, const char *stringP);
-void burps_html(burpT *burpP, const char *stringP);
 void burp_esc_quote(burpT *burpP, int offset, int quote);
 void burp_rtrim(burpT *burpP);
 
