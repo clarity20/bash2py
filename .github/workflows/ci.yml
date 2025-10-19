@@ -12,7 +12,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - run: |
-        cd bash-4.3.30
         ./configure
         make lint
 
@@ -29,9 +28,8 @@ jobs:
 
     - name: configure and make
       run: |
-        cd bash-4.3.30
         bash -c './configure CFLAGS="-Wno-implicit-function-declaration -Wno-implicit-int"'
-        bash -c "make bash2pyengine"
+        bash -c "make bash2py"
 
     - name: run-all
       run: |
