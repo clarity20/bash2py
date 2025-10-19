@@ -34,8 +34,6 @@ char **g_current_function;
 FILE *g_log_stream;
 _BOOL g_log_is_on;
 
-_BOOL g_translate_html = FALSE;
-
 #if !HAVE_STPCPY
 char *stpcpy(char *s1, const char *s2) {
 	char *end;
@@ -157,25 +155,6 @@ static void indentation(burpT *burpP)
 
 void burpc(burpT *burpP, const char c)
 {
-	if (g_translate_html) {
-		burpP->m_ungetc = burpP->m_lth;
-		switch (c) {
-		case '<':
-			g_translate_html = FALSE;
-			burps(burpP, "&lt;");
-			g_translate_html = TRUE;
-			return;
-		case '>':
-			g_translate_html = FALSE;
-			burps(burpP, "&gt;");
-			g_translate_html = TRUE;
-			return;
-		case '&':
-			g_translate_html = FALSE;
-			burps(burpP, "&amp;");
-			g_translate_html = TRUE;
-			return;
-	}	}
 	indentation(burpP);
 	burpc1(burpP, c);
 	assert(burpP->m_lth < burpP->m_max);
@@ -268,16 +247,6 @@ void burp_rtrim(burpT *burpP)
 	for (lth = burpP->m_lth; lth && burpP->m_P[lth-1] == ' '; --lth);
 	burpP->m_lth = lth;
 }
-
-void burps_html(burpT *burpP, const char *stringP)
-{
-	int save = g_translate_html;
-
-	g_translate_html = FALSE;
-	burps(burpP, stringP);
-	g_translate_html = save;
-}
-
 
 void log_init()
 {

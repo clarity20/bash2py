@@ -63,7 +63,7 @@ extern int g_rc_identifier;
 extern _BOOL g_is_inside_function;
 extern int g_function_parms_count;
 
-extern translateT	g_translate;
+extern translateT g_translate;
 
 #if defined (PREFER_STDARG)
 typedef void PFUNC __P((const char *, ...));
@@ -87,7 +87,6 @@ static REDIRECT *g_deferred_heredocs = NULL;
 static int g_embedded          = 0;
 static int g_started           = 0;
 
-extern _BOOL   g_translate_html;
 FILE* outputF = NULL;
 
 static burpT g_case_var = {0,0,0,0,0,0};
@@ -835,10 +834,7 @@ static void print_comments(int before_byte)
 	commentT *commentP = g_comment_headP;
 
 	while (commentP && commentP->m_byte < before_byte) {
-		burps_html(&g_output, commentP->m_textP);
-		if (g_translate_html) {
-			burps_html(&g_output, "</pre></td></tr><tr><td></td><td><pre>");
-		}
+		//MMMM deprecated, but we should print the comment sans html:   burps_html(&g_output, commentP->m_textP);
 		newline("");
 		commentT* temp = commentP;
 		commentP = commentP->m_nextP;
@@ -2745,7 +2741,6 @@ static void print_function_def (FUNCTION_DEF *func)
 	newline("");
 	OUTDENT(g_output);
 	newline("");
-	burps_html(&save, g_output.m_P);
 	temp     = save;
 	save     = g_output;
 	g_output = temp;
@@ -3024,13 +3019,7 @@ char * make_command_string (COMMAND *command)
 
 void print_command (COMMAND *command)
 {
-	if (g_translate_html) {
-		burps_html(&g_output, "<tr><td></td><td><pre>");
-	}
 	make_command_string (command);
-	if (g_translate_html) {
-		burps_html(&g_output, "</pre></td></tr>");
-	}
 	burpc(&g_output, '\n');
 }
 
@@ -3099,15 +3088,8 @@ char *initialize_translator(const char *input_filename)
 		exit(1);
 	  }
 	}
-	if (g_translate_html) {
-		fprintf(outputF, "<html>\n<body>\n<table>\n<tr><td></td><td>\n");
-	}
 
 	fprintf(outputF,"#! /usr/bin/env python\n");
-
-	if (g_translate_html) {
-		fprintf(outputF, "</td></tr>\n");
-	}
 
 	// Initialize the translation state object and buffer objects
     memset(&g_translate, 0, sizeof(g_translate));
@@ -3161,13 +3143,7 @@ static void emitUses(void)
 	struct usesS *usesP = &(g_translate.m_uses);
 
 	if (usesP->m_print) {
-		if (g_translate_html) {
-			fprintf(outputF, "<tr><td></td><td>");
-		}
 		fprintf(outputF, "from __future__ import print_function");
-		if (g_translate_html) {
-			fprintf(outputF, "</td></tr>");
-		}
 		fprintf(outputF, "\n");
 	}
 
@@ -3179,9 +3155,6 @@ static void emitUses(void)
 		usesP->m_glob        ||
 		usesP->m_re) {
 
-		if (g_translate_html) {
-			fprintf(outputF, "<tr><td></td><td>");
-		}
 		fprintf(outputF, "import");
 		if (usesP->m_sys) {
 			fprintf(outputF, " sys");
@@ -3212,20 +3185,11 @@ static void emitUses(void)
 			separator = ',';
 		}
 	
-		if (g_translate_html) {
-			fprintf(outputF, "</td></tr>");
-		}
 		fprintf(outputF, "\n");
 	}
 	
 	if (usesP->m_stat) {
-		if (g_translate_html) {
-			fprintf(outputF, "<tr><td></td><td>");
-		}
 		fprintf(outputF, "from stat import *");
-		if (g_translate_html) {
-			fprintf(outputF, "</td></tr>");
-		}
 		fprintf(outputF, "\n");
 	}
 }
@@ -3257,10 +3221,6 @@ static void emitExceptions(void)
 		return;
 	}
 
-	if (g_translate_html) {
-		fprintf(outputF, "<tr><td></td><td><pre>");
-	}
-
 	// Write the Bash2PyException class
 	cls(_EXCEPT, TRUE);
 		set_static(FALSE);
@@ -3269,10 +3229,6 @@ static void emitExceptions(void)
 		def = def_("__str__", "S");
 		write_function(def, ret_("repr($S)"));
 	end_cls();
-
-	if (g_translate_html) {
-		fprintf(outputF, "</pre></td></tr>");
-	}
 }
 	
 static void neededFunctions(void)
@@ -3322,10 +3278,6 @@ static void emitFunctions(void)
 
 	if (allzero(functionP, sizeof(g_translate.m_function))) {
 		return;
-	}
-
-	if (g_translate_html) {
-		fprintf(outputF, "<tr><td></td><td><pre>");
 	}
 
     // Global functions
@@ -3384,9 +3336,6 @@ static void emitFunctions(void)
 		write_function(def, asgn, iff, ret_(NULL));
 	}
 	
-	if (g_translate_html) {
- 		fprintf(outputF, "</pre></td></tr>");
-	}
 }
 	
 static void neededExpands(void)
@@ -3405,10 +3354,6 @@ static void emitExpandClass(void)
 
 	if (allzero(expandP, sizeof(g_translate.m_expand))) {
 		return;
-	}
-
-	if (g_translate_html) {
-		fprintf(outputF, "<tr><td></td><td><pre>");
 	}
 
 	cls("Expand", FALSE);
@@ -3520,10 +3465,6 @@ static void emitExpandClass(void)
 	}
 
 	end_cls();
-
-	if (g_translate_html) {
-		fprintf(outputF, "</pre></td></tr>");
-	}
 }
 
 static void neededBash2Py(void)
@@ -3549,10 +3490,6 @@ static void emitBash2PyClass(void)
 		return;
 	}
 
-	if (g_translate_html) {
-		fprintf(outputF, "<tr><td></td><td><pre>");
-	}
-	
 	cls("Bash2Py", FALSE);
 		set_static(FALSE);
 		write_function(asgn_("__slots__", "[\"$u\"]"));  // kludge
@@ -3624,10 +3561,6 @@ static void emitBash2PyClass(void)
 	}
 
 	end_cls();
-
-	if (g_translate_html) {
-		fprintf(outputF, "</pre></td></tr>");
-	}
 }
 
 void close_translator(const char *output_fname)
@@ -3651,9 +3584,6 @@ void close_translator(const char *output_fname)
 	if (g_output.m_lth) {
 		fputs(g_output.m_P, outputF);
 		log_info("Python output written to %s. Please check.", output_fname);
-	}
-	if (g_translate_html) {
-		fprintf(outputF, "</body>\n</html>\n");
 	}
 	fclose(outputF);
     outputF = NULL;

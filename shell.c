@@ -111,10 +111,6 @@ extern char *this_command_name;
    call shell_reinitialize () if you need to start afresh. */
 int shell_initialized = 0;
 
-#ifdef BASH2PY
-extern int g_translate_html;
-#endif
-
 COMMAND *global_command = (COMMAND *)NULL;
 
 /* Information about the current user. */
@@ -267,9 +263,6 @@ static const struct {
   { "version", Int, &do_version, (char **)0x0 },
 #if defined (WORDEXP_OPTION)
   { "wordexp", Int, &wordexp_only, (char **)0x0 },
-#endif
-#ifdef BASH2PY
-  { "html", Int, &g_translate_html, (char **)0x0 },
 #endif
   { (char *)0x0, Int, (int *)0x0, (char **)0x0 }
 };

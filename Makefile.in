@@ -593,8 +593,8 @@ bashversion$(EXEEXT):	patchlevel.h conftypes.h version.h buildversion.o $(SUPPOR
 buildversion.o: version.h conftypes.h patchlevel.h $(srcdir)/version.c
 	$(CC_FOR_BUILD) $(CCFLAGS_FOR_BUILD) -DBUILDTOOL -c -o $@ $(srcdir)/version.c
 
-bash2pyengine: .made
-	mv bash bash2pyengine
+bash2py: .made
+	mv bash bash2py
 
 # This is missing some dependencies. Can build by pasting the whole bash.exe command & changing to fix_string.
 fix_string: burp.o translate_expr.o fix_string.c
@@ -815,7 +815,7 @@ LIB_SUBDIRS = ${RL_LIBDIR}  ${HIST_LIBDIR} ${TERM_LIBDIR} ${GLOB_LIBDIR} \
 		${INTL_LIBDIR} ${TILDE_LIBDIR} ${ALLOC_LIBDIR} ${SH_LIBDIR}
 
 basic-clean:
-	$(RM) $(OBJECTS) $(Program) bashbug bash2pyengine
+	$(RM) $(OBJECTS) $(Program) bashbug bash2py
 	$(RM) .build .made version.h 
 
 clean:	basic-clean

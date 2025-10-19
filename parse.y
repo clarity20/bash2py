@@ -118,7 +118,6 @@ extern int extended_glob;
 #endif
 
 #ifdef BASH2PY
-extern int   g_translate_html;
 extern burpT g_output;
 #define LINE_NUMBER position.line
 #define VALUE(X) X.value
@@ -1755,9 +1754,6 @@ yy_getc ()
 
   c = (*(bash_input.getter))();
 
-  if (g_translate_html) {
-    burpc(&g_output, c);
-  }
   position.byte++;
   if (c == '\n') {
     position.line++;
@@ -1778,9 +1774,6 @@ yy_ungetc (c)
      int c;
 {
 #ifdef BASH2PY
-  if (g_translate_html) {
-    burp_ungetc(&g_output);
-  }
   position.byte--;
   position.column--;
 #endif
@@ -1930,11 +1923,6 @@ yy_string_get ()
   if (string && *string)
     {
       c = *string++;
-#ifdef BASH2PY
-      if (g_translate_html) {
-        burpc(&g_output, c);
-      }
-#endif
       bash_input.location.string = string;
       return (c);
     }
@@ -1947,11 +1935,6 @@ yy_string_unget (c)
      int c;
 {
   *(--bash_input.location.string) = c;
-#ifdef BASH2PY
-  if (g_translate_html) {
-    burp_ungetc(&g_output);
-  }
-#endif
   return (c);
 }
 

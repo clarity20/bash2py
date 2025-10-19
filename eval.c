@@ -64,7 +64,6 @@ extern int line_number;
 extern int expand_aliases;
 
 #ifdef BASH2PY
-extern int g_translate_html;
 extern burpT g_output;
 #endif
 
@@ -253,17 +252,7 @@ parse_command ()
     }
 
   current_command_line_count = 0;
-#ifdef BASH2PY
-  if (g_translate_html) {
-    burps_html(&g_output, "<tr><td><pre>");
-  }
-#endif
   r = yyparse ();
-#ifdef BASH2PY
-  if (g_translate_html) {
-       burps_html(&g_output, "</pre></td><td></td></tr>\n");
-  }       
-#endif
  
 
   if (need_here_doc)
