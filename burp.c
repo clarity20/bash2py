@@ -51,6 +51,16 @@ char *strdup(const char *s) {
 }
 #endif
 
+void swap_burps(burpT *oldP, burpT *newP)
+{
+	burpT	temp;
+
+	temp   = *oldP;
+	*oldP  = *newP;
+	*newP  = temp;
+}
+
+
 // Reset a burp without freeing its buffer, reducing explicit memory management.
 // When in doubt use burp_close() instead.
 void burp_reset(burpT *burpP)

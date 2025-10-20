@@ -27,15 +27,6 @@ extern	void seen_global(const char *nameP, _BOOL local);
 
 char g_regmatch_var_name[] = "BASH_REMATCH";
 
-static void exchange_burp_buffers(burpT *oldP, burpT *newP)
-{
-	burpT	temp;
-
-	temp   = *oldP;
-	*oldP  = *newP;
-	*newP  = temp;
-}
-
 // Finds and returns end of a quoted string (or NULL if improperly quoted)
 char * endQuotedString(char *stringP)
 {
@@ -483,7 +474,7 @@ static void replaceSingleQuotes(void)
 		}	}
 		burpc(&g_new, c);
 	}
-	exchange_burp_buffers(&g_buffer, &g_new);
+	swap_burps(&g_buffer, &g_new);
 }
 
 // emitQuoted(): Quotes the supplied string
@@ -1691,7 +1682,7 @@ static char * fix_string1(fix_typeE want, fix_typeE *gotP)
 
 	// Everything has been written to g_new
 	// Make it look as if it never left g_buffer
-	exchange_burp_buffers(&g_buffer, &g_new);
+	swap_burps(&g_buffer, &g_new);
 
 	compactWhiteSpace();
 	rename_special();
@@ -1706,7 +1697,7 @@ finish:
 			got         = FIX_EXPRESSION;
 			g_new.m_lth = 0;
 			burps(&g_new, translationP);
-			exchange_burp_buffers(&g_buffer, &g_new);
+			swap_burps(&g_buffer, &g_new);
 		}
 	}
 	unmarkExpand();
