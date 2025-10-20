@@ -2680,7 +2680,6 @@ static void reset_locals ()
 
 static void print_function_def (FUNCTION_DEF *func)
 {
-	burpT	temp;
 	COMMAND *cmdcopy;
 	REDIRECT *func_redirects;
 	char	 *nameP = func->name->word;
@@ -2692,9 +2691,7 @@ static void print_function_def (FUNCTION_DEF *func)
 	func_redirects = NULL;
 	burp(&g_output, "def %s (", nameP);
 
-	temp     = save;
-	save     = g_output;
-	g_output = temp;
+	swap_burps(&save, &g_output);
 	g_output.m_lth = 0;
 	burps(&g_output, "    ");
 	INDENT(g_output);
@@ -2713,7 +2710,7 @@ static void print_function_def (FUNCTION_DEF *func)
 	g_function_parms_count = 0;
 	emit_command (cmdcopy->type == cm_group
 				    ? cmdcopy->value.Group->command
-					: cmdcopy);
+					: cmdcopy);        // "g_output" now holds the function body
 
 	remove_unwind_protect ();
 
@@ -2729,7 +2726,7 @@ static void print_function_def (FUNCTION_DEF *func)
 	// Insert global variable declarations
 	if (g_variable_namesP) {
 		for (current_varP = g_variable_namesP; current_varP; current_varP = next_varP) {
-			burp(&save, "    global %s\n", current_varP->m_nameP);
+			burp(&save, "    global %s\n", current_varP->m_nameP);   // the indent here should match INDENT, dont assume its 4
 			next_varP = current_varP->m_nextP;
 			free(current_varP->m_nameP);
 			free(current_varP);
@@ -2738,12 +2735,13 @@ static void print_function_def (FUNCTION_DEF *func)
 		burpc(&save, '\n');
 	}
 
+	// "save" holds old backlog + function header "def foo(...):" + global declarations
+	// "g_output" holds the function body. We need swap-merge these.
 	newline("");
 	OUTDENT(g_output);
 	newline("");
-	temp     = save;
-	save     = g_output;
-	g_output = temp;
+	burps(&save, g_output.m_P);
+	swap_burps(&save, &g_output);
 
 	g_is_inside_function = FALSE;
 

@@ -43,6 +43,8 @@ void burpn(burpT *burpP, const char *stringP, int lth);
 void burps(burpT *burpP, const char *stringP);
 void burp_esc_quote(burpT *burpP, int offset, int quote);
 void burp_rtrim(burpT *burpP);
+void swap_burps(burpT *oldP, burpT *newP);
+
 
 #define INDENT(X) X.m_indent++
 #define OUTDENT(X) { assert(0 < X.m_indent); X.m_indent--; }
