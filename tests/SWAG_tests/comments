@@ -1,4 +1,11 @@
-#A comment
-x=1 #Another
-y=2 #Final
+
+
+#A whole-line comment
+x=1 #First EOL comment
+
+# Full-line comment after a blank line
+# Second consecutive full-line comment
+y=2 #Second EOL comment
 echo "$x+$y"
+
+# Comment at EOF

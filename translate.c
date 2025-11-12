@@ -93,7 +93,7 @@ static burpT g_case_var = {0,0,0,0,0,0};
 
 burpT	g_output  = {0, 0, 0, 0, 0, 0};
 
-static burpT	g_commentBuffer = {0, 0, 0, 0, 0, 0};
+burpT	g_commentBuffer = {0, 0, 0, 0, 0, 0};
 static burpT	g_temp    = {0, 0, 0, 0, 0, 0};
 static burpT	save = {0,0,0,0,0,0};
 
@@ -173,9 +173,6 @@ void seen_global(const char *nameP, _BOOL local)
 
 //#define UNCHANGED burps(&g_output, "^^")
 #define UNCHANGED
-
-extern POSITION position;
-static int comment_byte = -1;
 
 static void print_heredoc_header (REDIRECT *redirect)
 {
@@ -826,22 +823,6 @@ typedef struct commentS {
 	int				m_byte;
 	char			*m_textP;
 } commentT;
-
-commentT *g_comment_headP = NULL, *g_comment_tailP = NULL;
-
-static void print_comments(int before_byte)
-{
-	commentT *commentP = g_comment_headP;
-
-	while (commentP && commentP->m_byte < before_byte) {
-		//MMMM deprecated, but we should print the comment sans html:   burps_html(&g_output, commentP->m_textP);
-		newline("");
-		commentT* temp = commentP;
-		commentP = commentP->m_nextP;
-		free(temp);
-	}
-	g_comment_headP = NULL;
-}
 
 static void translate_unary_operation(char *operatorP, int complex1, char *term1P)
 {
@@ -2865,9 +2846,6 @@ static void emit_command (COMMAND *command)
 	if (!command)
 		return;
 
-	assert(0 <= command->position.byte);
-	print_comments(command->position.byte);
-
 	handle_redirection_list(&command->redirects);
 	if (command->flags & CMD_TIME_PIPELINE) {
 		UNCHANGED;
@@ -3018,41 +2996,14 @@ char * make_command_string (COMMAND *command)
 void print_command (COMMAND *command)
 {
 	make_command_string (command);
-	burpc(&g_output, '\n');
-}
-
-// This is a worrisome function that would probably break if ever (indirectly) used by print_comments()
-void seen_comment_char(int c)
-{
-	char *P;
-
-	if (c < 0) {
-		/* Start */
-			
-		comment_byte = position.byte;
-		g_commentBuffer.m_lth = 0;
-		// burpc(&g_commentBuffer, '\n');
-		c = '#';
+	/* Append buffered EOL comment if there is one. */
+	if (g_commentBuffer.m_lth > 0) {
+		burpc(&g_output, ' ');
+		burps(&g_output, g_commentBuffer.m_P);
+		burp_reset(&g_commentBuffer);
 	}
-	if (c == '\n') {
-
-		/* End */
-		P = g_commentBuffer.m_P;
-		if (*P != '#' || P[1] != '!') {
-			commentT *commentP = (commentT *) malloc(sizeof(commentT));
-			commentP->m_nextP  = NULL;
-			commentP->m_byte   = comment_byte;
-			commentP->m_textP  = P;    // So every comment points to the same place???
-			g_comment_tailP    = commentP;
-			if (!g_comment_headP) g_comment_headP = g_comment_tailP;
-			g_commentBuffer.m_lth    = 0;
-			g_commentBuffer.m_max    = 0;
-			g_commentBuffer.m_P      = NULL;
-		}
-		return;
-	}
-	if (c) {
-		burpc(&g_commentBuffer, c);
+	else {
+		burpc(&g_output, '\n');
 	}
 }
 
@@ -3563,8 +3514,10 @@ static void emitBash2PyClass(void)
 
 void close_translator(const char *output_fname)
 {
-	//TODO This is probably here to flush any remaining comments but is a no-op.
-	print_comments(999999999);
+	if (g_commentBuffer.m_lth > 0) {
+		burps(&g_output, g_commentBuffer.m_P);
+		burp_reset(&g_commentBuffer);
+	}
 
 	// What do we need
 	neededExpands();
