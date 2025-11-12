@@ -118,7 +118,7 @@ extern int extended_glob;
 #endif
 
 #ifdef BASH2PY
-extern burpT g_output;
+extern burpT g_commentBuffer, g_output;
 #define LINE_NUMBER position.line
 #define VALUE(X) X.value
 #else
@@ -143,9 +143,6 @@ extern int bash_input_fd_changed;
 #endif
 
 extern int errno;
-#ifdef BASH2PY
-extern void seen_comment_char(int c);
-#endif
 
 /* **************************************************************** */
 /*								    */
@@ -455,6 +452,7 @@ inputunit:	simple_list simple_list_terminator
 			  /* Case of regular command, but not a very
 			     interesting one.  Return a NULL command. */
 			  global_command = (COMMAND *)NULL;
+			  if (g_commentBuffer.m_lth == 0) burpc(&g_commentBuffer, '\n');
 			  if (parser_state & PST_CMDSUBST)
 			    parser_state |= PST_EOFTOKEN;
 			  YYACCEPT;
@@ -3000,11 +2998,11 @@ discard_until (character)
   int c;
 
 #ifdef BASH2PY
-  seen_comment_char(-1);
+    burpc(&g_commentBuffer, '#');
 #endif
   while ((c = shell_getc (0)) != EOF) {
 #ifdef BASH2PY
-    seen_comment_char(c);
+    burpc(&g_commentBuffer, (char)c);
 #endif
     if (c == character) {
       break;
@@ -3491,6 +3489,16 @@ read_token (command)
      token with an alias and pushed the string with push_string () */
  re_read_token:
 #endif /* ALIAS */
+
+#ifdef BASH2PY
+  /* If there is a pending comment flush it. This should be a whole-line comment 
+     that precedes the next command, not an end-of-line comment. */
+  if (g_commentBuffer.m_lth > 0)
+    {
+      burps(&g_output, g_commentBuffer.m_P);
+      burp_reset(&g_commentBuffer);
+    }
+#endif
 
   /* Read a single word from input.  Start by skipping blanks. */
   while ((character = shell_getc (1)) != EOF && shellblank (character))

@@ -99,12 +99,6 @@ static void increase_burp(burpT *burpP)
 		return;
 	}
 	max = burpP->m_max << 1;
-	if (max & 0x40000000) {
-		// Very serious problems trying to print whatever it might be..
-		fprintf(stderr,"Burp can't print\n");
-		assert(FALSE);
-		exit(1);
-	}
 	burpP->m_P = realloc(burpP->m_P, max);
 	if (!burpP->m_P) {
 		fprintf(stderr, "Burp can't realloc(%d)\n", max);

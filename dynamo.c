@@ -498,7 +498,7 @@ void write_function(char *first_line, ...) // first arg is broken out to comply 
     *pFmt = '\0';
 
     if (g_inside_class)
-        fprintf(outputF, "        #\n");
+        fprintf(outputF, "\n");
     va_start(lines, first_line);
     vfprintf(outputF, fmt, lines);
     va_end(lines);
