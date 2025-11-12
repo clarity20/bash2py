@@ -452,7 +452,9 @@ inputunit:	simple_list simple_list_terminator
 			  /* Case of regular command, but not a very
 			     interesting one.  Return a NULL command. */
 			  global_command = (COMMAND *)NULL;
+#ifdef BASH2PY
 			  if (g_commentBuffer.m_lth == 0) burpc(&g_commentBuffer, '\n');
+#endif
 			  if (parser_state & PST_CMDSUBST)
 			    parser_state |= PST_EOFTOKEN;
 			  YYACCEPT;
