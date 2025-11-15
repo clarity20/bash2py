@@ -21,6 +21,8 @@
 %{
 #include "config.h"
 
+#ifdef BASH2PY
+
 #include "bashtypes.h"
 #include "bashansi.h"
 
@@ -56,8 +58,6 @@
 #include "builtins/builtext.h"
 
 #include "shmbutil.h"
-
-#ifdef BASH2PY
 
 #if defined (READLINE)
 #  include "bashline.h"
