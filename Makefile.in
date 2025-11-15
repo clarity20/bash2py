@@ -423,7 +423,7 @@ LIBRARY_LDFLAGS = $(READLINE_LDFLAGS) $(HISTORY_LDFLAGS) $(GLOB_LDFLAGS) \
 #
 
 # The main source code for the Bourne Again SHell.
-CSOURCES = shell.c eval.c parse.y general.c make_cmd.c print_cmd.c y.tab.c \
+CSOURCES = shell.c eval.c b2p_parse.y general.c make_cmd.c print_cmd.c y.tab.c \
        burp.c dynamo.c translate_expr.c fix_string.c translate.c \
 	   dispose_cmd.c execute_cmd.c variables.c $(GLOBC) version.c \
 	   expr.c copy_cmd.c flags.c subst.c hashcmd.c hashlib.c mailcheck.c \
@@ -619,9 +619,9 @@ ${GRAM_H}:	y.tab.h
 		cmp -s $@ y.tab.h 2>/dev/null || cp -p y.tab.h $@; \
 	fi
 
-y.tab.c: parse.y
+y.tab.c: b2p_parse.y
 #	-if test -f y.tab.h; then mv -f y.tab.h old-y.tab.h; fi
-	$(YACC) -d $(srcdir)/parse.y
+	$(YACC) -d $(srcdir)/b2p_parse.y
 	touch parser-built
 #	-if cmp -s old-y.tab.h y.tab.h; then mv old-y.tab.h y.tab.h; else cp -p y.tab.h ${GRAM_H}; fi
 
