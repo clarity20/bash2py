@@ -2714,10 +2714,18 @@ discard_until (character)
      int character;
 {
   int c;
+  _BOOL captureComment = FALSE;
 
-  burpc(&g_commentBuffer, '#');
-  while ((c = shell_getc (0)) != EOF) {
+  c = shell_getc(0);
+  captureComment = (c != '!');   // filter out the shebang line
+
+  if (captureComment) {
+    burpc(&g_commentBuffer, '#');
     burpc(&g_commentBuffer, (char)c);
+  }
+
+  while ((c = shell_getc (0)) != EOF) {
+    if (captureComment) burpc(&g_commentBuffer, (char)c);
     if (c == character) {
       break;
   } }
