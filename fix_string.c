@@ -180,90 +180,78 @@ static void emit_hex(int c)
 
 // Try to decide if the string is an integer:
 
-char * integerStringOrEmpty(char *startP)
+char * integerStringOrEmpty(char *inputString)
 {
-	static char	temp[32];
+	static char workingString[32];
+	char valid_digits[16];
 
-	char *P, *P1, *endP;
-	int  base, value, c;
+	char *readerP, *writerP, *endP;
+	int  base, c, num_valid;
 
-	P1   = temp;
-	endP = temp + sizeof(temp) - 1;
+	memset(workingString, '\0', sizeof(workingString));
+	writerP = workingString;
+	endP = workingString + sizeof(workingString) - 1;
 
-	// String rubbish from input
-
-	for (P = startP; c = *P; ++P) {
-		switch (c) {
-		case START_QUOTE:
-		case END_QUOTE:
-		case '"':
+	// Filter out quotes and backslashes by walking reader & writer ptrs along the string
+	for (readerP = inputString; c = *readerP; ++readerP) {
+		if (c=='"' || c==START_QUOTE || c==END_QUOTE)
 			continue;
-		case '\\':
-			if (P[1]) {
-				c = *++P;
-			}
-			break;
+
+		if (c=='\\' && readerP[1])
+		    c = *++readerP;
+
+		if (endP <= writerP) {
+			log_info("integerStringOrEmpty: input string too long");
+			return NULL;
 		}
-		if (endP <= P1) {
-			return FALSE;
-		}
-		*P1++ = c;
+
+		*writerP++ = c;
 	}
-	*P1 = '\0';
+	*writerP = '\0';
 		
+	if (*workingString == '\0') {
+		log_info("integerStringOrEmpty: Input string is empty");
+		return NULL;
+	}
+
+	// Accept a leading + or - sign
 	base = 10;
-	P    = temp;
-	switch (*P) {
-	case '\0':
-		return FALSE;
-	case '-':
-	case '+':
-		if (!P[1]) {
-			return FALSE;
+	readerP    = workingString;  // N.B. reseat reader to the working string
+	if (strchr("+-", *readerP)) {
+		if (!readerP[1]) {
+			return NULL;
 		}
-		++P;
-		break;
+		++readerP;
 	}
 
-	if (*P == '0') {
-		switch (P[1]) {
-		case 'x':
-		case 'X':
-			P += 2;
-			if (!*P) {
-				return FALSE;
+	// Detect hex/octal indicators. Dispense with hex strings.
+	if (*readerP == '0') {
+		if (strchr("Xx", readerP[1])) {   // hex
+			readerP += 2;
+			if (!*readerP) {
+				return NULL;
 			}
-			value = read_hex(&P, sizeof(temp));
-			if (*P) {
-				return FALSE;
+			read_hex(&readerP, sizeof(workingString));
+			if (*readerP) {
+				return NULL;
 			}
-			return temp;
-		default:
+			return workingString;
+		}
+		else {   // octal
 			base = 8;
-			break;
-	}	}
-
-	for (; ; ++P) {
-		switch (c = *P) {
-		case '\0':
-			return temp;
-		case '9':
-		case '8':
-			if (base < 10) {
-				return FALSE;
-			}
-		case '7':
-		case '6':
-		case '5':
-		case '4':
-		case '3':
-		case '2':
-		case '1':
-		case '0':
-			continue;
 		}
-		return FALSE;
 	}
+
+	// Scan the string and return it. Any non-digit causes NULL return.
+	strcpy(valid_digits,"0123456789"); valid_digits[base] = '\0';
+	num_valid = strspn(readerP, valid_digits);
+	if (num_valid != strlen(readerP))
+	{
+//		log_info("integerStringOrEmpty: Invalid digit %c for base-%d number.", readerP[num_valid], base);
+		return NULL;
+	}
+	return workingString;
+
 }
 
 /* Initialise starting g_buffer with content of stringP */
