@@ -180,7 +180,7 @@ static void emit_hex(int c)
 
 // Try to decide if the string is an integer:
 
-char * isInteger(char *startP)
+char * integerStringOrEmpty(char *startP)
 {
 	static char	temp[32];
 
@@ -509,7 +509,7 @@ static void emitQuotedString(char *startP)
 }
 
 // forward declaration
-static char *emitSpecial1(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP);
+static char *emit_enclosed_subexpr(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP);
 
 static char * emitSimpleVariable(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 {
@@ -638,7 +638,7 @@ static char * emitString(char *startP, const char *terminatorsP, int in_quotes)
 		if (P != startP) {
 			burpc(&g_new, '+');	
 		}
-		endP = emitSpecial1(P, in_quotes, FIX_STRING, &got);
+		endP = emit_enclosed_subexpr(P, in_quotes, FIX_STRING, &got);
 		if (endP) {
 			is_inside_quotes = FALSE;
 			P = endP - 1;
@@ -855,7 +855,7 @@ done:
 		for (; ; ++endP) {
 			c = *endP;
 			offset = g_new.m_lth;
-			P = emitSpecial1(endP, in_quotes, want, &got);
+			P = emit_enclosed_subexpr(endP, in_quotes, want, &got);
 			if (P) {
 				endP = P - 1;
 				continue;
@@ -906,7 +906,7 @@ emitDollarExpression(char *startP, int in_quotes, fix_typeE want, fix_typeE *got
 		if (!isspace(c)) {
 			is_blank = FALSE;
 			offset = g_new.m_lth;
-			endP = emitSpecial1(P, in_quotes, FIX_INT, &got);
+			endP = emit_enclosed_subexpr(P, in_quotes, FIX_INT, &got);
 			if (endP) {
 				P = endP - 1;
 				continue;
@@ -960,7 +960,7 @@ done:
 		// Otherwise we will be translating Python output instead of the Bash
 		if (g_dollar_expr_nesting_level == 1) {
 			// Do allow array
-			P1 = translate_expression(g_new.m_P + start, TRUE);
+			P1 = translate_arithmetic_expr(g_new.m_P + start, TRUE);
             if (!P1) {
 				log_return_msg("Early exit after translation");
 				return NULL;
@@ -1018,7 +1018,7 @@ static char * emitTilde(char *startP, int in_quotes, fix_typeE want, fix_typeE *
 			in_string = FALSE;
 		}
 		burpc(&g_new, '+');
-		endP = emitSpecial1(P, in_quotes, FIX_STRING, &got);
+		endP = emit_enclosed_subexpr(P, in_quotes, FIX_STRING, &got);
 		if (endP) {
 			P = endP - 1;
 			continue;
@@ -1056,12 +1056,12 @@ done:
 // variable names following $ or ${, dispatches each to their appropriate handler,
 // and attempts a type-fixing of the result
 
-static char * emitSpecial1(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
+static char * emit_enclosed_subexpr(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 {
 	char *endP, *P;
 	int	 c, c1, start;
 	
-	log_enter("emitSpecial1 (startP=%q, in_quotes=%d, want=%t)", startP, in_quotes, want);
+	log_enter("emit_enclosed_subexpr (startP=%q, in_quotes=%d, want=%t)", startP, in_quotes, want);
 
 	endP   = NULL;
 	start  = g_new.m_lth;
@@ -1142,7 +1142,7 @@ static char * emitSpecial1(char *startP, int in_quotes, fix_typeE want, fix_type
 	return endP;
 }
 
-// emitSpecial(): Just a wrapper for emitSpecial1()
+// emitSpecial(): Just a wrapper for emit_enclosed_subexpr()
 // Returns 0 if not a special
 
 static char * emitSpecial(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
@@ -1152,7 +1152,7 @@ static char * emitSpecial(char *startP, int in_quotes, fix_typeE want, fix_typeE
 	int			start;
 
 	burpc(&g_new, START_EXPAND);
-	endP  = emitSpecial1(startP, in_quotes, want, gotP);
+	endP  = emit_enclosed_subexpr(startP, in_quotes, want, gotP);
 	burpc(&g_new, END_EXPAND);
 	return endP;
 }
@@ -1245,7 +1245,7 @@ static fix_typeE combine_types(int offset, fix_typeE want_type, fix_typeE was_ty
 
 // substitute(): Opens the door to the emit...() family of string transformations
 // which can call each other in all kinds of ways to fully pythonize a bash value.
-// Compare to only_expand() which does the same but in a more restricted way
+// Compare to expand_without_substituting() which does the same but in a more restricted way
 // for FIX_EXPRESSIONs.
 
 /* Convert double quotes so that all non-escaped bracketting double quotes
@@ -1272,7 +1272,7 @@ static fix_typeE substitute(fix_typeE want)
 	switch (want) {
 	case FIX_INT:
 	case FIX_VAR:
-		if (P = isInteger(g_buffer.m_P)) {
+		if (P = integerStringOrEmpty(g_buffer.m_P)) {
 			burps(&g_new, P);
 			log_return_msg("%s = simple integer, nothing to substitute", P);
 			return FIX_INT;
@@ -1415,16 +1415,16 @@ done:
 }
 
 // Alternative to substitute() when we can't do any translation
-// because we will later be calling translate_expression
+// because we will later be calling translate_arithmetic_expr
 
-static void only_expand(void)
+static void expand_without_substituting(void)
 {
 	int 		i, c, offset;
 	char		*P, *P1;
 	fix_typeE	got1;
 	_BOOL		is_quoted;
 
-	if (P = isInteger(g_buffer.m_P)) {
+	if (P = integerStringOrEmpty(g_buffer.m_P)) {
 		burps(&g_new, P);
 		return;
 	}
@@ -1458,7 +1458,7 @@ static void only_expand(void)
 
 /* Avoid using keywords with special values in python but not in bash */
 
-static void rename_special(void)
+static void rename_keywords(void)
 {
 	int 	c, c1, lth, in_word;
 	char	*P, *P1;
@@ -1677,7 +1677,7 @@ static char * fix_string1(fix_typeE want, fix_typeE *gotP)
 	} else {
 		is_expression           = TRUE;
 		g_dollar_expr_nesting_level = 1;
-		only_expand();
+		expand_without_substituting();
 	}
 
 	// Everything has been written to g_new
@@ -1685,7 +1685,7 @@ static char * fix_string1(fix_typeE want, fix_typeE *gotP)
 	swap_burps(&g_buffer, &g_new);
 
 	compactWhiteSpace();
-	rename_special();
+	rename_keywords();
 finish:
 	unmarkQuotes(is_expression);
 	unescapeDollar();
@@ -1693,7 +1693,7 @@ finish:
 		char 		*translationP;
 
 		// Don't allow array
-		if (translationP = translate_expression(g_buffer.m_P, FALSE)) {
+		if (translationP = translate_arithmetic_expr(g_buffer.m_P, FALSE)) {
 			got         = FIX_EXPRESSION;
 			g_new.m_lth = 0;
 			burps(&g_new, translationP);
