@@ -1290,7 +1290,8 @@ static fix_typeE substitute(fix_typeE want)
 		case '?':
 		case '[':
 		    // Any unprotected globbing character should trigger file globbing
-			if (is_outside_quotes) is_file_expansion = TRUE;
+			if (is_outside_quotes && !strchr("$\\", *(P-1)))
+				is_file_expansion = TRUE;
 			break;
 		case '~':
 		case '$':
