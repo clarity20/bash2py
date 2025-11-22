@@ -178,7 +178,9 @@ static void emit_hex(int c)
 	burpc(&g_new, c1);
 }
 
-// Try to decide if the string is an integer:
+// If a string denotes an integer (hex, octal, decimal strings with or without sign or quotes all okay) 
+// then return a pointer to a "cleaner" version of the string, else return NULL.
+// If the "cleaner" string has any non-numeric content, return a NULL, so this is NOT like atoi().
 
 char * integerStringOrEmpty(char *inputString)
 {
@@ -279,8 +281,7 @@ static void string_to_buffer(const char *stringP)
 
 static int g_little_endian = -1;
 
-// Convert any single quotes in g_buffer to escaped double quotes in g_new ???
-// Strictly alphanum strings should not be changed. What about $$ strings ???
+// Convert any single quotes in g_buffer to escaped double quotes, using g_new as a temp.
 static void replaceSingleQuotes(void)
 {
 	int 	in_quotes;
@@ -289,22 +290,30 @@ static void replaceSingleQuotes(void)
 
 	in_quotes   = 0;
 	g_new.m_lth = 0;
+
 	for (P = g_buffer.m_P; c = *((unsigned char *) P); ++P) {
+
+		// The giant switch{...} manages state when special characters are seen
+		// The final burpc() copies the character
+
 		switch (c) {
 		case '"':
 			if (!in_quotes) {
-				in_quotes = c;   // found an opening double quote, remember it
+				in_quotes = c;   // remember opening double quote
 			} else if (in_quotes == c) {
-				in_quotes = 0;   // found a terminating double quote, toss it
+				in_quotes = 0;   // found a terminating double quote
 			} else {
-				burpc(&g_new, '\\');    // found a double quote inside a non-double quote
+				burpc(&g_new, '\\');    // escaped, dollared or strong-quoted double quote
 			}
 			break;
 		case '\'':
 			if (!in_quotes) {
-				in_quotes = c;    // found an opening single quote
-				c         = '"';
-			} else if (in_quotes == c || in_quotes == '$') {
+				in_quotes = c;    // remember opening single quote
+				c         = '"';  // but replace with double quote
+			} else if (in_quotes == c) {
+				in_quotes = 0;
+				c         = '"';    // replace closing single with double
+			} else if (in_quotes == '$') {
 				in_quotes = 0;
 				c         = '"';
 			}
@@ -465,7 +474,7 @@ static void replaceSingleQuotes(void)
 	swap_burps(&g_buffer, &g_new);
 }
 
-// emitQuoted(): Quotes the supplied string
+// emitQuoted(): Weak-quotes the supplied string into g_new
 static void emitQuotedString(char *startP)
 {
 	char *P;
@@ -478,6 +487,7 @@ static void emitQuotedString(char *startP)
 		switch (c) {
 		case '\0':
 			burpc(&g_new, '"');
+			log_return();
 			return;
 		case '\\':
 			burpc(&g_new, c);
@@ -1130,10 +1140,12 @@ static char * emit_enclosed_subexpr(char *startP, int in_quotes, fix_typeE want,
 	return endP;
 }
 
-// emitSpecial(): Just a wrapper for emit_enclosed_subexpr()
-// Returns 0 if not a special
+// emit_delimited(): A wrapper for emit_enclosed_subexpr()
+// that delimits one subexpression of a compound sequence like  ${foo}"bar"$@"bu'z'z"`cat x.in`
+// and is meant to be called repeatedly while traversing such a sequence.
+// Returns 0 if input is not a special expression
 
-static char * emitSpecial(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
+static char * emit_delimited(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 {
 	char		*endP;
 	fix_typeE 	got;
@@ -1286,7 +1298,7 @@ static fix_typeE substitute(fix_typeE want)
 		case '`':
 		    // We have a "special" character
 			//TODO:  Very bad!!!  quoted is not initialized! Compare to other invocations.
-			P1 = emitSpecial(P, quoted, want, &got1);
+			P1 = emit_delimited(P, quoted, want, &got1);
 			if (P1 && P1 != P) {
 				P   = --P1;
 				continue;
@@ -1340,7 +1352,7 @@ static fix_typeE substitute(fix_typeE want)
 			}
 			quote_removal = FALSE;
 			offset = g_new.m_lth;
-			P1 = emitSpecial(P, quoted, want1, &got1);
+			P1 = emit_delimited(P, quoted, want1, &got1);
 			if (P1 && P1 != P) {
 				got = combine_types(offset, want1, got, got1);
 				P   = --P1;
@@ -1421,7 +1433,7 @@ static void expand_without_substituting(void)
 	is_quoted = FALSE;
 	for (P = g_buffer.m_P; c = *P; ++P) {
 		offset = g_new.m_lth;
-		P1 = emitSpecial(P, is_quoted, FIX_EXPRESSION, &got1);
+		P1 = emit_delimited(P, is_quoted, FIX_EXPRESSION, &got1);
 		if (P1 && P1 != P) {
 			P   = --P1;
 			continue;
@@ -1640,9 +1652,17 @@ static void unescapeDollar(void)
 	 " indicating we are embedding the contents of this string inside popen
  */
 
-// fix_string1(): Topmost filter function after fixBraced() has peeled off any
+// fix_string1(): Second-highest filter function after fixBraced() has peeled off any
 // brace expressions, that is,  "{1..10}"  and  "foo{a,bbb,cc}bar"  stuff
-static char * fix_string1(fix_typeE want, fix_typeE *gotP)
+// N.B. The call chain is: fix_string()
+//             -> fixBraced()     // processes braces but leaves string entire
+//             -> fix_string1()
+//             -> [[ substitute() | expand_without() ]] // expand and [[ substitute | leave alone ]]
+//                                                      // and notes whether string is outer-quoted
+//             -> emit_enclosed_subexpr()    // delimits string with START/END_EXPAND
+//             -> emit_delimited()           // string gets stripped of its head:  ${ ` ~ $(( etc
+// Then the last of these plays volleyball with about six emit...() functions.
+static char fix_string1(fix_typeE want, fix_typeE *gotP)
 {
 	fix_typeE	got;
 	_BOOL		is_expression;
@@ -1660,28 +1680,27 @@ static char * fix_string1(fix_typeE want, fix_typeE *gotP)
 	burp_close(&g_new);
 
 	if (want != FIX_EXPRESSION) {
+		// Expand and substitute
 		is_expression           = FALSE;
 		g_dollar_expr_nesting_level = 0;
 		got = substitute(want);	
 	} else {
+	    // Expand only, will translate as a numeric expression in a moment
 		is_expression           = TRUE;
 		g_dollar_expr_nesting_level = 1;
 		expand_without_substituting();
 	}
 
-	// Everything has been written to g_new
-	// Make it look as if it never left g_buffer
-	swap_burps(&g_buffer, &g_new);
+	swap_burps(&g_buffer, &g_new);   // Move changes to the permanent buffer
 
 	compactWhiteSpace();
 	rename_keywords();
-finish:
+
 	unmarkQuotes(is_expression);
 	unescapeDollar();
 	if (is_expression) {
 		char 		*translationP;
 
-		// Don't allow array
 		if (translationP = translate_arithmetic_expr(g_buffer.m_P, FALSE)) {
 			got         = FIX_EXPRESSION;
 			g_new.m_lth = 0;
@@ -1825,7 +1844,7 @@ pass_through:
 	resultP = fix_string1(want, gotP);
 
 log_activate();
-	log_return_msg("Brace expr not detected, pass through to emitSpecial()");
+	log_return_msg("Brace expr not detected, pass through to delimitSpecialSubexpr()");
 	return resultP;
 }
 
@@ -1833,7 +1852,7 @@ log_activate();
 // Basically wraps fixBracedString(), which wraps ...
 char * fix_string(const char *stringP, fix_typeE want, fix_typeE *gotP)
 {
-	char *P;
+	char *P = NULL;
 
 	if (want == FIX_NONE || !*stringP) {
 		return (char *) stringP;
