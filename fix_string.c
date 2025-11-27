@@ -514,7 +514,7 @@ static void emitQuotedString(char *startP)
 // forward declaration
 static char *emit_enclosed_subexpr(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP);
 
-// emitSimpleVariable(): pythonifies nonbraced variables like $foo, $#, and $?
+// emitSimpleVariable(): pythonifies nonbraced variables like $foo, $#, and $?, writing to g_new
 static char * emitSimpleVariable(char *afterDollarP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 {
 	char		*P;
@@ -734,10 +734,10 @@ static char *findClosingBrace(char *buf)
 }
 
 // emitVariable(): Process variable names following $ or ${.  After the closing } is seen,
-// keep processing and 
-// Handles names having the indirection 
-// prefix "!" and/or a postfix in the set { [*] [@] :- := :+ :? } while handing off 
-// simpler variable name instances to emitSimpleVariable.
+// scan forward and recurse into emit_enclosed() to handle further special subexpressions.
+// This function handles names having the indirection prefix "!" and/or a postfix in the set
+//  [*] [@] :- := :+ :?  or one of the string operators  :  /  %  #
+// while handing off simpler variable name instances to emitSimpleVariable.
 // Any input text that follows } is then processed with nested calls to emitters as needed.
 // The input is a pointer to g_buffer[2], and the final result is written to g_new.
 
@@ -749,7 +749,7 @@ static char * emitVariable(char *vblNameP, _BOOL is_variable_name_braced, int in
 	fix_typeE	got;
     int is_colon_subrange = FALSE;
 
-	log_enter("emitVariable (g_buffer[vblNameP]=%q, is_braced=%b, in_quotes=%d, want=%t)",
+	log_enter("emitVariable (g_buffer[vblName]=%q, is_braced=%b, in_quotes=%d, want=%t)",
 			vblNameP, is_variable_name_braced, in_quotes, want);
 	start2P = NULL;
 	functionName = NULL;
@@ -854,98 +854,97 @@ static char * emitVariable(char *vblNameP, _BOOL is_variable_name_braced, int in
 					c = *afterVblName;
 					*afterVblName = '\0';
 					burp(&g_new,"GetValue(%s.val)", vblNameP);
-				    *afterVblName = c;
+					*afterVblName = c;
 					endP = afterVblName;
 					goto done;
 				}
 				else if (is_colon_subrange) {
 					char *tailP = start2P;
 					is_colon_subrange = FALSE;
+					{
+						//TODO Any extra considerations for array-type variables?
+						char *parameter1P, *parameter2P, *ogParameter1P;
+						char *intP1, *intP2;
+						int int1, int2;
+						char tmp[32];
+						burpT g_scratch0 = {0,0,0,0,0,0};
+						burpT g_scratch = {0,0,0,0,0,0};
+						burpT bufferBackup = {0,0,0,0,0,0};
 
-{
-    //TODO Any extra considerations for array-type variables?
-    char *parameter1P, *parameter2P, *ogParameter1P;
-    char *intP1, *intP2;
-    int int1, int2;
-    char tmp[32];
-    burpT g_scratch0 = {0,0,0,0,0,0};
-    burpT g_scratch = {0,0,0,0,0,0};
-    burpT bufferBackup = {0,0,0,0,0,0};
+						// Delimit the first parameter
+						parameter1P = start2P+1;            // go past ':' to the first parameter
+						//if (*parameter1P == ' ') parameter1P++;
+						if (*parameter1P == ':') {          // check for the form ${var::y}
+							// Transform into ${var:0:y}
+							burp_insert(&g_buffer, parameter1P-g_buffer.m_P, "0");
+						}
 
-    // Delimit the first parameter
-    parameter1P = start2P+1;            // go past ':' to the first parameter
-    if (*parameter1P == ':') {          // check for the form ${var::y}
-        // Transform into ${var:0:y}
-        burp_insert(&g_buffer, parameter1P-g_buffer.m_P, "0");
-    }
+						// Delimit the second parameter
+						parameter2P = skiparith(parameter1P, ':');  // go to next ':' (or the end)
+						if (*parameter2P == '\0')   // check for the form ${var:x} -- parameter2 is empty string
+						{
+							// Reseat both parameters in scratch buffers
+							endP = strrchr(parameter1P, '}');
+							assert(endP);
+							burp(&g_scratch0, "%.*s", (int)(endP-parameter1P), parameter1P);
+							burps(&g_scratch, parameter2P);
+							parameter1P = g_scratch0.m_P;
+							parameter2P = g_scratch.m_P;
+						}
+						else if (*parameter2P == ':') {          // check for forms  ${var:x:y}  and  ${var:x:}
+							// As above, reseat both parameters in scratch buffers
+							parameter2P++;
+							endP = findClosingBrace(parameter2P);   // forward search for closing '}'
+							assert(endP);
+							if (parameter2P == endP) {     // the form ${var:x:}
+								burp_insert(&g_buffer, (int)(parameter2P-g_buffer.m_P), "0");
+								endP++;
+							}
+							burp(&g_scratch0, "%.*s", (int)(parameter2P-parameter1P)-1, parameter1P);
+							burp(&g_scratch, "%.*s", (int)(endP-parameter2P), parameter2P);
+							parameter1P = g_scratch0.m_P;
+							parameter2P = g_scratch.m_P;
+						}
+						else goto done;         // unexpected behavior from skiparith(). Malformed input?
 
-    // Delimit the second parameter
-    parameter2P = skiparith(parameter1P, ':');  // go to next ':' (or the end)
-    if (*parameter2P == '\0')   // check for the form ${var:x} -- parameter2 is empty string
-    {
-        // Reseat both parameters in scratch buffers
-        endP = strrchr(parameter1P, '}');
-        assert(endP);
-        burp(&g_scratch0, "%.*s", (int)(endP-parameter1P), parameter1P);
-//        endP++; // The "emit...() volleyball algo" requires us to return a pointer no further than the last }
-//changes nothing. endP points to brace:        endP = g_buffer.m_P+(int)(endP-vblNameP+2);
-        burps(&g_scratch, parameter2P);
-        parameter1P = g_scratch0.m_P;
-        parameter2P = g_scratch.m_P;
-    }
-    else if (*parameter2P == ':') {          // check for forms  ${var:x:y}  and  ${var:x:}
-        // As above, reseat both parameters in scratch buffers
-        parameter2P++;
-        endP = findClosingBrace(parameter2P);   // forward search for closing '}'
-        assert(endP);
-        if (parameter2P == endP) {     // the form ${var:x:}
-            burp_insert(&g_buffer, (int)(parameter2P-g_buffer.m_P), "0");
-            endP++;
-        }
-        burp(&g_scratch0, "%.*s", (int)(parameter2P-parameter1P)-1, parameter1P);
-        burp(&g_scratch, "%.*s", (int)(endP-parameter2P), parameter2P);
-//        endP++;
-//changes nothing. endP points to brace:        endP = g_buffer.m_P+(int)(endP-vblNameP+2);
-        parameter1P = g_scratch0.m_P;
-        parameter2P = g_scratch.m_P;
-    }
-    else goto done;         // unexpected behavior from skiparith(). Malformed input?
+						intP1 = parameter1P ? integerStringOrEmpty(parameter1P) : NULL;
+						if (intP1) int1 = atoi(intP1);
+						intP2 = parameter2P ? integerStringOrEmpty(parameter2P) : NULL;
+						if (intP2) int2 = atoi(intP2);
 
-    intP1 = parameter1P ? integerStringOrEmpty(parameter1P) : NULL;
-    if (intP1) int1 = atoi(intP1);
-    intP2 = parameter2P ? integerStringOrEmpty(parameter2P) : NULL;
-    if (intP2) int2 = atoi(intP2);
+						// Back up the original buffer & reseat its internal pointers
+						burp(&bufferBackup, g_buffer.m_P);
+						vblNameP = bufferBackup.m_P + (vblNameP-g_buffer.m_P);
+						sprintf(tmp, ":%s", parameter1P);
+						ogParameter1P = strstr(bufferBackup.m_P, tmp) + 1;
 
-    // Back up the original buffer & reseat its internal pointers
-    burp(&bufferBackup, g_buffer.m_P);
-    vblNameP = bufferBackup.m_P + (vblNameP-g_buffer.m_P);
-//    endP = bufferBackup.m_P + (endP-g_buffer.m_P);
-    sprintf(tmp, ":%s", parameter1P);
-    ogParameter1P = strstr(bufferBackup.m_P, tmp) + 1;
+						/****  Construct the pythonic-style range expression ****/
 
-    /****  Construct the pythonic-style range expression ****/
+						// (1) Set up the preamble
+						burp(&g_new, "%.*s[", (ogParameter1P-vblNameP)-1, vblNameP);
 
-    // (1) Set up the preamble
-//    burp_reset(&g_buffer);
-    burp(&g_new, "%.*s[", (ogParameter1P-vblNameP)-1, vblNameP);
+						// (2) Set up the range, niceifying when there are numeric literals
+						if (intP1 && intP2) {
+							burp(&g_new, "%d:%d]", int1, (int2>0) ? int1+int2 : int2);
+						}
+						else if (intP1) {   // 7:   7:x+2
+							burp(&g_new, "%d:%s]", int1, (parameter2P ? parameter2P : ""));
+						}
+						else if (intP2) {
+							burp(&g_new, "%s:%d]", (parameter1P ? parameter1P : ""), int2);
+						}
+						else {   // Neither parameter is a numeric literal
+							if (!parameter1P) {
+								burp(&g_new, ":%s]", parameter2P);
+							} else if (!parameter2P) {
+								burp(&g_new, "%s:]", parameter1P);
+							} else {
+								burp(&g_new, "%s:%s+%s]", parameter1P, parameter1P, parameter2P);
+							}
+						}
 
-    // (2) Set up the range, niceifying when there are numeric literals
-    if (intP1 && intP2) {
-        burp(&g_new, "%d:%d]", int1, (int2>0) ? int1+int2 : int2);
-    }
-    else if (intP1) {   // 7:   7:x+2
-        burp(&g_new, "%d:%s]", int1, (parameter2P ? parameter2P : ""));
-    }
-    else if (intP2) {
-        burp(&g_new, "%s:%d]", (parameter1P ? parameter1P : ""), int2);
-    }
-    else {   // Neither parameter is a numeric literal
-        burp(&g_new, "%s:%s+%s]", parameter1P, parameter1P, parameter2P);
-    }
-
-//    burps(&g_new, g_buffer.m_P);
-    goto done;
-}
+						goto done;
+					}
 				}   // is_colon_subrange
 			}  // no helper function
 			else {  // helper function
@@ -972,7 +971,7 @@ done:
 	if (is_variable_name_braced) {
 		int offset;
 
-		is_array = (*endP == '[' || g_regmatch_special_case);    //TODO Here, endP = after_vbl_name
+		is_array = (*endP == '[' || g_regmatch_special_case);
 		if (is_array) {
 			*gotP = FIX_VAR;
 			if (g_regmatch_special_case) {
@@ -1425,19 +1424,6 @@ static fix_typeE substitute(fix_typeE want)
 			if (is_outside_quotes && !(*(P-1)=='$' || *(P-1)=='\\'))
 				is_file_expansion = TRUE;
 			break;
-		case '~':
-		case '$':
-		case '`':
-			// We have a special subexpression. Put an expanded & delimited version in g_new
-			P1 = emit_delimited(P, quoted, want, &got1);
-			// Jump past the subexpression
-			if (P1 && P1 != P) {
-				P   = --P1;
-				continue;
-			}
-			// Restore to where we were
-			burp_reset(&g_new);   //TODO This wipes out the nice new g_buffer we just built in emit_delimited()
-			break;
 		case '"':
 			is_outside_quotes = !is_outside_quotes;
 			break;
@@ -1448,14 +1434,20 @@ static fix_typeE substitute(fix_typeE want)
 			}
 		}
 	}
-//	g_new.m_lth = offset;    //TODO This wipes out the g_new we just built... for no reason?
 
 	got              = FIX_NONE;   //TODO Try initting to STRING. It looks like NONE should NEVER be used
 	startquote_offset = NOT_QUOTED;
 	quote_removal    = FALSE;
 	want1            = (is_file_expansion ? FIX_STRING : want);
 
-	for (P = g_buffer.m_P; ; ++P) {  //TODO Having expanded g_buffer into g_new above, shouldn't we stick to g_new here?
+	// The strange treatment of quotes in the following code is meant to trade bash quoting for python quoting.
+	// Since for example,   echo ${abc}de"fg"hi     would translate to     print(str(abc)+"defghi")
+	// the strategy is to strip the quotes from literal text in the input, determine where python
+	// needs them, and insert new ones there. To keep track of this we use the markers {START/END}_QUOTE.
+	// Meanwhile we cannot just toss the quotes from the special bash variable "$*".
+	// That's what 'quoted' is used to keep track of as you can see in emitSimpleVariable()..
+
+	for (P = g_buffer.m_P; ; ++P) {
 
 		c = *P;
 
@@ -1465,24 +1457,25 @@ static fix_typeE substitute(fix_typeE want)
 			continue;
 		}
 
-		switch (c) {    //TODO: Wait a minute. Shouldnt these chars have been removed from g_new by the first loop?
-		                //TODO: This is ridiculous. What do the earlier versions of bash2py do?
+		switch (c) {
 		case '\0':
 		case '~':
 		case '$':
 		case '`':
-			// We have a "special" character or the null terminator. Reset quoting & combine types (looking back to startquote).
-			// Substitute the substring. Combine types (right here at m_lth).
+			// We have a "special" character or the null terminator.
 			if (startquote_offset == NOT_QUOTED) {
-				quoted = quote_removal;    // TODO This eats my '$' char so combine_types was not being run, but catches my '\0'
+				quoted = quote_removal;
 			} else {
-				burpc(&g_new, END_QUOTE);  // N.B. This is the counterpart to START_QUOTE 25 lines below
+				// We are in a START_QUOTE-markedup section and have reached its end. Close it with END_QUOTE.
+				burpc(&g_new, END_QUOTE);
+
+				// Combine the type of the QUOTE-markup section with the type of whatever precedes it
 				got1 = FIX_STRING;
-				got = combine_types(startquote_offset, want1, got, got1);  // (offset, want_type, was_type, new_type);
+				got = combine_types(startquote_offset, want1, got, got1);
 				startquote_offset = NOT_QUOTED;
 				quoted = 1;
 			}
-			if (!c) {
+			if (!c) {  // '\0' means we are done processing
 				goto done;
 			}
 			quote_removal = FALSE;
@@ -1491,17 +1484,18 @@ static fix_typeE substitute(fix_typeE want)
 			if (P1 && P1 != P) {
 				got = combine_types(offset, want1, got, got1);
 				P   = --P1;
-				continue;    // N.B. continue changes the flow.
+				continue;    // N.B. this changes the control flow.
 			}
-			// Restore to where we were
+			// Restore to where we were. //TODO is this always correct even if emit_delim() changews the buffer length?
 			g_new.m_lth = offset;
 			g_new.m_P[offset] = '\0';
 		}
 
 		quote_removal = FALSE;
 
-		// Saw some normal character  //TODO: Best if the new subsequence registers as a FIX_STRING?
+		// Saw some normal character
 		if (startquote_offset == NOT_QUOTED) {
+			// Set the START marker for a new subsection of text that will need quoting
 			startquote_offset = g_new.m_lth;
 			burpc(&g_new, START_QUOTE);
 		}
@@ -1510,6 +1504,7 @@ static fix_typeE substitute(fix_typeE want)
 				burpc(&g_new, '\\');
 				c = *++P;
 		}	}
+
 		burpc(&g_new, c);
 	}
 done:
@@ -1936,7 +1931,7 @@ expand_brace_expr:
 	resultP = NULL;
 	arrayPP = brace_expand((char *) startP);   // calling bash API here
 	if (arrayPP) {
-	    // Transform array into a pythonic list: [x, y, z]
+	    // Transform array into a pythonic list: [x, y, z] in g_braced
 		if (arrayPP[0]) {
 			fix_typeE	single_want_type;
 			int			i;
