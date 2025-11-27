@@ -9,6 +9,8 @@
 #include "burp.h"
 #include "fix_string.h"
 
+extern char *skiparith __P((char *, int));
+
 translateT	g_translate;
 
 burpT g_buffer = {0,0,0,0,0,0};
@@ -24,6 +26,9 @@ int g_rc_identifier   = 0;
 static int g_dollar_expr_nesting_level = 0;
 
 extern	void seen_global(const char *nameP, _BOOL local);
+
+static char * emitSpecialSubexpression(char *startP, fix_typeE want, fix_typeE *gotP);
+static char * fixBracedString(const char *startP, fix_typeE want, fix_typeE *gotP);
 
 char g_regmatch_var_name[] = "BASH_REMATCH";
 
@@ -228,7 +233,7 @@ char * integerStringOrEmpty(char *inputString)
 
 	// Detect hex/octal indicators. Dispense with hex strings.
 	if (*readerP == '0') {
-		if (strchr("Xx", readerP[1])) {   // hex
+		if (toupper(readerP[1]) == 'X') {   // hex
 			readerP += 2;
 			if (!*readerP) {
 				return NULL;
@@ -509,15 +514,16 @@ static void emitQuotedString(char *startP)
 // forward declaration
 static char *emit_enclosed_subexpr(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP);
 
-static char * emitSimpleVariable(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
+// emitSimpleVariable(): pythonifies nonbraced variables like $foo, $#, and $?
+static char * emitSimpleVariable(char *afterDollarP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 {
-	char		*P, *endP;
+	char		*P;
 	int			c, len;
 	fix_typeE	got;
 
-	got = FIX_NONE;
+	got = FIX_NONE;  // Logically guaranteed to change to not-NONE
 
-	P = startP;
+	P = afterDollarP;
 	switch (c = *P++) {
 	case '*':
 		g_translate.m_expand.m_star = TRUE;
@@ -591,10 +597,11 @@ static char * emitSimpleVariable(char *startP, int in_quotes, fix_typeE want, fi
 		break;
 	default:
 		if (c != '_' && !isalpha(c)) {
+			// Invalid character at beginning of variable name
 			return NULL;
 		}
 		len = strlen(g_regmatch_var_name);
-		if (0 == strncmp(startP, g_regmatch_var_name, len)) {
+		if (0 == strncmp(afterDollarP, g_regmatch_var_name, len)) {
 		    g_regmatch_special_case = TRUE;
 		    burps(&g_new, "match_object.group");
 			P += len-1;
@@ -678,15 +685,15 @@ done:
 	return P;
 }
 
-static char * emitFunction(char *nameP, char *parm1P, char *parm2P, _BOOL indirect, int in_quotes)
+static char * emitFunction(char *functionName, char *parm1P, char *parm2P, _BOOL indirect, int in_quotes)
 {
 	char 		*endP;
 	int	 		offset;
 
-	log_enter("emitFunction (nameP=%q, parm1P=%q, parm2P=%q, indirect=%b, in_quotes=%d)",
-			nameP, parm1P, parm2P, indirect, in_quotes);
+	log_enter("emitFunction (functionName=%q, parm1P=%q, parm2P=%q, indirect=%b, in_quotes=%d)",
+			functionName, parm1P, parm2P, indirect, in_quotes);
 
-	burp(&g_new, "%s(", nameP);
+	burp(&g_new, "%s(", functionName);
 	if (indirect) {
 		g_translate.m_function.m_get_value = TRUE;
 		burp(&g_new, "GetValue(%s.val)", parm1P);
@@ -709,32 +716,56 @@ static char * emitFunction(char *nameP, char *parm1P, char *parm2P, _BOOL indire
 	return endP;
 }
 
-// Process variable names following $ or ${. Handles variables having the indirection 
-// prefix "!" and/or a postfix in the set { [*] [@] :- := :+ :? } while handing off 
-// simpler variable name instances to emitSimpleVariable, then finally some postprocessing.
-
-static char * emitVariable(char *startP, _BOOL is_braced, int in_quotes, fix_typeE want, fix_typeE *gotP)
+static char *findClosingBrace(char *buf)
 {
-	char		*P, *endP, *functionP, *end_start1P, *start2P;
+    char *c = buf;
+    int brace = 0;
+    while (*c)
+    {
+        if (*c == '{' && *(c-1)!='\\') brace++;
+        else if (*c == '}' && *(c-1)!='\\') {
+            if(--brace == -1) {
+                break;
+            }
+        }
+        c++;
+    }
+    return c;
+}
+
+// emitVariable(): Process variable names following $ or ${.  After the closing } is seen,
+// keep processing and 
+// Handles names having the indirection 
+// prefix "!" and/or a postfix in the set { [*] [@] :- := :+ :? } while handing off 
+// simpler variable name instances to emitSimpleVariable.
+// Any input text that follows } is then processed with nested calls to emitters as needed.
+// The input is a pointer to g_buffer[2], and the final result is written to g_new.
+
+static char * emitVariable(char *vblNameP, _BOOL is_variable_name_braced, int in_quotes, fix_typeE want, fix_typeE *gotP)
+{
+	char		*P, *endP, *functionName, *afterVblName, *start2P;
 	int			c, is_array;
 	_BOOL		is_indirect;
 	fix_typeE	got;
+    int is_colon_subrange = FALSE;
 
-	log_enter("emitVariable (startP=%q, is_braced=%b, in_quotes=%d, want=%t)",
-			startP, is_braced, in_quotes, want);
-	start2P     = 0;
-	functionP   = 0;
+	log_enter("emitVariable (g_buffer[vblNameP]=%q, is_braced=%b, in_quotes=%d, want=%t)",
+			vblNameP, is_variable_name_braced, in_quotes, want);
+	start2P = NULL;
+	functionName = NULL;
 
 	*gotP = FIX_STRING;
 
-	if (is_braced) {
+	if (is_variable_name_braced) {
 
-		is_indirect = (*startP == '!');
+		is_indirect = (*vblNameP == '!');
 		if (is_indirect) {
-			++startP;
+			++vblNameP;
 		}
-		for (start2P = startP; ; ++start2P) {
-			end_start1P = start2P;
+		for (start2P = vblNameP; ; ++start2P) {
+			afterVblName = start2P;
+
+			// (1) Use the symbol seen to choose a helper function
 			switch(c = *start2P) {
 			case '\0':
 				log_return_msg("Early return, null character");
@@ -742,14 +773,14 @@ static char * emitVariable(char *startP, _BOOL is_braced, int in_quotes, fix_typ
 			case '*':
 				if (is_indirect == TRUE && start2P[1] == '}') { 	// ${!prefix*}
 					g_translate.m_expand.m_prefixStar = TRUE;
-					functionP = "Expand.prefixStar";
+					functionName = "Expand.prefixStar";
 					is_indirect = FALSE;
 				}
 				break;
 			case '@': 					// ${!prefix@}
 				if (is_indirect == TRUE && start2P[1] == '}') {
 					g_translate.m_expand.m_prefixAt = TRUE;
-					functionP = "Expand.prefixAt";
+					functionName = "Expand.prefixAt";
 					is_indirect = FALSE;
 				}
 				break;
@@ -759,13 +790,13 @@ static char * emitVariable(char *startP, _BOOL is_braced, int in_quotes, fix_typ
 				if (is_indirect == TRUE) {
 					if (!strncmp(start2P, "[*]}", 4)) {	// ${!name[*]}
 						g_translate.m_expand.m_indicesStar = TRUE;
-						functionP = "Expand.indicesStar";
+						functionName = "Expand.indicesStar";
 						is_indirect = FALSE;
 						start2P  += 2;
 					}
 					if (!strncmp(start2P, "[@]}", 4)) {	// ${!name[@]}
 						g_translate.m_expand.m_indicesAt = TRUE;
-						functionP = "Expand.indicesAt";
+						functionName = "Expand.indicesAt";
 						is_indirect = FALSE;
 						start2P  += 2;
 					}
@@ -774,61 +805,156 @@ static char * emitVariable(char *startP, _BOOL is_braced, int in_quotes, fix_typ
 				break;
 			case '-':
 				g_translate.m_expand.m_minus = TRUE;
-				functionP = "Expand.minus";
+				functionName = "Expand.minus";
 				break;
 			case '=':
 				g_translate.m_expand.m_eq = TRUE;
-				functionP = "Expand.eq";
+				functionName = "Expand.eq";
 				break;
 			case '?':
 				g_translate.m_expand.m_qmark = TRUE;
-				functionP = "Expand.qmark";
+				functionName = "Expand.qmark";
 				break;
 			case '+':
 				g_translate.m_expand.m_plus = TRUE;
-				functionP = "Expand.plus";
+				functionName = "Expand.plus";
 				break;
 			case ':':
 				switch (*++start2P) {
 				case '-':
 					g_translate.m_expand.m_colon_minus = TRUE;
-					functionP = "Expand.colonMinus";
+					functionName = "Expand.colonMinus";
 					break;
 				case '=':
 					g_translate.m_expand.m_colon_eq = TRUE;
-					functionP   = "Expand.colonEq";
+					functionName   = "Expand.colonEq";
 					break;
 				case '?':
 					g_translate.m_expand.m_colon_qmark = TRUE;
-					functionP   = "Expand.colonQmark";
+					functionName   = "Expand.colonQmark";
 					break;
 				case '+':
 					g_translate.m_expand.m_colon_plus = TRUE;
-					functionP = "Expand.colonPlus";
+					functionName = "Expand.colonPlus";
 					break;
 				default:
+				    // The character after : is none of the above.
+				    // Assume it's a subrange expr like ${x:y:z}
+					is_colon_subrange = TRUE;
 					--start2P;
 				}
 				break;
 			default:
 				continue;
 			}
-			if (!functionP) {
+
+			// (2) Indirect references and string operations do not use functions
+			if (!functionName) {
 				if (is_indirect) {
-					c = *end_start1P;
-					*end_start1P = '\0';
-					burp(&g_new,"GetValue(%s.val)", startP);
-				    *end_start1P = c;
-					endP = end_start1P;
+					c = *afterVblName;
+					*afterVblName = '\0';
+					burp(&g_new,"GetValue(%s.val)", vblNameP);
+				    *afterVblName = c;
+					endP = afterVblName;
 					goto done;
 				}
-			} else {
+				else if (is_colon_subrange) {
+					char *tailP = start2P;
+					is_colon_subrange = FALSE;
+
+{
+    //TODO Any extra considerations for array-type variables?
+    char *parameter1P, *parameter2P, *ogParameter1P;
+    char *intP1, *intP2;
+    int int1, int2;
+    char tmp[32];
+    burpT g_scratch0 = {0,0,0,0,0,0};
+    burpT g_scratch = {0,0,0,0,0,0};
+    burpT bufferBackup = {0,0,0,0,0,0};
+
+    // Delimit the first parameter
+    parameter1P = start2P+1;            // go past ':' to the first parameter
+    if (*parameter1P == ':') {          // check for the form ${var::y}
+        // Transform into ${var:0:y}
+        burp_insert(&g_buffer, parameter1P-g_buffer.m_P, "0");
+    }
+
+    // Delimit the second parameter
+    parameter2P = skiparith(parameter1P, ':');  // go to next ':' (or the end)
+    if (*parameter2P == '\0')   // check for the form ${var:x} -- parameter2 is empty string
+    {
+        // Reseat both parameters in scratch buffers
+        endP = strrchr(parameter1P, '}');
+        assert(endP);
+        burp(&g_scratch0, "%.*s", (int)(endP-parameter1P), parameter1P);
+//        endP++; // The "emit...() volleyball algo" requires us to return a pointer no further than the last }
+//changes nothing. endP points to brace:        endP = g_buffer.m_P+(int)(endP-vblNameP+2);
+        burps(&g_scratch, parameter2P);
+        parameter1P = g_scratch0.m_P;
+        parameter2P = g_scratch.m_P;
+    }
+    else if (*parameter2P == ':') {          // check for forms  ${var:x:y}  and  ${var:x:}
+        // As above, reseat both parameters in scratch buffers
+        parameter2P++;
+        endP = findClosingBrace(parameter2P);   // forward search for closing '}'
+        assert(endP);
+        if (parameter2P == endP) {     // the form ${var:x:}
+            burp_insert(&g_buffer, (int)(parameter2P-g_buffer.m_P), "0");
+            endP++;
+        }
+        burp(&g_scratch0, "%.*s", (int)(parameter2P-parameter1P)-1, parameter1P);
+        burp(&g_scratch, "%.*s", (int)(endP-parameter2P), parameter2P);
+//        endP++;
+//changes nothing. endP points to brace:        endP = g_buffer.m_P+(int)(endP-vblNameP+2);
+        parameter1P = g_scratch0.m_P;
+        parameter2P = g_scratch.m_P;
+    }
+    else goto done;         // unexpected behavior from skiparith(). Malformed input?
+
+    intP1 = parameter1P ? integerStringOrEmpty(parameter1P) : NULL;
+    if (intP1) int1 = atoi(intP1);
+    intP2 = parameter2P ? integerStringOrEmpty(parameter2P) : NULL;
+    if (intP2) int2 = atoi(intP2);
+
+    // Back up the original buffer & reseat its internal pointers
+    burp(&bufferBackup, g_buffer.m_P);
+    vblNameP = bufferBackup.m_P + (vblNameP-g_buffer.m_P);
+//    endP = bufferBackup.m_P + (endP-g_buffer.m_P);
+    sprintf(tmp, ":%s", parameter1P);
+    ogParameter1P = strstr(bufferBackup.m_P, tmp) + 1;
+
+    /****  Construct the pythonic-style range expression ****/
+
+    // (1) Set up the preamble
+//    burp_reset(&g_buffer);
+    burp(&g_new, "%.*s[", (ogParameter1P-vblNameP)-1, vblNameP);
+
+    // (2) Set up the range, niceifying when there are numeric literals
+    if (intP1 && intP2) {
+        burp(&g_new, "%d:%d]", int1, (int2>0) ? int1+int2 : int2);
+    }
+    else if (intP1) {   // 7:   7:x+2
+        burp(&g_new, "%d:%s]", int1, (parameter2P ? parameter2P : ""));
+    }
+    else if (intP2) {
+        burp(&g_new, "%s:%d]", (parameter1P ? parameter1P : ""), int2);
+    }
+    else {   // Neither parameter is a numeric literal
+        burp(&g_new, "%s:%s+%s]", parameter1P, parameter1P, parameter2P);
+    }
+
+//    burps(&g_new, g_buffer.m_P);
+    goto done;
+}
+				}   // is_colon_subrange
+			}  // no helper function
+			else {  // helper function
 				assert(start2P);
 				++start2P;
-				c = *end_start1P;
-				*end_start1P = '\0';
-				endP = emitFunction(functionP, startP, start2P, is_indirect, in_quotes);
-				*end_start1P = c;
+				c = *afterVblName;
+				*afterVblName = '\0';
+				endP = emitFunction(functionName, vblNameP, start2P, is_indirect, in_quotes);
+				*afterVblName = c;
 				if (!endP) {
 					log_return_msg("Early return, null character");
 					return NULL;
@@ -836,13 +962,17 @@ static char * emitVariable(char *startP, _BOOL is_braced, int in_quotes, fix_typ
 				goto done;
 			}
 			break;
-	}	}
-	endP = emitSimpleVariable(startP, in_quotes, want, gotP);
+		}
+	}
+
+    // N.B. Because of gotos in the code above, this only runs for unbraced variables like $foo:
+	endP = emitSimpleVariable(vblNameP, in_quotes, want, gotP);
+
 done:
-	if (is_braced) {
+	if (is_variable_name_braced) {
 		int offset;
 
-		is_array = (*endP == '[' || g_regmatch_special_case);
+		is_array = (*endP == '[' || g_regmatch_special_case);    //TODO Here, endP = after_vbl_name
 		if (is_array) {
 			*gotP = FIX_VAR;
 			if (g_regmatch_special_case) {
@@ -850,6 +980,8 @@ done:
 				*endP = '(';
 			}
 		}
+
+		// Attend to everything up to the closing '}'
 		for (; ; ++endP) {
 			c = *endP;
 			offset = g_new.m_lth;
@@ -858,26 +990,26 @@ done:
 				endP = P - 1;
 				continue;
 			}
-			// Undo emission
-			g_new.m_lth = offset;
+			g_new.m_lth = offset; // Undo emission
 			switch (c) {
-			case '\0':
-				log_return_msg("Early return, null character");
-				return NULL;
-			case '}':
-				++endP;
-				goto finish;
-			case ']':
-				if (is_array) {
-					// We don't know what an array is of..
-					burps(&g_new, g_regmatch_special_case ? ")" : "]");
-					is_array = FALSE;
-					g_regmatch_special_case = FALSE;
-					continue;
+				case '\0':
+					log_return_msg("Early return, null character");
+					return NULL;
+				case '}':
+					++endP;
+					goto finish;  // the single "right" way to end this loop
+				case ']':
+					if (is_array) {
+						// We don't know what an array is of..
+						burps(&g_new, g_regmatch_special_case ? ")" : "]");
+						is_array = FALSE;
+						g_regmatch_special_case = FALSE;
+						continue;
+					}
 				}
-			}
 			burpc(&g_new, c);
-	}	}
+		}
+	}
 finish:
 	log_return();
 	return endP;
@@ -1024,15 +1156,16 @@ static char * emitTilde(char *startP, int in_quotes, fix_typeE want, fix_typeE *
 		// Undo emission
 		g_new.m_lth = offset;
 		switch (c = *P) {
-		case '_':
-		case '-':
-		case '.':
-		case '/':
-			break;
-		default:
-			if (!isalnum(c)) {
-				goto done;
-		}	}
+			case '_':
+			case '-':
+			case '.':
+			case '/':
+				break;
+			default:
+				if (!isalnum(c)) {
+					goto done;
+			}
+		}
 		if (!in_string) {
 			burps(&g_new, "+\"");
 			in_string = TRUE;
@@ -1051,8 +1184,8 @@ done:
 }
 
 // Identifies tilde, backtick, subshell and double-paren expressions as well as 
-// variable names following $ or ${, dispatches each to their appropriate handler,
-// and attempts a type-fixing of the result
+// braced & unbraced variable exprs ${x} or $x , dispatches each to their appropriate handler,
+// and attempts a type-fixing of the result. The results are written to g_new.
 
 static char * emit_enclosed_subexpr(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 {
@@ -1143,7 +1276,9 @@ static char * emit_enclosed_subexpr(char *startP, int in_quotes, fix_typeE want,
 // emit_delimited(): A wrapper for emit_enclosed_subexpr()
 // that delimits one subexpression of a compound sequence like  ${foo}"bar"$@"bu'z'z"`cat x.in`
 // and is meant to be called repeatedly while traversing such a sequence.
-// Returns 0 if input is not a special expression
+// Writes the result to g_new and returns NULL if the input is not a special expression.
+// Opens the door to the emit...() family of string transformations
+// which can call each other in all kinds of ways to fully pythonize a bash value.
 
 static char * emit_delimited(char *startP, int in_quotes, fix_typeE want, fix_typeE *gotP)
 {
@@ -1157,6 +1292,7 @@ static char * emit_delimited(char *startP, int in_quotes, fix_typeE want, fix_ty
 	return endP;
 }
 
+// combine_types(): Applies type modifier to a value in g_new to make it compatible with its predecessor
 static fix_typeE combine_types(int offset, fix_typeE want_type, fix_typeE was_type, fix_typeE new_type)
 {
 	char	*P;
@@ -1207,7 +1343,7 @@ static fix_typeE combine_types(int offset, fix_typeE want_type, fix_typeE was_ty
 
 	if (was_type == FIX_NONE) {
 		// Do nothing more
-		log_return_msg("Simple cast");
+		log_return_msg("Untyped value, will not cast");
 		return new_type;
 	}
 	if (was_type == new_type) {
@@ -1243,18 +1379,14 @@ static fix_typeE combine_types(int offset, fix_typeE want_type, fix_typeE was_ty
 	return FIX_STRING;
 }
 
-// substitute(): Opens the door to the emit...() family of string transformations
-// which can call each other in all kinds of ways to fully pythonize a bash value.
-// Compare to expand_without_substituting() which does the same but in a more restricted way
-// for FIX_EXPRESSIONs.
+// substitute(): Traverses g_buffer (mostly invisibly), performing expansion & substitution
+// on each subexpression we see along the way and writing the result to g_new. Compare to
+// emit_without_substituting(), which only does the former and is intended for FIX_EXPRESSIONs.
+// Returns the type of the result (FIX_INT, etc.)
 
 /* Convert double quotes so that all non-escaped bracketting double quotes
  * are given clear internal codes  to simplify subsequent logic 
  * Recursively expand expressions as needed
- *
- * We can assume we are working with something considered a bash word
- *
- * Returns the type of the result
  */
 
 static fix_typeE substitute(fix_typeE want)
@@ -1262,7 +1394,8 @@ static fix_typeE substitute(fix_typeE want)
 	fix_typeE	got;	// What I had
 	fix_typeE	got1;	// What I'm now seeing
 	fix_typeE	want1;
-	int 		i,  in_quotes, quoted, c, c1, c2, offset;
+	int 		i, startquote_offset, quoted, c, c1, c2, offset;
+	const int   NOT_QUOTED = -1;
 	char		**arrayPP, *P, *P1, *P2;
 	_BOOL      	is_file_expansion, quote_removal;
 	_BOOL		is_outside_quotes;
@@ -1281,31 +1414,29 @@ static fix_typeE substitute(fix_typeE want)
 
 	is_outside_quotes = TRUE;
 	is_file_expansion = FALSE;
-	offset           = g_new.m_lth;
+	offset = 0;
 
 	for (P = g_buffer.m_P; c = *P ; ++P) {
-
 		switch (c) {
 		case '*':
 		case '?':
 		case '[':
-		    // Any unprotected globbing character should trigger file globbing
-			if (is_outside_quotes && !strchr("$\\", *(P-1)))
+			// Any unprotected globbing character should trigger globbing
+			if (is_outside_quotes && !(*(P-1)=='$' || *(P-1)=='\\'))
 				is_file_expansion = TRUE;
 			break;
 		case '~':
 		case '$':
 		case '`':
-		    // We have a "special" character
-			//TODO:  Very bad!!!  quoted is not initialized! Compare to other invocations.
+			// We have a special subexpression. Put an expanded & delimited version in g_new
 			P1 = emit_delimited(P, quoted, want, &got1);
+			// Jump past the subexpression
 			if (P1 && P1 != P) {
 				P   = --P1;
 				continue;
 			}
 			// Restore to where we were
-			g_new.m_lth = offset;
-			g_new.m_P[offset] = '\0';
+			burp_reset(&g_new);   //TODO This wipes out the nice new g_buffer we just built in emit_delimited()
 			break;
 		case '"':
 			is_outside_quotes = !is_outside_quotes;
@@ -1314,37 +1445,41 @@ static fix_typeE substitute(fix_typeE want)
 		    // Skip/protect escaped characters
 			if (P[1]) {
 				++P;
-	}	}	}
-	g_new.m_lth = offset;
+			}
+		}
+	}
+//	g_new.m_lth = offset;    //TODO This wipes out the g_new we just built... for no reason?
 
-	got              = FIX_NONE;
-	in_quotes        = -1;
+	got              = FIX_NONE;   //TODO Try initting to STRING. It looks like NONE should NEVER be used
+	startquote_offset = NOT_QUOTED;
 	quote_removal    = FALSE;
 	want1            = (is_file_expansion ? FIX_STRING : want);
 
-	for (P = g_buffer.m_P; ; ++P) {
+	for (P = g_buffer.m_P; ; ++P) {  //TODO Having expanded g_buffer into g_new above, shouldn't we stick to g_new here?
 
 		c = *P;
 
 		if (c == '"') {
-			// Quote removal
+			// Note the quote mark and discard it.
 			quote_removal = TRUE;
 			continue;
 		}
 
-		switch (c) {
+		switch (c) {    //TODO: Wait a minute. Shouldnt these chars have been removed from g_new by the first loop?
+		                //TODO: This is ridiculous. What do the earlier versions of bash2py do?
 		case '\0':
 		case '~':
 		case '$':
 		case '`':
-			// We have a "special" character or the null terminator.
-			if (in_quotes < 0) {
-				quoted = quote_removal;
+			// We have a "special" character or the null terminator. Reset quoting & combine types (looking back to startquote).
+			// Substitute the substring. Combine types (right here at m_lth).
+			if (startquote_offset == NOT_QUOTED) {
+				quoted = quote_removal;    // TODO This eats my '$' char so combine_types was not being run, but catches my '\0'
 			} else {
-				burpc(&g_new, END_QUOTE);
+				burpc(&g_new, END_QUOTE);  // N.B. This is the counterpart to START_QUOTE 25 lines below
 				got1 = FIX_STRING;
-				got = combine_types(in_quotes, want1, got, got1);
-				in_quotes = -1;
+				got = combine_types(startquote_offset, want1, got, got1);  // (offset, want_type, was_type, new_type);
+				startquote_offset = NOT_QUOTED;
 				quoted = 1;
 			}
 			if (!c) {
@@ -1356,7 +1491,7 @@ static fix_typeE substitute(fix_typeE want)
 			if (P1 && P1 != P) {
 				got = combine_types(offset, want1, got, got1);
 				P   = --P1;
-				continue;
+				continue;    // N.B. continue changes the flow.
 			}
 			// Restore to where we were
 			g_new.m_lth = offset;
@@ -1365,9 +1500,9 @@ static fix_typeE substitute(fix_typeE want)
 
 		quote_removal = FALSE;
 
-		// Saw some normal character
-		if (in_quotes < 0) {
-			in_quotes = g_new.m_lth;
+		// Saw some normal character  //TODO: Best if the new subsequence registers as a FIX_STRING?
+		if (startquote_offset == NOT_QUOTED) {
+			startquote_offset = g_new.m_lth;
 			burpc(&g_new, START_QUOTE);
 		}
 		if (c == '\\') {
@@ -1560,7 +1695,7 @@ ignore:
 	}
 }
 
-
+// compactWhiteSpace(): Merge consecutive spaces in g_buffer into one
 static void compactWhiteSpace(void)
 {
 	char *P, *P1, *P3;
@@ -1580,6 +1715,8 @@ static void compactWhiteSpace(void)
 	}
 }
 
+// unmarkQuotes(): Remove {START/END}_QUOTE markers (not quote characters)
+// from g_buffer. (These markers are sometimes added by substitute().)
 static void unmarkQuotes(_BOOL delete_quotes)
 {
 	char	*P, *P1;
@@ -1611,6 +1748,8 @@ static void unmarkQuotes(_BOOL delete_quotes)
 	g_buffer.m_lth = P1 - g_buffer.m_P;
 }
 
+// unmarkExpand(): Remove the {START/END}_EXPAND markers from g_buffer
+// which were inserted by emit_delimited()
 static void unmarkExpand(void)
 {
 	char	*P, *P1;
@@ -1646,23 +1785,18 @@ static void unescapeDollar(void)
 	return;
 }
 	
-/* Transforms g_buffer
- * Separator can be:
-	 + indicating concatonate parts (normal behaviour)
-	 " indicating we are embedding the contents of this string inside popen
- */
 
-// fix_string1(): Second-highest filter function after fixBraced() has peeled off any
-// brace expressions, that is,  "{1..10}"  and  "foo{a,bbb,cc}bar"  stuff
+// fix_string1(): Second-highest transformation filter after fixBraced()
+// Transforms g_buffer and returns a pointer to it
 // N.B. The call chain is: fix_string()
-//             -> fixBraced()     // processes braces but leaves string entire
+//             -> fixBraced()     // processes "{1..10}" and "foo{a,bbb,bb}bar" constructs only
 //             -> fix_string1()
 //             -> [[ substitute() | expand_without() ]] // expand and [[ substitute | leave alone ]]
-//                                                      // and notes whether string is outer-quoted
-//             -> emit_enclosed_subexpr()    // delimits string with START/END_EXPAND
-//             -> emit_delimited()           // string gets stripped of its head:  ${ ` ~ $(( etc
-// Then the last of these plays volleyball with about six emit...() functions.
-static char fix_string1(fix_typeE want, fix_typeE *gotP)
+//                                                      // and note whether string is outer-quoted
+//             -> emit_enclosed_subexpr()    // string gets stripped of its head:  ${ ` ~ $(( etc
+//             -> emit_delimited()           // delimits string with START/END_EXPAND
+// Then the last of these plays volleyball with the emit...() functions.
+static char * fix_string1(fix_typeE want, fix_typeE *gotP)
 {
 	fix_typeE	got;
 	_BOOL		is_expression;
@@ -1691,7 +1825,7 @@ static char fix_string1(fix_typeE want, fix_typeE *gotP)
 		expand_without_substituting();
 	}
 
-	swap_burps(&g_buffer, &g_new);   // Move changes to the permanent buffer
+	swap_burps(&g_buffer, &g_new);   // Move changes ("new") to the permanent buffer
 
 	compactWhiteSpace();
 	rename_keywords();
@@ -1722,7 +1856,7 @@ done:
 // fixBracedString(): The topmost filtering function under fix_string().
 // Processes brace expressions like {1..10} and foo{a,bbb,cc}bar but NOT
 // dollar-brace expressions like ${x}. Notice how the code looks for '.' or ',' inside {}.
-
+// Can return a pointer to g_buffer or g_braced
 static char * fixBracedString(const char *startP, fix_typeE want, fix_typeE *gotP)
 {
 	extern char **brace_expand(char *textP);   // from braces.c in the bash API
@@ -1802,6 +1936,7 @@ expand_brace_expr:
 	resultP = NULL;
 	arrayPP = brace_expand((char *) startP);   // calling bash API here
 	if (arrayPP) {
+	    // Transform array into a pythonic list: [x, y, z]
 		if (arrayPP[0]) {
 			fix_typeE	single_want_type;
 			int			i;
@@ -1836,8 +1971,9 @@ log_deactivate();
 		if (resultP) {
 log_activate();
 		    log_return_msg("brace expression processed");
-			return resultP;
-	}	}
+			return resultP;  // pointer to g_braced
+		}
+	} // close array block
 
 pass_through:
 	string_to_buffer(startP);

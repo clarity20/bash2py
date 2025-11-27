@@ -818,11 +818,6 @@ static void indent (int amount)
 	}
 }
 
-typedef struct commentS {
-	struct commentS *m_nextP;
-	int				m_byte;
-	char			*m_textP;
-} commentT;
 
 static void translate_unary_operation(char *operatorP, int complex1, char *term1P)
 {

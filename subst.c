@@ -289,7 +289,10 @@ static void parameter_brace_expand_error __P((char *, char *));
 static int valid_length_expression __P((char *));
 static intmax_t parameter_brace_expand_length __P((char *));
 
+#ifndef BASH2PY
 static char *skiparith __P((char *, int));
+#endif
+
 static int verify_substring_values __P((SHELL_VAR *, char *, char *, int, intmax_t *, intmax_t *));
 static int get_var_and_type __P((char *, char *, arrayind_t, int, int, SHELL_VAR **, char **));
 static char *mb_substring __P((char *, int, int));
@@ -6197,7 +6200,10 @@ parameter_brace_expand_length (name)
 	2.  If the substring contains a `?', read past one `:' for each `?'.
 */
 
-static char *
+#ifndef BASH2PY
+static
+#endif
+char *
 skiparith (substr, delim)
      char *substr;
      int delim;
