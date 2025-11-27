@@ -1177,13 +1177,13 @@ assign:
  */
 
 
-char *translate_expression(char *stringP, _BOOL allow_array)
+char *translate_arithmetic_expr(char *stringP, _BOOL allow_array)
 {
 	nodeT	*treeP;
 	int 	ret;
 
-log_activate_in("translate_expression");
-    log_enter("translate_expression (stringP=%s, allow_array=%b)", stringP, allow_array);
+log_activate_in("translate_arithmetic_expr");
+    log_enter("translate_arithmetic_expr (stringP=%s, allow_array=%b)", stringP, allow_array);
 
 	g_stringP = g_atP = stringP;
 	skipspace(0);
@@ -1205,7 +1205,7 @@ log_activate_in("translate_expression");
   	}
 
     log_return_msg("g_expression = %q", g_expression.m_P);
-log_deactivate_in("translate_expression");
+log_deactivate_in("translate_arithmetic_expr");
   	return g_expression.m_P;
 }
 
@@ -1226,7 +1226,7 @@ main(int argc, char **argv)
 			bufferP[lth-1] = '\0';
 		}
 		printf("> %s\n", bufferP);
-		translationP = translate_expression(bufferP, TRUE);
+		translationP = translate_arithmetic_expr(bufferP, TRUE);
 		if (!translationP) {
 			printf("Can't translate\n");
 			continue;
