@@ -850,7 +850,7 @@ static char * emitVariable(char *vblNameP, _BOOL is_variable_name_braced, int in
 				break;
 			case '/':   // c = *start2P
 				{
-				char *name, *value, *lpatsub, *pattern, *repl, *replacement;
+				char *name, *value, *lpatsub, *pattern, *repl, *replacement, *p;
 				int delim, quoted=0;
 				fix_typeE got;
 				burpT bufferBackup;
@@ -900,20 +900,25 @@ static char * emitVariable(char *vblNameP, _BOOL is_variable_name_braced, int in
 				// Restore the input buffer
 				swap_burps(&g_buffer, &bufferBackup);
 
-				// burp into g_new eventually.
+				// Construct the python code
+				g_translate.m_uses.m_re = TRUE;
+                burp_reset(&g_new);
 
-				//TODO These calls will perform bash expansions on the pattern, yielding a variable value. 
-				//TODO We want equivalent pythonic expressions, not values. So use fix_string() instead.
-				//TODO So we should back up g_buffer, make the function call & restore it.
+                burp(&g_new, "re.sub(r%s, %s, %s", pattern, replacement, name);
+				if (!is_global_replace)
+					burps(&g_new, ", count=1");
+				burpc(&g_new, ')');
 
 				free(name);
 				free(lpatsub);
 				free(pattern);
-				//free(repl);
 				free(replacement);
+
+				goto done;
 				}
 				break;
 			default:
+				// Current character in buffer is nothing special
 				continue;
 			}
 
@@ -1574,10 +1579,14 @@ static fix_typeE substitute(fix_typeE want)
 			// Look for the symbols relevant to extended globbing, POSIX globbing or both
 			case '!':
 			case '+':
-			case '@':
 				if (*(P+1) == '(') {
 					glob_type = c; // Save the glob symbol, print it later
 					c = *++P;	  // Skip to the '(', print that now
+				}
+				break;
+			case '@':
+				if (*(P+1) == '(') {
+					c = *++P; // Don't flag as glob and skip the '@' sign
 				}
 				break;
 			case ')':
