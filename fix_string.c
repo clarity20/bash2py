@@ -9,7 +9,10 @@
 #include "burp.h"
 #include "fix_string.h"
 
+// To borrow from subst.c:
+#include <sys/types.h>
 extern char *skiparith __P((char *, int));
+extern int skip_to_delim __P((char *, int, char *, int));
 
 translateT	g_translate;
 
@@ -20,7 +23,7 @@ burpT g_braced = {0,0,0,0,0,0};   // Only directly used in FixBraced()
 _BOOL g_regmatch_special_case = FALSE;
 _BOOL g_is_inside_function = FALSE;
 int g_function_parms_count  = 0;
-
+_BOOL g_pythonify_globs = FALSE;
 int g_rc_identifier   = 0;
 
 static int g_dollar_expr_nesting_level = 0;
@@ -205,7 +208,7 @@ char * integerStringOrEmpty(char *inputString)
 			continue;
 
 		if (c=='\\' && readerP[1])
-		    c = *++readerP;
+			c = *++readerP;
 
 		if (endP <= writerP) {
 			log_info("integerStringOrEmpty: input string too long");
@@ -269,14 +272,11 @@ static void string_to_buffer(const char *stringP)
 	int			lth;
 
   	for (P0 = stringP; isspace(*P0); ++P0);
-	g_buffer.m_lth = 0;
-	/* Make sure we have a string created */
-	burpc(&g_buffer, ' ');
-	g_buffer.m_lth = 0;
+	burp_reset(&g_buffer);
 	burps(&g_buffer, P0);
 	for (lth = g_buffer.m_lth; lth && isspace(g_buffer.m_P[lth-1]); --lth);
   	g_buffer.m_P[lth] = 0;
-	g_buffer.m_lth    = lth;
+	g_buffer.m_lth = lth;
 }
 
 /* Replace single quotes by double quotes escaping contents correctly
@@ -602,8 +602,8 @@ static char * emitSimpleVariable(char *afterDollarP, int in_quotes, fix_typeE wa
 		}
 		len = strlen(g_regmatch_var_name);
 		if (0 == strncmp(afterDollarP, g_regmatch_var_name, len)) {
-		    g_regmatch_special_case = TRUE;
-		    burps(&g_new, "match_object.group");
+			g_regmatch_special_case = TRUE;
+			burps(&g_new, "match_object.group");
 			P += len-1;
 			c = *P;
 		}
@@ -624,7 +624,9 @@ static char * emitSimpleVariable(char *afterDollarP, int in_quotes, fix_typeE wa
 	*gotP = got;
 	return P;
 }
-	
+
+// emitString(): Turns the input string into text suitable for print() by quoting
+// the literal parts and concatenating them ('+') with the variable parts
 static char * emitString(char *startP, const char *terminatorsP, int in_quotes)
 {
 	char 		*P, *endP;
@@ -634,6 +636,8 @@ static char * emitString(char *startP, const char *terminatorsP, int in_quotes)
 	log_enter("emitString (startP=%q, terminatorsP=%q, in_quotes=%d)",
 			  startP, terminatorsP, in_quotes);
 	is_inside_quotes = FALSE;
+
+	// Build the output in pieces
 	for (P = startP; ; ++P) {
 		c = *P;
 		offset = g_new.m_lth;
@@ -718,19 +722,19 @@ static char * emitFunction(char *functionName, char *parm1P, char *parm2P, _BOOL
 
 static char *findClosingBrace(char *buf)
 {
-    char *c = buf;
-    int brace = 0;
-    while (*c)
-    {
-        if (*c == '{' && *(c-1)!='\\') brace++;
-        else if (*c == '}' && *(c-1)!='\\') {
-            if(--brace == -1) {
-                break;
-            }
-        }
-        c++;
-    }
-    return c;
+	char *c = buf;
+	int brace = 0;
+	while (*c)
+	{
+		if (*c == '{' && *(c-1)!='\\') brace++;
+		else if (*c == '}' && *(c-1)!='\\') {
+			if(--brace == -1) {
+				break;
+			}
+		}
+		c++;
+	}
+	return c;
 }
 
 // emitVariable(): Process variable names following $ or ${.  After the closing } is seen,
@@ -747,7 +751,7 @@ static char * emitVariable(char *vblNameP, _BOOL is_variable_name_braced, int in
 	int			c, is_array;
 	_BOOL		is_indirect;
 	fix_typeE	got;
-    int is_colon_subrange = FALSE;
+	int			is_colon_subrange = FALSE;
 
 	log_enter("emitVariable (g_buffer[vblName]=%q, is_braced=%b, in_quotes=%d, want=%t)",
 			vblNameP, is_variable_name_braced, in_quotes, want);
@@ -838,10 +842,75 @@ static char * emitVariable(char *vblNameP, _BOOL is_variable_name_braced, int in
 					functionName = "Expand.colonPlus";
 					break;
 				default:
-				    // The character after : is none of the above.
-				    // Assume it's a subrange expr like ${x:y:z}
+					// The character after : is none of the above.
+					// Assume it's a subrange expr like ${x:y:z}
 					is_colon_subrange = TRUE;
 					--start2P;
+				}
+				break;
+			case '/':   // c = *start2P
+				{
+				char *name, *value, *lpatsub, *pattern, *repl, *replacement;
+				int delim, quoted=0;
+				fix_typeE got;
+				burpT bufferBackup;
+				_BOOL is_global_replace = FALSE;
+
+				// Extract the substitution parameters: name, pattern, replacement.
+				// Much of the following code borrows from bash's parameter_brace_patsub ().
+				memset(&bufferBackup, 0, sizeof(bufferBackup));
+				*start2P = '\0';  // temp edit
+				name = strdup(vblNameP);
+				*start2P = c;  // revert edit
+				value = start2P+1;
+
+				if (*value == '/')
+				{
+					is_global_replace = TRUE;
+					value++;
+				}
+				lpatsub = strdup(value);
+				*(strrchr(lpatsub, '}')) = '\0';
+
+				delim = skip_to_delim (lpatsub, ((*value == '/') ? 1 : 0), "/", 0);
+				if (lpatsub[delim] == '/')
+				{
+					lpatsub[delim] = 0;
+					repl = lpatsub + delim + 1;
+				}
+				else
+					repl = (char *)NULL;
+				if (repl && *repl == '\0')
+					repl = (char *)NULL;
+
+				// Expand the pattern and replacement and build the python around them.
+				// We want fix_string() to do the dirty work, but this requires staging & unstaging
+				// the global buffers carefully because fix_string can alter them too.
+ 
+				// Flip the switch that will rewrite any globs as pythonic regexes
+				g_pythonify_globs = TRUE;
+				// Back up the real g_buffer so that fix_string() does no lasting harm
+				swap_burps(&g_buffer, &bufferBackup);
+				// Expand & pythonify the pattern
+				pattern = strdup(fix_string(lpatsub, FIX_STRING, &got));
+				// Turn off the pythonification switch 
+				g_pythonify_globs = FALSE;
+				// Expand the replacement string
+				replacement = strdup(fix_string(repl, FIX_STRING, &got));
+				// Restore the input buffer
+				swap_burps(&g_buffer, &bufferBackup);
+
+				// burp into g_new eventually.
+
+				//TODO These calls will perform bash expansions on the pattern, yielding a variable value. 
+				//TODO We want equivalent pythonic expressions, not values. So use fix_string() instead.
+				//TODO So we should back up g_buffer, make the function call & restore it.
+
+				free(name);
+				free(lpatsub);
+				free(pattern);
+				//free(repl);
+				free(replacement);
 				}
 				break;
 			default:
@@ -859,92 +928,89 @@ static char * emitVariable(char *vblNameP, _BOOL is_variable_name_braced, int in
 					goto done;
 				}
 				else if (is_colon_subrange) {
-					char *tailP = start2P;
+					//TODO Any extra considerations for array-type variables?
+					char *parameter1P, *parameter2P, *ogParameter1P;
+					char *intP1, *intP2;
+					int int1, int2;
+					char tmp[32];
+					burpT g_scratch0 = {0,0,0,0,0,0};
+					burpT g_scratch = {0,0,0,0,0,0};
+					burpT bufferBackup = {0,0,0,0,0,0};
 					is_colon_subrange = FALSE;
-					{
-						//TODO Any extra considerations for array-type variables?
-						char *parameter1P, *parameter2P, *ogParameter1P;
-						char *intP1, *intP2;
-						int int1, int2;
-						char tmp[32];
-						burpT g_scratch0 = {0,0,0,0,0,0};
-						burpT g_scratch = {0,0,0,0,0,0};
-						burpT bufferBackup = {0,0,0,0,0,0};
 
-						// Delimit the first parameter
-						parameter1P = start2P+1;            // go past ':' to the first parameter
-						//if (*parameter1P == ' ') parameter1P++;
-						if (*parameter1P == ':') {          // check for the form ${var::y}
-							// Transform into ${var:0:y}
-							burp_insert(&g_buffer, parameter1P-g_buffer.m_P, "0");
-						}
-
-						// Delimit the second parameter
-						parameter2P = skiparith(parameter1P, ':');  // go to next ':' (or the end)
-						if (*parameter2P == '\0')   // check for the form ${var:x} -- parameter2 is empty string
-						{
-							// Reseat both parameters in scratch buffers
-							endP = strrchr(parameter1P, '}');
-							assert(endP);
-							burp(&g_scratch0, "%.*s", (int)(endP-parameter1P), parameter1P);
-							burps(&g_scratch, parameter2P);
-							parameter1P = g_scratch0.m_P;
-							parameter2P = g_scratch.m_P;
-						}
-						else if (*parameter2P == ':') {          // check for forms  ${var:x:y}  and  ${var:x:}
-							// As above, reseat both parameters in scratch buffers
-							parameter2P++;
-							endP = findClosingBrace(parameter2P);   // forward search for closing '}'
-							assert(endP);
-							if (parameter2P == endP) {     // the form ${var:x:}
-								burp_insert(&g_buffer, (int)(parameter2P-g_buffer.m_P), "0");
-								endP++;
-							}
-							burp(&g_scratch0, "%.*s", (int)(parameter2P-parameter1P)-1, parameter1P);
-							burp(&g_scratch, "%.*s", (int)(endP-parameter2P), parameter2P);
-							parameter1P = g_scratch0.m_P;
-							parameter2P = g_scratch.m_P;
-						}
-						else goto done;         // unexpected behavior from skiparith(). Malformed input?
-
-						intP1 = parameter1P ? integerStringOrEmpty(parameter1P) : NULL;
-						if (intP1) int1 = atoi(intP1);
-						intP2 = parameter2P ? integerStringOrEmpty(parameter2P) : NULL;
-						if (intP2) int2 = atoi(intP2);
-
-						// Back up the original buffer & reseat its internal pointers
-						burp(&bufferBackup, g_buffer.m_P);
-						vblNameP = bufferBackup.m_P + (vblNameP-g_buffer.m_P);
-						sprintf(tmp, ":%s", parameter1P);
-						ogParameter1P = strstr(bufferBackup.m_P, tmp) + 1;
-
-						/****  Construct the pythonic-style range expression ****/
-
-						// (1) Set up the preamble
-						burp(&g_new, "%.*s[", (ogParameter1P-vblNameP)-1, vblNameP);
-
-						// (2) Set up the range, niceifying when there are numeric literals
-						if (intP1 && intP2) {
-							burp(&g_new, "%d:%d]", int1, (int2>0) ? int1+int2 : int2);
-						}
-						else if (intP1) {   // 7:   7:x+2
-							burp(&g_new, "%d:%s]", int1, (parameter2P ? parameter2P : ""));
-						}
-						else if (intP2) {
-							burp(&g_new, "%s:%d]", (parameter1P ? parameter1P : ""), int2);
-						}
-						else {   // Neither parameter is a numeric literal
-							if (!parameter1P) {
-								burp(&g_new, ":%s]", parameter2P);
-							} else if (!parameter2P) {
-								burp(&g_new, "%s:]", parameter1P);
-							} else {
-								burp(&g_new, "%s:%s+%s]", parameter1P, parameter1P, parameter2P);
-							}
-						}
-
-						goto done;
+					// Delimit the first parameter
+					parameter1P = start2P+1;			// go past ':' to the first parameter
+					//if (*parameter1P == ' ') parameter1P++;
+					if (*parameter1P == ':') {		  // check for the form ${var::y}
+						// Transform into ${var:0:y}
+						burp_insert(&g_buffer, parameter1P-g_buffer.m_P, "0");
 					}
+
+					// Delimit the second parameter
+					parameter2P = skiparith(parameter1P, ':');  // go to next ':' (or the end)
+					if (*parameter2P == '\0')   // check for the form ${var:x} -- parameter2 is empty string
+					{
+						// Reseat both parameters in scratch buffers
+						endP = strrchr(parameter1P, '}');
+						assert(endP);
+						burp(&g_scratch0, "%.*s", (int)(endP-parameter1P), parameter1P);
+						burps(&g_scratch, parameter2P);
+						parameter1P = g_scratch0.m_P;
+						parameter2P = g_scratch.m_P;
+					}
+					else if (*parameter2P == ':') {		  // check for forms  ${var:x:y}  and  ${var:x:}
+						// As above, reseat both parameters in scratch buffers
+						parameter2P++;
+						endP = findClosingBrace(parameter2P);   // forward search for closing '}'
+						assert(endP);
+						if (parameter2P == endP) {	 // the form ${var:x:}
+							burp_insert(&g_buffer, (int)(parameter2P-g_buffer.m_P), "0");
+							endP++;
+						}
+						burp(&g_scratch0, "%.*s", (int)(parameter2P-parameter1P)-1, parameter1P);
+						burp(&g_scratch, "%.*s", (int)(endP-parameter2P), parameter2P);
+						parameter1P = g_scratch0.m_P;
+						parameter2P = g_scratch.m_P;
+					}
+					else goto done;		 // unexpected behavior from skiparith(). Malformed input?
+
+					intP1 = parameter1P ? integerStringOrEmpty(parameter1P) : NULL;
+					if (intP1) int1 = atoi(intP1);
+					intP2 = parameter2P ? integerStringOrEmpty(parameter2P) : NULL;
+					if (intP2) int2 = atoi(intP2);
+
+					// Back up the original buffer & reseat its internal pointers
+					burp(&bufferBackup, g_buffer.m_P);
+					vblNameP = bufferBackup.m_P + (vblNameP-g_buffer.m_P);
+					sprintf(tmp, ":%s", parameter1P);
+					ogParameter1P = strstr(bufferBackup.m_P, tmp) + 1;
+
+					/****  Construct the pythonic-style range expression ****/
+
+					// (1) Set up the preamble
+					burp(&g_new, "%.*s[", (ogParameter1P-vblNameP)-1, vblNameP);
+
+					// (2) Set up the range, niceifying when there are numeric literals
+					if (intP1 && intP2) {
+						burp(&g_new, "%d:%d]", int1, (int2>0) ? int1+int2 : int2);
+					}
+					else if (intP1) {   // 7:   7:x+2
+						burp(&g_new, "%d:%s]", int1, (parameter2P ? parameter2P : ""));
+					}
+					else if (intP2) {
+						burp(&g_new, "%s:%d]", (parameter1P ? parameter1P : ""), int2);
+					}
+					else {   // Neither parameter is a numeric literal
+						if (!parameter1P) {
+							burp(&g_new, ":%s]", parameter2P);
+						} else if (!parameter2P) {
+							burp(&g_new, "%s:]", parameter1P);
+						} else {
+							burp(&g_new, "%s:%s+%s]", parameter1P, parameter1P, parameter2P);
+						}
+					}
+
+					goto done;
 				}   // is_colon_subrange
 			}  // no helper function
 			else {  // helper function
@@ -964,7 +1030,7 @@ static char * emitVariable(char *vblNameP, _BOOL is_variable_name_braced, int in
 		}
 	}
 
-    // N.B. Because of gotos in the code above, this only runs for unbraced variables like $foo:
+	// N.B. Because of gotos in the code above, this only runs for unbraced variables like $foo:
 	endP = emitSimpleVariable(vblNameP, in_quotes, want, gotP);
 
 done:
@@ -1090,7 +1156,7 @@ done:
 		if (g_dollar_expr_nesting_level == 1) {
 			// Do allow array
 			P1 = translate_arithmetic_expr(g_new.m_P + start, TRUE);
-            if (!P1) {
+			if (!P1) {
 				log_return_msg("Early exit after translation");
 				return NULL;
 			}
@@ -1104,10 +1170,12 @@ done:
 	return P;
 } 
 
-/* When the old-style backquote form of substitution is used, backslash retains its literal meaning except when followed by ‘$’, ‘`’, or ‘\’. The first backquote not preceded by a backslash terminates the command substitution. When using the $(command) form, all characters between the parentheses make up the command; none are treated specially. 
-*/
+// When the backquote form of substitution is used, backslash retains its literal meaning
+// except when followed by $, `, or \. The first backquote not preceded by a backslash
+// terminates the command substitution. When using the $(command) form, all characters
+// between the parentheses make up the command; none are treated specially.
 
-static char * emitCommand(char *startP, int new_style, int in_quotes, fix_typeE want, fix_typeE *gotP)
+static char * emitCommand(char *dollarOrTickP, _BOOL is_dollar_style, int in_quotes, fix_typeE want, fix_typeE *gotP)
 {
 	int			old_dollar_expr_nesting_level;
 	char 		*endP;
@@ -1117,10 +1185,10 @@ static char * emitCommand(char *startP, int new_style, int in_quotes, fix_typeE 
 	*gotP = FIX_STRING;
 	burps(&g_new, "os.popen(");
 
-	if (new_style) {
-		endP = emitString(startP+2, ")", in_quotes);
+	if (is_dollar_style) {
+		endP = emitString(dollarOrTickP+2, ")", in_quotes);
 	} else {
-		endP = emitString(startP+1, "`", in_quotes);
+		endP = emitString(dollarOrTickP+1, "`", in_quotes);
 	}
 	if (endP) {
 		++endP;
@@ -1292,6 +1360,7 @@ static char * emit_delimited(char *startP, int in_quotes, fix_typeE want, fix_ty
 }
 
 // combine_types(): Applies type modifier to a value in g_new to make it compatible with its predecessor
+// before joining them together
 static fix_typeE combine_types(int offset, fix_typeE want_type, fix_typeE was_type, fix_typeE new_type)
 {
 	char	*P;
@@ -1378,7 +1447,7 @@ static fix_typeE combine_types(int offset, fix_typeE want_type, fix_typeE was_ty
 	return FIX_STRING;
 }
 
-// substitute(): Traverses g_buffer (mostly invisibly), performing expansion & substitution
+// substitute(): Traverses g_buffer, performing expansion & substitution
 // on each subexpression we see along the way and writing the result to g_new. Compare to
 // emit_without_substituting(), which only does the former and is intended for FIX_EXPRESSIONs.
 // Returns the type of the result (FIX_INT, etc.)
@@ -1393,11 +1462,12 @@ static fix_typeE substitute(fix_typeE want)
 	fix_typeE	got;	// What I had
 	fix_typeE	got1;	// What I'm now seeing
 	fix_typeE	want1;
-	int 		i, startquote_offset, quoted, c, c1, c2, offset;
+	int 		i, startquote_offset, quoted, c, offset;
 	const int   NOT_QUOTED = -1;
-	char		**arrayPP, *P, *P1, *P2;
+	char		**arrayPP, *P, *P1, glob_type;
 	_BOOL      	is_file_expansion, quote_removal;
-	_BOOL		is_outside_quotes;
+	_BOOL		is_outside_quotes, burp_extra_glob_symbol = FALSE;
+	const char  special_globbing_chars[] = "@!*+?)";
 
 	log_enter("substitute (want=%t)", want);
 
@@ -1415,22 +1485,24 @@ static fix_typeE substitute(fix_typeE want)
 	is_file_expansion = FALSE;
 	offset = 0;
 
-	for (P = g_buffer.m_P; c = *P ; ++P) {
-		switch (c) {
-		case '*':
-		case '?':
-		case '[':
-			// Any unprotected globbing character should trigger globbing
-			if (is_outside_quotes && !(*(P-1)=='$' || *(P-1)=='\\'))
-				is_file_expansion = TRUE;
-			break;
-		case '"':
-			is_outside_quotes = !is_outside_quotes;
-			break;
-		case '\\':
-		    // Skip/protect escaped characters
-			if (P[1]) {
-				++P;
+	if (!g_pythonify_globs) {
+		for (P = g_buffer.m_P; c = *P ; ++P) {
+			switch (c) {
+			case '*':
+			case '?':
+			case '[':
+				// Any unprotected globbing character should trigger globbing
+				if (is_outside_quotes && !(*(P-1)=='$' || *(P-1)=='\\'))
+					is_file_expansion = TRUE;
+				break;
+			case '"':
+				is_outside_quotes = !is_outside_quotes;
+				break;
+			case '\\':
+				// Skip/protect escaped characters
+				if (P[1]) {
+					++P;
+				}
 			}
 		}
 	}
@@ -1441,8 +1513,8 @@ static fix_typeE substitute(fix_typeE want)
 	want1            = (is_file_expansion ? FIX_STRING : want);
 
 	// The strange treatment of quotes in the following code is meant to trade bash quoting for python quoting.
-	// Since for example,   echo ${abc}de"fg"hi     would translate to     print(str(abc)+"defghi")
-	// the strategy is to strip the quotes from literal text in the input, determine where python
+	// For example,   echo ${abc}de"fg"hi     would translate to     print(str(abc)+"defghi").
+	// The strategy is to strip the quotes from literal text in the input, determine where python
 	// needs them, and insert new ones there. To keep track of this we use the markers {START/END}_QUOTE.
 	// Meanwhile we cannot just toss the quotes from the special bash variable "$*".
 	// That's what 'quoted' is used to keep track of as you can see in emitSimpleVariable()..
@@ -1489,7 +1561,58 @@ static fix_typeE substitute(fix_typeE want)
 			// Restore to where we were. //TODO is this always correct even if emit_delim() changews the buffer length?
 			g_new.m_lth = offset;
 			g_new.m_P[offset] = '\0';
-		}
+            break;
+		} // end switch block
+
+		// Other characters are generally copied straight from input to output.
+		// But depending on context we might need to translate shell globbing expressions to pythonic regexes
+		if (g_pythonify_globs)
+		{
+			//TODO A perfect solution would track nested glob_types incl. NULLs and unwind them to print them out
+
+			switch (c) {
+			// Look for the symbols relevant to extended globbing, POSIX globbing or both
+			case '!':
+			case '+':
+			case '@':
+				if (*(P+1) == '(') {
+					glob_type = c; // Save the glob symbol, print it later
+					c = *++P;	  // Skip to the '(', print that now
+				}
+				break;
+			case ')':
+				// Make sure the ')' is globbing-related
+				if (glob_type != 0) {
+					// Set the the stage to burp both ')' and the glob type.
+					burp_extra_glob_symbol = TRUE;
+				}
+				break;
+			case '*':
+				// '*' can indicate an extended glob OR a POSIX glob
+				if ((*(P+1) == '(')) {
+					glob_type = c;
+					c = *++P;
+				} else {
+					// Need to convert "*" to ".*"
+					glob_type = c;
+					c = '.';
+					burp_extra_glob_symbol = TRUE;
+				}
+				break;
+			case '?':
+				// '?' can indicate an extended glob OR a POSIX glob
+				if ((*(P+1) == '(')) {
+					glob_type = c;
+					c = *++P;
+				} else {
+					// We will just replace '?' with '.'. No need to remember the type.
+					glob_type = 0;
+					c = '.';
+				}
+				break;
+			// case '[':  // Bracketed globs are the same in bash and python. Nothing to do here.
+			} // switch (c)
+		} // if (pythonify_globs)
 
 		quote_removal = FALSE;
 
@@ -1505,7 +1628,16 @@ static fix_typeE substitute(fix_typeE want)
 				c = *++P;
 		}	}
 
+		// Most important step: copy input to output
 		burpc(&g_new, c);
+
+		// If glob conversion requires us to print another character, do that now
+		if (burp_extra_glob_symbol) {
+			burpc(&g_new, glob_type);
+			// Reset the state
+			burp_extra_glob_symbol = FALSE;
+			glob_type = 0;
+		}
 	}
 done:
 
