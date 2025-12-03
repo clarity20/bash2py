@@ -9,8 +9,7 @@
 #include "burp.h"
 #include "fix_string.h"
 
-// To borrow from subst.c:
-#include <sys/types.h>
+// Borrowed from subst.c:
 extern char *skiparith __P((char *, int));
 extern int skip_to_delim __P((char *, int, char *, int));
 
@@ -23,7 +22,7 @@ burpT g_braced = {0,0,0,0,0,0};   // Only directly used in FixBraced()
 _BOOL g_regmatch_special_case = FALSE;
 _BOOL g_is_inside_function = FALSE;
 int g_function_parms_count  = 0;
-_BOOL g_pythonify_globs = FALSE;
+globConversionStateE g_globConversionState = INACTIVE;
 int g_rc_identifier   = 0;
 
 static int g_dollar_expr_nesting_level = 0;
@@ -852,13 +851,14 @@ static char * emitVariable(char *vblNameP, _BOOL is_variable_name_braced, int in
 				{
 				char *name, *value, *lpatsub, *pattern, *repl, *replacement, *p;
 				int delim, quoted=0;
-				fix_typeE got;
-				burpT bufferBackup;
+				char rawflag;
+				burpT bufferBackup, newBackup;
 				_BOOL is_global_replace = FALSE;
 
 				// Extract the substitution parameters: name, pattern, replacement.
 				// Much of the following code borrows from bash's parameter_brace_patsub ().
 				memset(&bufferBackup, 0, sizeof(bufferBackup));
+				memset(&newBackup, 0, sizeof(newBackup));
 				*start2P = '\0';  // temp edit
 				name = strdup(vblNameP);
 				*start2P = c;  // revert edit
@@ -887,24 +887,23 @@ static char * emitVariable(char *vblNameP, _BOOL is_variable_name_braced, int in
 				// We want fix_string() to do the dirty work, but this requires staging & unstaging
 				// the global buffers carefully because fix_string can alter them too.
  
-				// Flip the switch that will rewrite any globs as pythonic regexes
-				g_pythonify_globs = TRUE;
-				// Back up the real g_buffer so that fix_string() does no lasting harm
+				// Back up the real buffers before running fix_string()
 				swap_burps(&g_buffer, &bufferBackup);
-				// Expand & pythonify the pattern
+				swap_burps(&g_new, &newBackup);
+				// Expand & pythonify the pattern, and just expand the replacement
+				g_globConversionState = CONVERTING;
+				got = FIX_STRING;
 				pattern = strdup(fix_string(lpatsub, FIX_STRING, &got));
-				// Turn off the pythonification switch 
-				g_pythonify_globs = FALSE;
-				// Expand the replacement string
+				g_globConversionState = INACTIVE;
 				replacement = strdup(fix_string(repl, FIX_STRING, &got));
-				// Restore the input buffer
+				g_globConversionState = PROTECTING;
+				// Restore the buffers
 				swap_burps(&g_buffer, &bufferBackup);
+				swap_burps(&g_new, &newBackup);
 
 				// Construct the python code
 				g_translate.m_uses.m_re = TRUE;
-                burp_reset(&g_new);
-
-                burp(&g_new, "re.sub(r%s, %s, %s", pattern, replacement, name);
+				burp(&g_new, "re.sub(%s%s, %s, %s", (strchr("\"\'", pattern[0]))?"r":"", pattern, replacement, name);
 				if (!is_global_replace)
 					burps(&g_new, ", count=1");
 				burpc(&g_new, ')');
@@ -914,6 +913,7 @@ static char * emitVariable(char *vblNameP, _BOOL is_variable_name_braced, int in
 				free(pattern);
 				free(replacement);
 
+                endP = strrchr(vblNameP, '}');
 				goto done;
 				}
 				break;
@@ -1472,7 +1472,6 @@ static fix_typeE substitute(fix_typeE want)
 	char		**arrayPP, *P, *P1, glob_type;
 	_BOOL      	is_file_expansion, quote_removal;
 	_BOOL		is_outside_quotes, burp_extra_glob_symbol = FALSE;
-	const char  special_globbing_chars[] = "@!*+?)";
 
 	log_enter("substitute (want=%t)", want);
 
@@ -1490,7 +1489,7 @@ static fix_typeE substitute(fix_typeE want)
 	is_file_expansion = FALSE;
 	offset = 0;
 
-	if (!g_pythonify_globs) {
+	if (g_globConversionState == INACTIVE) {  // INACTIVE by default. Changes when expr is like ${s/x/y}
 		for (P = g_buffer.m_P; c = *P ; ++P) {
 			switch (c) {
 			case '*':
@@ -1558,22 +1557,24 @@ static fix_typeE substitute(fix_typeE want)
 			quote_removal = FALSE;
 			offset = g_new.m_lth;
 			P1 = emit_delimited(P, quoted, want1, &got1);
+			if (g_globConversionState != INACTIVE) // This can change in emit_delim() so check it again
+			    is_file_expansion = FALSE;
 			if (P1 && P1 != P) {
 				got = combine_types(offset, want1, got, got1);
 				P   = --P1;
 				continue;    // N.B. this changes the control flow.
 			}
-			// Restore to where we were. //TODO is this always correct even if emit_delim() changews the buffer length?
+			// Restore to where we were. //TODO is this always correct even if emit_delim() changes the buffer length?
 			g_new.m_lth = offset;
 			g_new.m_P[offset] = '\0';
             break;
 		} // end switch block
 
 		// Other characters are generally copied straight from input to output.
-		// But depending on context we might need to translate shell globbing expressions to pythonic regexes
-		if (g_pythonify_globs)
+		// But first we might need to convert shell globbing expressions to pythonic regexes
+		if (g_globConversionState == CONVERTING)
 		{
-			//TODO A perfect solution would track nested glob_types incl. NULLs and unwind them to print them out
+			//TODO A perfect solution would track nested glob_types incl. NULLs in a stack and unwind it to print them out
 
 			switch (c) {
 			// Look for the symbols relevant to extended globbing, POSIX globbing or both
@@ -1621,7 +1622,10 @@ static fix_typeE substitute(fix_typeE want)
 				break;
 			// case '[':  // Bracketed globs are the same in bash and python. Nothing to do here.
 			} // switch (c)
-		} // if (pythonify_globs)
+
+		}
+		else if (g_globConversionState == PROTECTING)
+		    g_globConversionState = INACTIVE;
 
 		quote_removal = FALSE;
 

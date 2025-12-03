@@ -3,6 +3,14 @@
 
 typedef int _BOOL;
 
+// Choose the contexts in which globbing expressions are detected and handled
+// This is necessary because the relevant functions can call each other repeatedly
+typedef enum {
+    INACTIVE = 0,
+    CONVERTING,
+    PROTECTING
+} globConversionStateE;
+
 /* We handle 5 types of data:
 	NONE, INT, STRING, VAR, ARRAY
  */
