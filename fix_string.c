@@ -848,25 +848,24 @@ static char * emitVariable(char *vblNameP, _BOOL is_variable_name_braced, int in
 				}
 				break;
 			case '/':   // c = *start2P
+			//case '%':
+			//case '#':
 				{
 				char *name, *value, *lpatsub, *pattern, *repl, *replacement, *p;
 				int delim, quoted=0;
 				char rawflag;
 				burpT bufferBackup, newBackup;
-				_BOOL is_global_replace = FALSE;
+				_BOOL is_operator_doubled = FALSE;
 
 				// Extract the substitution parameters: name, pattern, replacement.
 				// Much of the following code borrows from bash's parameter_brace_patsub ().
 				memset(&bufferBackup, 0, sizeof(bufferBackup));
 				memset(&newBackup, 0, sizeof(newBackup));
-				*start2P = '\0';  // temp edit
-				name = strdup(vblNameP);
-				*start2P = c;  // revert edit
 				value = start2P+1;
 
-				if (*value == '/')
+				if (*value == c)
 				{
-					is_global_replace = TRUE;
+					is_operator_doubled = TRUE;
 					value++;
 				}
 				lpatsub = strdup(value);
@@ -883,19 +882,36 @@ static char * emitVariable(char *vblNameP, _BOOL is_variable_name_braced, int in
 				if (repl && *repl == '\0')
 					repl = (char *)NULL;
 
-				// Expand the pattern and replacement and build the python around them.
+				// Expand the pattern, name and replacement and build the python around them.
 				// We want fix_string() to do the dirty work, but this requires staging & unstaging
 				// the global buffers carefully because fix_string can alter them too.
  
 				// Back up the real buffers before running fix_string()
 				swap_burps(&g_buffer, &bufferBackup);
 				swap_burps(&g_new, &newBackup);
-				// Expand & pythonify the pattern, and just expand the replacement
+				// Expand & pythonify the pattern
 				g_globConversionState = CONVERTING;
 				got = FIX_STRING;
 				pattern = strdup(fix_string(lpatsub, FIX_STRING, &got));
+				// Just expand the name and replacement
 				g_globConversionState = INACTIVE;
+
+				got = FIX_STRING;
+				// Extract the name from vblName. To guard against global memory issues,
+				// set it up with strdup() so that we are working on virgin territory.
+				// (1) Mark end of vblName in the original buffer
+				*start2P = '\0';
+				// (2) In the future we should be able to say   "name = strdup(vblNameP)"
+				// as we expect name will not need expanding. But for now, to make the python
+				// self-consistent we need these three steps to insert the regrettable "str(XXX.val)" markup
+				p = malloc(strlen(vblNameP)+2);
+				sprintf(p, "$%s", vblNameP);  // '$' tricks fix_string() into treating name like a var name
+				name = strdup(fix_string(p, FIX_STRING, &got));
+				// (3) Unmark the end of vblName
+				*start2P = c;
+
 				replacement = strdup(fix_string(repl, FIX_STRING, &got));
+				// Ensure the glob-regex conversion is only attempted once
 				g_globConversionState = PROTECTING;
 				// Restore the buffers
 				swap_burps(&g_buffer, &bufferBackup);
@@ -904,10 +920,11 @@ static char * emitVariable(char *vblNameP, _BOOL is_variable_name_braced, int in
 				// Construct the python code
 				g_translate.m_uses.m_re = TRUE;
 				burp(&g_new, "re.sub(%s%s, %s, %s", (strchr("\"\'", pattern[0]))?"r":"", pattern, replacement, name);
-				if (!is_global_replace)
+				if (!is_operator_doubled)
 					burps(&g_new, ", count=1");
 				burpc(&g_new, ')');
 
+				free(p);
 				free(name);
 				free(lpatsub);
 				free(pattern);
@@ -1517,11 +1534,11 @@ static fix_typeE substitute(fix_typeE want)
 	want1            = (is_file_expansion ? FIX_STRING : want);
 
 	// The strange treatment of quotes in the following code is meant to trade bash quoting for python quoting.
-	// For example,   echo ${abc}de"fg"hi     would translate to     print(str(abc)+"defghi").
+	// For example,   echo de"fg"hi     would translate to     print("defghi").
 	// The strategy is to strip the quotes from literal text in the input, determine where python
 	// needs them, and insert new ones there. To keep track of this we use the markers {START/END}_QUOTE.
 	// Meanwhile we cannot just toss the quotes from the special bash variable "$*".
-	// That's what 'quoted' is used to keep track of as you can see in emitSimpleVariable()..
+	// That's what 'quoted' keeps track of, as you can see in the "*" handler inside emitSimpleVariable().
 
 	for (P = g_buffer.m_P; ; ++P) {
 
@@ -1624,8 +1641,11 @@ static fix_typeE substitute(fix_typeE want)
 			} // switch (c)
 
 		}
-		else if (g_globConversionState == PROTECTING)
+		else if (g_globConversionState == PROTECTING) {
+		    // Having ensured the glob-regex conversion is only attempted once
+		    // for a given input, we revert to normal execution in the future
 		    g_globConversionState = INACTIVE;
+		}
 
 		quote_removal = FALSE;
 
@@ -2076,7 +2096,7 @@ expand_brace_expr:
 	resultP = NULL;
 	arrayPP = brace_expand((char *) startP);   // calling bash API here
 	if (arrayPP) {
-	    // Transform array into a pythonic list: [x, y, z] in g_braced
+	    // Transform array into a pythonic list, writing [x, y, z] to g_braced
 		if (arrayPP[0]) {
 			fix_typeE	single_want_type;
 			int			i;
