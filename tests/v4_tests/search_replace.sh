@@ -4,7 +4,7 @@
 s=01234567890abcdefgh
 key=7
 repl=haha
-echo ${s/+(90|ba)/__}
+echo ${s/+(90|qr)/__}
 echo ${s/456/___}
 echo ${s//456/___}
 echo ${s/$key/_${repl}_}

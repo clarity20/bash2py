@@ -847,55 +847,102 @@ static char * emitVariable(char *vblNameP, _BOOL is_variable_name_braced, int in
 					--start2P;
 				}
 				break;
-			case '/':   // c = *start2P
+			case '/':
+			case '%':
+			case '#':
 				{
-				char *name, *value, *lpatsub, *pattern, *repl, *replacement, *p;
-				int delim, quoted=0;
-				char rawflag;
+				char *name, *value, *parameters, *pattern, *anchored_pattern, *repl, *replacement, *p;
+				int delim, quoted=0, plen;
+				char *rawflag;
 				burpT bufferBackup, newBackup;
-				_BOOL is_global_replace = FALSE;
+				_BOOL is_operator_doubled = FALSE;
 
-				// Extract the substitution parameters: name, pattern, replacement.
+				// Extract the name and the parameters: (1) pattern and (2) replacement ('/' operator only).
 				// Much of the following code borrows from bash's parameter_brace_patsub ().
 				memset(&bufferBackup, 0, sizeof(bufferBackup));
 				memset(&newBackup, 0, sizeof(newBackup));
-				*start2P = '\0';  // temp edit
-				name = strdup(vblNameP);
-				*start2P = c;  // revert edit
 				value = start2P+1;
 
-				if (*value == '/')
-				{
-					is_global_replace = TRUE;
+				if (*value == c)
+				{ //TODO this needs to be generalized to handle /% and /% operators
+					is_operator_doubled = TRUE;
 					value++;
 				}
-				lpatsub = strdup(value);
-				*(strrchr(lpatsub, '}')) = '\0';
 
-				delim = skip_to_delim (lpatsub, ((*value == '/') ? 1 : 0), "/", 0);
-				if (lpatsub[delim] == '/')
+				parameters = strdup(value);
+				*(strrchr(parameters, '}')) = '\0';
+
+				if (c == '/') 
 				{
-					lpatsub[delim] = 0;
-					repl = lpatsub + delim + 1;
+					delim = skip_to_delim (parameters, ((*value == '/') ? 1 : 0), "/", 0);
+					if (parameters[delim] == '/')
+					{
+						parameters[delim] = 0;
+						repl = parameters + delim + 1;
+					}
+					else
+						repl = (char *)NULL;
+					if (repl && *repl == '\0')
+						repl = (char *)NULL;
 				}
-				else
-					repl = (char *)NULL;
-				if (repl && *repl == '\0')
-					repl = (char *)NULL;
 
-				// Expand the pattern and replacement and build the python around them.
+				// Expand the pattern, name and (if op='/') replacement and build the python around them.
 				// We want fix_string() to do the dirty work, but this requires staging & unstaging
 				// the global buffers carefully because fix_string can alter them too.
  
+				got = FIX_STRING;
 				// Back up the real buffers before running fix_string()
 				swap_burps(&g_buffer, &bufferBackup);
 				swap_burps(&g_new, &newBackup);
-				// Expand & pythonify the pattern, and just expand the replacement
-				g_globConversionState = CONVERTING;
-				got = FIX_STRING;
-				pattern = strdup(fix_string(lpatsub, FIX_STRING, &got));
+				// Expand & pythonify the pattern
+				g_globConversionState = !(is_operator_doubled || c=='/') ? CONVERTING_UNGREEDY : CONVERTING;
+				pattern = strdup(fix_string(parameters, FIX_STRING, &got));
+
+				// Finish the pattern with raw marker and/or anchor if required
+				plen = strlen(pattern);
+				switch (c)
+				{
+					case '#':
+						anchored_pattern = malloc(plen+6);
+						if (*pattern == 'r') {   // Quoted-string patterns
+							sprintf(anchored_pattern, "%.2s^%s", pattern, pattern+2);
+						} else {  // Other patterns e.g. variable names
+							sprintf(anchored_pattern, "r'^'+%s", pattern);
+						}
+						break;
+					case '%':
+						anchored_pattern = malloc(plen+6);
+						p = pattern + plen-1;  // last char of pattern
+						if (strchr("\"\'", *p) != NULL) { //if (*pattern == 'r') {
+							sprintf(anchored_pattern, "%s", pattern);
+							sprintf(p, "$%c", *p);
+						}
+						else
+							sprintf(anchored_pattern, "%s+r'$'", pattern);
+						break;
+					case '/':
+						//TODO This is where to add logic for '/#' and '/%' operators
+						anchored_pattern = pattern;
+						break;
+				}
+
+				// Extract the name from vblName
 				g_globConversionState = INACTIVE;
-				replacement = strdup(fix_string(repl, FIX_STRING, &got));
+				// To guard against global memory issues, copy name into a new buffer
+				// (1) Mark end of name in the original buffer
+				*start2P = '\0';
+				// (2) (TODO) Basically do "name = strdup(vblNameP)" as we expect name will not need
+				// expanding. But for now, to make the python self-consistent we need to insert
+				// the regrettable "str(XXX.val)" markup, We do this with 3 LOC:
+				p = malloc(strlen(vblNameP)+2);
+				sprintf(p, "$%s", vblNameP);  // '$' tricks fix_string() into treating name like a var name
+				name = strdup(fix_string(p, FIX_STRING, &got));
+				// (3) Unmark the end of vblName
+				*start2P = c;
+
+				// Expand the replacement
+				replacement = strdup( (c=='/') ? fix_string(repl, FIX_STRING, &got) : "''");
+				// Ensure the glob-to-regex conversion is only attempted once
 				g_globConversionState = PROTECTING;
 				// Restore the buffers
 				swap_burps(&g_buffer, &bufferBackup);
@@ -903,17 +950,19 @@ static char * emitVariable(char *vblNameP, _BOOL is_variable_name_braced, int in
 
 				// Construct the python code
 				g_translate.m_uses.m_re = TRUE;
-				burp(&g_new, "re.sub(%s%s, %s, %s", (strchr("\"\'", pattern[0]))?"r":"", pattern, replacement, name);
-				if (!is_global_replace)
+				burp(&g_new, "re.sub(%s, %s, %s", anchored_pattern, replacement, name);
+				if (c=='/' && !is_operator_doubled)
 					burps(&g_new, ", count=1");
 				burpc(&g_new, ')');
 
+				free(p);
 				free(name);
-				free(lpatsub);
+				free(parameters);
+				if (anchored_pattern != pattern) free(anchored_pattern);
 				free(pattern);
 				free(replacement);
 
-                endP = strrchr(vblNameP, '}');
+				endP = strrchr(vblNameP, '}');
 				goto done;
 				}
 				break;
@@ -1364,7 +1413,7 @@ static char * emit_delimited(char *startP, int in_quotes, fix_typeE want, fix_ty
 	return endP;
 }
 
-// combine_types(): Applies type modifier to a value in g_new to make it compatible with its predecessor
+// combine_types(): Applies type modifier to the latest piece of g_new to make it compatible with its predecessor
 // before joining them together
 static fix_typeE combine_types(int offset, fix_typeE want_type, fix_typeE was_type, fix_typeE new_type)
 {
@@ -1415,7 +1464,7 @@ static fix_typeE combine_types(int offset, fix_typeE want_type, fix_typeE was_ty
 	}
 
 	if (was_type == FIX_NONE) {
-		// Do nothing more
+		// Do nothing more. e.g. we have only one component
 		log_return_msg("Untyped value, will not cast");
 		return new_type;
 	}
@@ -1423,8 +1472,15 @@ static fix_typeE combine_types(int offset, fix_typeE want_type, fix_typeE was_ty
 		switch (was_type) {
 		case FIX_ARRAY:
 		case FIX_STRING:
-			// Join two things together
-			P = burp_insert(&g_new, offset, "+");
+			// Join two pieces together
+			if ((g_globConversionState == CONVERTING || g_globConversionState == CONVERTING_UNGREEDY)
+				&& (g_new.m_P[offset-1] == 'r')) {
+				// Join at the raw marker right behind the START_QUOTE
+				P = burp_insert(&g_new, offset-1, "+");
+			} else {
+				// Join at the START_QUOTE
+				P = burp_insert(&g_new, offset, "+");
+			}
 			log_return_msg("Concatenated");
 			return new_type;
 	}	}
@@ -1467,11 +1523,11 @@ static fix_typeE substitute(fix_typeE want)
 	fix_typeE	got;	// What I had
 	fix_typeE	got1;	// What I'm now seeing
 	fix_typeE	want1;
-	int 		i, startquote_offset, quoted, c, offset;
+	int 		i, startquote_offset, offset, quoted, c, output_c;
 	const int   NOT_QUOTED = -1;
 	char		**arrayPP, *P, *P1, glob_type;
 	_BOOL      	is_file_expansion, quote_removal;
-	_BOOL		is_outside_quotes, burp_extra_glob_symbol = FALSE;
+	_BOOL		is_outside_quotes, burp_extra_glob_symbols = FALSE;
 
 	log_enter("substitute (want=%t)", want);
 
@@ -1489,7 +1545,7 @@ static fix_typeE substitute(fix_typeE want)
 	is_file_expansion = FALSE;
 	offset = 0;
 
-	if (g_globConversionState == INACTIVE) {  // INACTIVE by default. Changes when expr is like ${s/x/y}
+	if (g_globConversionState == INACTIVE) {  // INACTIVE by default. Changes inside string modification operators.
 		for (P = g_buffer.m_P; c = *P ; ++P) {
 			switch (c) {
 			case '*':
@@ -1517,11 +1573,11 @@ static fix_typeE substitute(fix_typeE want)
 	want1            = (is_file_expansion ? FIX_STRING : want);
 
 	// The strange treatment of quotes in the following code is meant to trade bash quoting for python quoting.
-	// For example,   echo ${abc}de"fg"hi     would translate to     print(str(abc)+"defghi").
+	// For example,   echo de"fg"hi     would translate to     print("defghi").
 	// The strategy is to strip the quotes from literal text in the input, determine where python
 	// needs them, and insert new ones there. To keep track of this we use the markers {START/END}_QUOTE.
 	// Meanwhile we cannot just toss the quotes from the special bash variable "$*".
-	// That's what 'quoted' is used to keep track of as you can see in emitSimpleVariable()..
+	// That's what 'quoted' keeps track of, as you can see in the "*" handler inside emitSimpleVariable().
 
 	for (P = g_buffer.m_P; ; ++P) {
 
@@ -1558,7 +1614,7 @@ static fix_typeE substitute(fix_typeE want)
 			offset = g_new.m_lth;
 			P1 = emit_delimited(P, quoted, want1, &got1);
 			if (g_globConversionState != INACTIVE) // This can change in emit_delim() so check it again
-			    is_file_expansion = FALSE;
+				is_file_expansion = FALSE;
 			if (P1 && P1 != P) {
 				got = combine_types(offset, want1, got, got1);
 				P   = --P1;
@@ -1567,88 +1623,113 @@ static fix_typeE substitute(fix_typeE want)
 			// Restore to where we were. //TODO is this always correct even if emit_delim() changes the buffer length?
 			g_new.m_lth = offset;
 			g_new.m_P[offset] = '\0';
-            break;
+			break;
 		} // end switch block
 
-		// Other characters are generally copied straight from input to output.
-		// But first we might need to convert shell globbing expressions to pythonic regexes
-		if (g_globConversionState == CONVERTING)
-		{
-			//TODO A perfect solution would track nested glob_types incl. NULLs in a stack and unwind it to print them out
+		// Other characters are generally copied straight from input to output...
+		output_c = c;
+
+		// ... but we need to make exceptions when converting shell globbing expressions to pythonic regexes
+		switch (g_globConversionState) {
+        case CONVERTING:
+        case CONVERTING_UNGREEDY:
+			//TODO A perfect solution would use recursion to handle nested glob_types incl. NULLs
 
 			switch (c) {
 			// Look for the symbols relevant to extended globbing, POSIX globbing or both
-			case '!':
 			case '+':
 				if (*(P+1) == '(') {
 					glob_type = c; // Save the glob symbol, print it later
-					c = *++P;	  // Skip to the '(', print that now
+					output_c = *++P;	  // Skip to the '(', print that now
+				}
+				break;
+			case '!':
+				if (*(P+1) == '(') {
+					// '!(..)' becomes '(?!..)'
+					burp_extra_glob_symbols = TRUE;
+					glob_type = c;
+					output_c = *++P;
 				}
 				break;
 			case '@':
 				if (*(P+1) == '(') {
-					c = *++P; // Don't flag as glob and skip the '@' sign
+					output_c = *++P; // Don't flag as glob and skip the '@' sign
+								// What bash sees as @(..) python sees as (..)
 				}
 				break;
 			case ')':
 				// Make sure the ')' is globbing-related
 				if (glob_type != 0) {
-					// Set the the stage to burp both ')' and the glob type.
-					burp_extra_glob_symbol = TRUE;
+					// Set the stage to burp both ')' and the glob type.
+					burp_extra_glob_symbols = TRUE;
+					output_c = *P;
 				}
 				break;
 			case '*':
 				// '*' can indicate an extended glob OR a POSIX glob
 				if ((*(P+1) == '(')) {
 					glob_type = c;
-					c = *++P;
+					output_c = *++P;
 				} else {
 					// Need to convert "*" to ".*"
 					glob_type = c;
-					c = '.';
-					burp_extra_glob_symbol = TRUE;
+					output_c = '.';
+					burp_extra_glob_symbols = TRUE;
 				}
 				break;
 			case '?':
 				// '?' can indicate an extended glob OR a POSIX glob
 				if ((*(P+1) == '(')) {
 					glob_type = c;
-					c = *++P;
+					output_c = *++P;
 				} else {
 					// We will just replace '?' with '.'. No need to remember the type.
 					glob_type = 0;
-					c = '.';
+					output_c = '.';
 				}
 				break;
-			// case '[':  // Bracketed globs are the same in bash and python. Nothing to do here.
+				// case '[':  // Bracketed globs are the same in bash and python. Nothing to do here.
+			default:
+				output_c = c;
 			} // switch (c)
-
-		}
-		else if (g_globConversionState == PROTECTING)
-		    g_globConversionState = INACTIVE;
+		break;
+		case PROTECTING:
+			// Having ensured the glob-regex conversion is only attempted once
+			// for a given input, we revert to normal execution in the future
+			g_globConversionState = INACTIVE;
+			break;
+        } // switch (g_globConversionState)
 
 		quote_removal = FALSE;
 
-		// Saw some normal character
+		// Saw some normal character: Make sure it gets QUOTED. Escape it if needed. Then post the character.
 		if (startquote_offset == NOT_QUOTED) {
-			// Set the START marker for a new subsection of text that will need quoting
+			// Set the START_QUOTE marker for a new subsection of text that will need quoting
+			if (g_globConversionState == CONVERTING || g_globConversionState == CONVERTING_UNGREEDY) {
+				// Put a raw string marker before the quote
+				burpc(&g_new, 'r');
+			}
 			startquote_offset = g_new.m_lth;
 			burpc(&g_new, START_QUOTE);
 		}
 		if (c == '\\') {
 			if (P[1]) {
 				burpc(&g_new, '\\');
-				c = *++P;
+				output_c = *++P;
 		}	}
+		// Most important step: Append the possibly-modified character to output
+		burpc(&g_new, output_c);
 
-		// Most important step: copy input to output
-		burpc(&g_new, c);
-
-		// If glob conversion requires us to print another character, do that now
-		if (burp_extra_glob_symbol) {
+		// If glob conversion requires us to print more symbols, do that now
+		if (burp_extra_glob_symbols) {
+			if (glob_type == '!')
+				burpc(&g_new, '?');
 			burpc(&g_new, glob_type);
+			// Also append the ungreedy sign '?' if needed
+			if ((glob_type == '+' || glob_type == '*') && g_globConversionState == CONVERTING_UNGREEDY)
+				burpc(&g_new, '?');
 			// Reset the state
-			burp_extra_glob_symbol = FALSE;
+			burp_extra_glob_symbols = FALSE;
 			glob_type = 0;
 		}
 	}
@@ -1855,8 +1936,8 @@ static void compactWhiteSpace(void)
 	}
 }
 
-// unmarkQuotes(): Remove {START/END}_QUOTE markers (not quote characters)
-// from g_buffer. (These markers are sometimes added by substitute().)
+// unmarkQuotes(): Replace {START/END}_QUOTE markers with '"' characters
+// in g_buffer. (These markers are sometimes added by substitute().)
 static void unmarkQuotes(_BOOL delete_quotes)
 {
 	char	*P, *P1;
@@ -1873,13 +1954,15 @@ static void unmarkQuotes(_BOOL delete_quotes)
 			break;
 		case END_QUOTE:
 			if (P[1] == START_QUOTE) {
+				// Delete adjacent END-START pairs to merge quoted chunks
 				++P;
 				continue;
-			}
+			}  // N.B. We fall through here
 		case START_QUOTE:
 			if (delete_quotes && !expand_depth) {
 				continue;
 			}
+			// Normal step: Turn START/END_QUOTE into '"'
 			c = '"';
 		}
 		*P1++ = c;
@@ -2076,7 +2159,7 @@ expand_brace_expr:
 	resultP = NULL;
 	arrayPP = brace_expand((char *) startP);   // calling bash API here
 	if (arrayPP) {
-	    // Transform array into a pythonic list: [x, y, z] in g_braced
+	    // Transform array into a pythonic list, writing [x, y, z] to g_braced
 		if (arrayPP[0]) {
 			fix_typeE	single_want_type;
 			int			i;
