@@ -913,7 +913,7 @@ static char * emitVariable(char *vblNameP, _BOOL is_variable_name_braced, int in
 					case '%':
 						anchored_pattern = malloc(plen+6);
 						p = pattern + plen-1;  // last char of pattern
-						if (strchr("\"\'", p) != NULL) { //if (*pattern == 'r') {
+						if (strchr("\"\'", *p) != NULL) { //if (*pattern == 'r') {
 							sprintf(anchored_pattern, "%s", pattern);
 							sprintf(p, "$%c", *p);
 						}
