@@ -8,6 +8,7 @@ typedef int _BOOL;
 typedef enum {
     INACTIVE = 0,
     CONVERTING,
+    CONVERTING_UNGREEDY,
     PROTECTING
 } globConversionStateE;
 
