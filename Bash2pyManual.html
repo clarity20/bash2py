@@ -6,7 +6,7 @@ the Bash shell (version 4.2, 28 December 2010).
 This is Edition 4.2, last updated 28 December 2010, 
 of The GNU Bash Reference Manual,
 for Bash, Version 4.2.
-Hacked to document Bash2py by Ian Davis
+Hacked to document Bash2py by Michael Wood, Ian Davis
 
 Copyright (C) 1988-2011 Free Software Foundation, Inc.
 
@@ -363,16 +363,16 @@ Next: <a href="#What-is-a-shell_003f" accesskey="n" rel="next">What is a shell?<
 <h3 class="section">1.1 What is Bash2py?</h3>
 <p>
 <font color=purple>
-Bash2py is a rough and ready translator from Bash to Python.  Python is
-generally considered superior to Bash, and it is therefore desirable to
+Bash2py is a rough and ready transpiler from Bash to Python.  Python is
+a more feature-rich language than Bash, and it is therefore desirable to
 be able to migrate from legacy Bash code, to Python.
 </font>
 <p>
 <p>Bash is the shell, or command language interpreter,
 for the <small>GNU</small> operating system.
 The name is an acronym for the &lsquo;<samp>Bourne-Again SHell</samp>&rsquo;,
-a pun on Stephen Bourne, the author of the direct ancestor of
-the current Unix shell <code>sh</code>, 
+named after Stephen Bourne, author of 
+the Unix shell <code>sh</code>, the direct ancestor of bash, 
 which appeared in the Seventh Edition Bell Labs Research version
 of Unix.
 </p>
@@ -1483,7 +1483,7 @@ resulting Python may need to be corrected to match Python regular expression
 syntax. If the operator was <samp>!=</samp> the result of such a regular
 expression comparison is negated.</font>
 </p>
-<p>An additional binary operator, <font color=orange>&lsquo;<samp>=~</samp>&rsquo;</font>, is available, with the same
+<p>An additional binary operator, <font color=green>&lsquo;<samp>=~</samp>&rsquo;</font>, is available, with the same
 precedence as &lsquo;<samp>==</samp>&rsquo; and &lsquo;<samp>!=</samp>&rsquo;.
 When it is used, the string to the right of the operator is considered
 an extended regular expression and matched accordingly (as in <i>regex</i>3)).  
@@ -2503,7 +2503,7 @@ is null or unset, nothing is substituted, otherwise the expansion of
 </p>
 </dd>
 </font>
-<font color=red>
+<font color=green>
 <dt><code>${<var>parameter</var>:<var>offset</var>}</code></dt>
 <dt><code>${<var>parameter</var>:<var>offset</var>:<var>length</var>}</code></dt>
 <dd><p>Expands to up to <var>length</var> characters of <var>parameter</var>
@@ -2918,7 +2918,7 @@ The special pattern characters must be quoted if they are to be matched
 literally.
 </p>
 <p>The special pattern characters have the following meanings
-<font color=orange>in Bash but not necessarily Python</font>:
+<font color=orange>that we have attempted to translate into Python equivalents</font>:
 </p><dl compact="compact">
 <dt><code>*</code></dt>
 <dd><p>Matches any string, including the null string.
@@ -4727,7 +4727,7 @@ If <samp>-n</samp> is specified, the trailing newline is suppressed.
 If the <samp>-e</samp> option is given, interpretation of the following
 backslash-escaped characters is enabled.
 <p>
-<font color=purple>Output for python assumes the version 3 format of the print statement.  For earlier versions the (..) around the text will print, and the -n option will generate a syntax error.</font>
+<font color=purple>Bash2py generates its output in python version 3. 
 <p>
 <font color=red>
 The <samp>-E</samp> option disables the interpretation of these escape characters,
@@ -12675,8 +12675,8 @@ The latest version of Bash is always available for FTP from
 <a href="ftp://ftp.gnu.org/pub/gnu/bash/">ftp://ftp.gnu.org/pub/gnu/bash/</a>.
 <font color=purple>
 The latest version of Bash2Py is available at:
-<a href="http://www.swag.uwaterloo.ca/bash2py">
-www.swag.uwaterloo.ca/bash2py</a>
+<a href="https://github.com/clarity20/bash2py">
+https://github.com/clarity20/bash2py</a>
 </font>
 </p>
 <p>Once you have determined that a bug actually exists, use the
@@ -12686,8 +12686,8 @@ Suggestions and &lsquo;philosophical&rsquo; bug reports may be mailed
 to <a href="mailto:bug-bash@gnu.org">bug-bash@gnu.org</a> or posted to the Usenet
 newsgroup <code>gnu.bash.bug</code>.
 <font color=purple>Contact information for Bash2Py can be found at:
-<a href="http://www.swag.uwaterloo.ca/bash2py">
-www.swag.uwaterloo.ca/bash2py</a>
+<a href="https://github.com/clarity20/bash2py">
+https://github.com/clarity20/bash2py</a>
 </font>
 </p>
 <p>All bug reports should include:
