@@ -1,8 +1,11 @@
 # bash2py: A Bash-to-python transpiler
 
-Welcome to the new home of `bash2py`, a project for translating Bash shell code into Python.
+Welcome to the new home of `bash2py`, a software tool that translates Bash shell code into Python.
 
-For an overview of the project's status (i.e. its current capabilities), the document `Bash2pyManual.html` is a modified version of the Bash reference manual that summarizes the progress of this project. It indicates which Bash constructs we have specifically addressed. Items highlighted in green are likely to be transpiled correctly, those in orange may translate correctly some of the time, and those in red are not expected to work *yet*. Text in purple provides additional commentary.
+For an overview of the project's status and current capabilities, please refer to the document `Bash2pyManual.html`.
+This document is a color-coded version of the Bash reference manual that shows which Bash constructs we have specifically addressed.
+Items highlighted in green have been addressed and are likely to be transpiled correctly, those in orange may translate correctly
+some of the time, and those in red are not expected to work *yet*. Text in purple provides additional commentary.
 
 ### Installation and usage
 
@@ -32,7 +35,7 @@ This will build `bash2py [.exe]`.
 ./bash2py  shellScript  [...]
 ```
 
-`Bash2py` will write its Python translation(s) to the same directory as the corresponding Bash file(s) using the same basename but a *.py* extension.
+`Bash2py` will write its Python translation(s) to the same directory as the corresponding Bash script(s) using the same basename but a *.py* extension.
 It will also write semi-customizable transpilation logs to your screen.
 
 `Bash2py` is a work in progress. We offer no warranty or guarantees as to its output. Please backup any input files before running.
@@ -41,14 +44,16 @@ It is a violation of federal law to use this software in a manner inconsistent w
 
 ### Development notes:
 
-Our methodology is to alter and extend the native Bash source code, using the macro BASH2PY to segregate our changes.
+The fundamental idea of `bash2py` is to replace bash's command execution loop with a transpile-and-print loop.
 
-The most significant changes and additions are:
+We aspire to cover as much bash functionality as possible, altering and extending the native Bash source code and using the macro BASH2PY to segregate our changes.
+
+The most significant changes and additions are contained in the following source files:
 1.  (Added)  fix_string.c
-    *Mimics shell expansion and substitution so bash value-expressions can be rendered in python*
+    *Alternative expansion and substitution algorithms that enable us to render bash value-expressions in python. "foo${x}" becomes 'foo'+x, etc.*
 
 2.  (Added)  translate.c
-    *Translates bash command syntax into python equivalents; "echo hello" becomes "print('hello')". Derived from bash's print_cmd.c.*
+    *Translates bash command syntax into python equivalents; "echo ..." becomes "print('...')", etc. Derived from bash's print_cmd.c.*
 
 3.  (Added)  translate_expr.c
     *Translates arithmetic expressions. This is an adaptation of bash's expr.c. Instead of performing computations, we reformat bash arithmetic expressions into equivalent Python expressions.*
@@ -60,8 +65,9 @@ The bash source code comes from bash-4.3.30 but a forward port is on the agenda.
 
 ### Contact:
 
-Please reach out to the project maintainers via this online repository.
-The historical project coordinator, Ian Davis at textserver.com@gmail.com, is no longer maintaining the project.
+Please reach out to the project maintainer via this online repository.
+The historical project coordinator, Ian Davis of the University of Waterloo, is no longer maintaining the project.
 
 *Visit the original project home [here](https://www.swag.uwaterloo.ca/bash2py/index.html)*.
 
+*-- Michael Wood*
