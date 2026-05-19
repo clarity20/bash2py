@@ -15,11 +15,10 @@ You can install and run `bash2py` on Linux, Windows, Mac and Android.
 
 1. Download this software package.
 
-2. Set up the standard GNU toolchain for building C-language projects (gcc, make, autoconf).
+2. Set up the standard GNU toolchain for building C-language projects (`gcc`, `make`, `autoconf`).
+    - *Building on Windows?* We recommend the `Cygwin` Unix emulation layer and the `bash-devel` and `cygwin-devel` packages to provide all required header files.
 
-*Building on Windows?* We recommend the `Cygwin` Unix emulation layer and the `bash-devel` and `cygwin-devel` packages to provide all required header files.
-
-*Building on Android?* The standard GNU toolchain is adequate to build the project **except** for at least one symbol (mblen) that is missing from the libc system library. You can download this code from https://github.com/termux/libandroid-support and build and link it to create the executable.
+    - *Building on Android?* The standard GNU toolchain is adequate to build the project **except** for at least one symbol (mblen) that is missing from the `libc` system library. You can download this code from https://github.com/termux/libandroid-support and build and link it to create the executable.
 
 3. `cd` into the bash2py project and run
 
@@ -27,7 +26,7 @@ You can install and run `bash2py` on Linux, Windows, Mac and Android.
 ./install.sh
 ```
 
-This will build `bash2py [.exe]`.
+    - This will build `bash2py [.exe]`.
 
 4. **Run bash2py:**
 
@@ -35,8 +34,8 @@ This will build `bash2py [.exe]`.
 ./bash2py  shellScript  [...]
 ```
 
-`Bash2py` will write its Python translation(s) to the same directory as the corresponding Bash script(s) using the same basename but a *.py* extension.
-It will also write semi-customizable transpilation logs to your screen.
+`Bash2py` will tell you where it's writing its Pythonic output: the same directory as the corresponding input script(s) using the same basename but a *.py* extension.
+It will also write semi-customizable program trace logs to your screen.
 
 `Bash2py` is a work in progress. We offer no warranty or guarantees as to its output. Please backup any input files before running.
 
@@ -46,7 +45,7 @@ It is a violation of federal law to use this software in a manner inconsistent w
 
 The fundamental idea of `bash2py` is to replace bash's command execution loop with a transpile-and-print loop.
 
-We aspire to cover as much bash functionality as possible, altering and extending the native Bash source code and using the macro BASH2PY to segregate our changes.
+We aspire to cover as much bash functionality as possible by altering and extending the native Bash source code. We use the preprocessor macro "BASH2PY" to segregate our changes.
 
 The most significant changes and additions are contained in the following source files:
 1.  (Added)  fix_string.c
@@ -69,5 +68,7 @@ Please reach out to the project maintainer via this online repository.
 The historical project coordinator, Ian Davis of the University of Waterloo, is no longer maintaining the project.
 
 *Visit the original project home [here](https://www.swag.uwaterloo.ca/bash2py/index.html)*.
+
+_- Michael Wood_
 
 *-- Michael Wood*
