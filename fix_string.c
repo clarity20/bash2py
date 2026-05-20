@@ -751,6 +751,7 @@ static char * emitVariable(char *vblNameP, _BOOL is_variable_name_braced, int in
 	_BOOL		is_indirect;
 	fix_typeE	got;
 	int			is_colon_subrange = FALSE;
+    anchorTypeE anchorType = ANCHOR_NONE;
 
 	log_enter("emitVariable (g_buffer[vblName]=%q, is_braced=%b, in_quotes=%d, want=%t)",
 			vblNameP, is_variable_name_braced, in_quotes, want);
@@ -857,23 +858,50 @@ static char * emitVariable(char *vblNameP, _BOOL is_variable_name_braced, int in
 				burpT bufferBackup, newBackup;
 				_BOOL is_operator_doubled = FALSE;
 
-				// Extract the name and the parameters: (1) pattern and (2) replacement ('/' operator only).
-				// Much of the following code borrows from bash's parameter_brace_patsub ().
-				memset(&bufferBackup, 0, sizeof(bufferBackup));
-				memset(&newBackup, 0, sizeof(newBackup));
 				value = start2P+1;
 
+                // Figure out the operator and set up the behavior flags appropriate for it
 				if (*value == c)
-				{ //TODO this needs to be generalized to handle /% and /% operators
+				{
+				    // Operator is a doubled-up character
 					is_operator_doubled = TRUE;
+                    anchorType = (c=='#' ? ANCHOR_LEFT : (c=='%' ? ANCHOR_RIGHT : ANCHOR_NONE));
+					g_globConversionState = CONVERTING_GREEDY;
 					value++;
 				}
+                else if (*value == '#')   // op is '/#'
+                {
+					is_operator_doubled = FALSE;
+                    anchorType = ANCHOR_LEFT;
+					g_globConversionState = CONVERTING_UNGREEDY;
+                    value++;
+                }
+                else if (*value == '%')   // op is '/%'
+                {
+					is_operator_doubled = FALSE;
+                    anchorType = ANCHOR_RIGHT;
+					g_globConversionState = CONVERTING_UNGREEDY;
+                    value++;
+                }
+                else  // op is single-character 
+                {
+					is_operator_doubled = FALSE;
+                    anchorType = (c=='#' ? ANCHOR_LEFT : (c=='%' ? ANCHOR_RIGHT : ANCHOR_NONE));
+					g_globConversionState = CONVERTING_UNGREEDY;
+                    // value++;   // DO NOT advance the value pointer
+                }
 
+				memset(&bufferBackup, 0, sizeof(bufferBackup));
+				memset(&newBackup, 0, sizeof(newBackup));
 				parameters = strdup(value);
 				*(strrchr(parameters, '}')) = '\0';
 
 				if (c == '/') 
 				{
+				    // For the '/' operators the parameters look like "pattern/repl".
+                    // Here we parse out the "repl" part of that, using bash's
+                    // parameter_brace_patsub () to do the heavy lifting.
+					//TODO Retest this for the '/#' and '/%' operators
 					delim = skip_to_delim (parameters, ((*value == '/') ? 1 : 0), "/", 0);
 					if (parameters[delim] == '/')
 					{
@@ -886,42 +914,37 @@ static char * emitVariable(char *vblNameP, _BOOL is_variable_name_braced, int in
 						repl = (char *)NULL;
 				}
 
-				// Expand the pattern, name and (if op='/') replacement and build the python around them.
-				// We want fix_string() to do the dirty work, but this requires staging & unstaging
-				// the global buffers carefully because fix_string can alter them too.
- 
+				// Expand & pythonify the "pattern" part of the parameters
 				got = FIX_STRING;
-				// Back up the real buffers before running fix_string()
+				// Back up the working buffers before calling the expand & pythonify utility
 				swap_burps(&g_buffer, &bufferBackup);
 				swap_burps(&g_new, &newBackup);
-				// Expand & pythonify the pattern
-				g_globConversionState = !(is_operator_doubled || c=='/') ? CONVERTING_UNGREEDY : CONVERTING;
+				// Call the utility
 				pattern = strdup(fix_string(parameters, FIX_STRING, &got));
-
-				// Finish the pattern with raw marker and/or anchor if required
+				// Finish pythonifying: add the raw marker ('r') and/or anchor if required
 				plen = strlen(pattern);
-				switch (c)
+				switch (anchorType)
 				{
-					case '#':
+					case ANCHOR_LEFT:
 						anchored_pattern = malloc(plen+6);
+						// How to place the anchor depends on whether the pattern is quoted-string or not
 						if (*pattern == 'r') {   // Quoted-string patterns
 							sprintf(anchored_pattern, "%.2s^%s", pattern, pattern+2);
 						} else {  // Other patterns e.g. variable names
 							sprintf(anchored_pattern, "r'^'+%s", pattern);
 						}
 						break;
-					case '%':
+					case ANCHOR_RIGHT:
 						anchored_pattern = malloc(plen+6);
 						p = pattern + plen-1;  // last char of pattern
-						if (strchr("\"\'", *p) != NULL) { //if (*pattern == 'r') {
+						if (strchr("\"\'", *p) != NULL) {   // Quoted-string patterns
 							sprintf(anchored_pattern, "%s", pattern);
-							sprintf(p, "$%c", *p);
+							sprintf(anchored_pattern+plen-1, "$%c", *p);
 						}
 						else
 							sprintf(anchored_pattern, "%s+r'$'", pattern);
 						break;
-					case '/':
-						//TODO This is where to add logic for '/#' and '/%' operators
+					case ANCHOR_NONE:
 						anchored_pattern = pattern;
 						break;
 				}
@@ -944,17 +967,18 @@ static char * emitVariable(char *vblNameP, _BOOL is_variable_name_braced, int in
 				replacement = strdup( (c=='/') ? fix_string(repl, FIX_STRING, &got) : "''");
 				// Ensure the glob-to-regex conversion is only attempted once
 				g_globConversionState = PROTECTING;
-				// Restore the buffers
+				// Restore the working buffers
 				swap_burps(&g_buffer, &bufferBackup);
 				swap_burps(&g_new, &newBackup);
 
-				// Construct the python code
+				// Construct the python from the name, pattern, and (if op='/') the replacement
 				g_translate.m_uses.m_re = TRUE;
 				burp(&g_new, "re.sub(%s, %s, %s", anchored_pattern, replacement, name);
 				if (c=='/' && !is_operator_doubled)
 					burps(&g_new, ", count=1");
 				burpc(&g_new, ')');
 
+                // Finish up
 				free(p);
 				free(name);
 				free(parameters);
@@ -1473,7 +1497,7 @@ static fix_typeE combine_types(int offset, fix_typeE want_type, fix_typeE was_ty
 		case FIX_ARRAY:
 		case FIX_STRING:
 			// Join two pieces together
-			if ((g_globConversionState == CONVERTING || g_globConversionState == CONVERTING_UNGREEDY)
+			if ((g_globConversionState == CONVERTING_GREEDY || g_globConversionState == CONVERTING_UNGREEDY)
 				&& (g_new.m_P[offset-1] == 'r')) {
 				// Join at the raw marker right behind the START_QUOTE
 				P = burp_insert(&g_new, offset-1, "+");
@@ -1631,7 +1655,7 @@ static fix_typeE substitute(fix_typeE want)
 
 		// ... but we need to make exceptions when converting shell globbing expressions to pythonic regexes
 		switch (g_globConversionState) {
-        case CONVERTING:
+        case CONVERTING_GREEDY:
         case CONVERTING_UNGREEDY:
 			//TODO A perfect solution would use recursion to handle nested glob_types incl. NULLs
 
@@ -1705,7 +1729,7 @@ static fix_typeE substitute(fix_typeE want)
 		// Saw some normal character: Make sure it gets QUOTED. Escape it if needed. Then post the character.
 		if (startquote_offset == NOT_QUOTED) {
 			// Set the START_QUOTE marker for a new subsection of text that will need quoting
-			if (g_globConversionState == CONVERTING || g_globConversionState == CONVERTING_UNGREEDY) {
+			if (g_globConversionState == CONVERTING_GREEDY || g_globConversionState == CONVERTING_UNGREEDY) {
 				// Put a raw string marker before the quote
 				burpc(&g_new, 'r');
 			}

@@ -3,11 +3,18 @@
 
 typedef int _BOOL;
 
+// Anchoring types of the string manipulation operators
+typedef enum {
+    ANCHOR_NONE = 0,
+    ANCHOR_LEFT,
+    ANCHOR_RIGHT
+} anchorTypeE;
+
 // Choose the contexts in which globbing expressions are detected and handled
 // This is necessary because the relevant functions can call each other repeatedly
 typedef enum {
     INACTIVE = 0,
-    CONVERTING,
+    CONVERTING_GREEDY,
     CONVERTING_UNGREEDY,
     PROTECTING
 } globConversionStateE;

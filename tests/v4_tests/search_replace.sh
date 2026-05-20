@@ -9,4 +9,8 @@ echo ${s/456/___}
 echo ${s//456/___}
 echo ${s/$key/_${repl}_}
 echo ${s/8*a??/__}
+echo ${repl//a/b}
+
+echo ${repl/#a/b}
+echo ${repl/%a/b}
 
